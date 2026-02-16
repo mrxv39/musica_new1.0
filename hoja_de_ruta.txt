@@ -1,6 +1,9 @@
 #Tareas
 
+
 IMPLEMENTADAS
+PREFLOP: mano.py returns mano_raw + hand_class (e.g. 9c9d + 99 / AKo / AKs)
+TEST: regression tests for mano.py (JSON output, deterministic templates, fingerprint non-empty)
 
 POR IMPLEMENTAR
 
