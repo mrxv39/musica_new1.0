@@ -1,0 +1,7 @@
+# local artifacts
+data/
+config/
+*.bmp
+*.bak_*
+__pycache__/
+*.pyc
