@@ -1,9 +1,15 @@
 #Tareas
 
 
+
+
+
 IMPLEMENTADAS
 PREFLOP: mano.py returns mano_raw + hand_class (e.g. 9c9d + 99 / AKo / AKs)
 TEST: regression tests for mano.py (JSON output, deterministic templates, fingerprint non-empty)
+PREFLOP: time.py implemented (ROI template match) + regression tests
+PREFLOP: noboard.py implemented (ROI mean/std/dark_ratio, deterministic regression tests)
+PREFLOP: preflop.py orchestrator (runs mano/time/noboard concurrently) + deterministic tests
 
 POR IMPLEMENTAR
 
