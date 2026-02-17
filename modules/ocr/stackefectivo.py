@@ -1,7 +1,9 @@
 
-# from __future__ import annotations must be first
 from __future__ import annotations
-# Alias for orchestrator/test compatibility
+
+
+# Alias for orchestrator/test compatibility (must be at module level for patching)
+# Place at end of file to ensure patching works
 def read_stackefectivo(*args, **kwargs):
     return read_stack_efectivo(*args, **kwargs)
 # C:\Users\Usuario\Desktop\proyectos\musica_new\modules\ocr\stackefectivo.py

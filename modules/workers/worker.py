@@ -65,6 +65,7 @@ def safe_capture(region):
 
 
 def main():
+
     args = parse_args()
     worker_id = args.id
     interval_ms = args.interval_ms
@@ -75,6 +76,9 @@ def main():
 
     mode = "replay" if image_path else "screen"
     tick = 0
+
+    # Dedupe state: last hand signature
+    last_hand_sig = None
 
     try:
         while True:
@@ -104,8 +108,38 @@ def main():
                         errors.append(f"capture failed: {err}")
                         img_path = None
 
+
+
+
+            # Run preflop before dedupe logic
             preflop = run_preflop(img_path) if img_path else {"error": "no image", "preflop_ok": False}
+
+            # --- DEDUPE LOGIC (mano + stacks) ---
+            mano_result = {"valid": False, "mano_raw": None}
+            stacks_result = {"p1": None}
+            if isinstance(preflop, dict):
+                mods = preflop.get("modules")
+                if isinstance(mods, dict):
+                    mano_result = mods.get("mano", mano_result)
+                    stacks_result = mods.get("stacks", stacks_result)
             fingerprint = get_fingerprint(worker_id, mode, image_or_region)
+
+            dedupe_skipped = False
+            dedupe_reason = None
+            sig = None
+            p1 = stacks_result.get("p1", 0)
+            if p1 is None:
+                p1 = 0
+            if mano_result.get("valid") and p1 > 0:
+                base = f"{mano_result['mano_raw']}|{p1}"
+                sig = hashlib.sha1(base.encode("utf-8")).hexdigest()
+                if sig == last_hand_sig:
+                    dedupe_skipped = True
+                    dedupe_reason = "duplicate_hand"
+                else:
+                    last_hand_sig = sig
+            else:
+                dedupe_reason = "no_dedupe"  # mano inválida o stack faltante
 
             out = {
                 "worker_id": worker_id,
@@ -113,12 +147,23 @@ def main():
                 "tick": tick,
                 "ts": ts,
                 "preflop": preflop,
+                "mano_result": mano_result,
+                "stacks_result": stacks_result,
                 "errors": errors,
                 "fingerprint": fingerprint,
+                "dedupe_skipped": dedupe_skipped,
+                "dedupe_reason": dedupe_reason,
             }
 
             if print_every_tick:
                 print(json.dumps(out))
+
+            if dedupe_skipped:
+                # Skip further processing for this tick
+                if max_ticks is not None and tick >= max_ticks:
+                    break
+                time.sleep(interval_ms / 1000.0)
+                continue
 
             if mode == "screen" and img_path:
                 try:
