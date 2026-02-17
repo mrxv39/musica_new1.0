@@ -1,8 +1,12 @@
+
+# from __future__ import annotations must be first
+from __future__ import annotations
+# Alias for orchestrator/test compatibility
+def read_stackefectivo(*args, **kwargs):
+    return read_stack_efectivo(*args, **kwargs)
 # C:\Users\Usuario\Desktop\proyectos\musica_new\modules\ocr\stackefectivo.py
 # OCR stack efectivo (numeros) en ROI relativo.
 # Basado en encontrar_stackefectivo.py (legacy) pero con mejoras de robustez.
-
-from __future__ import annotations
 
 import os
 import re
