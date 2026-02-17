@@ -1,61 +1,119 @@
-#Tareas
+============================================================
+HOJA DE RUTA – musica_new
+============================================================
 
+Fecha: 2026-02-17
+Objetivo global:
+Sistema multi-mesa (4 mesas) capaz de detectar manos en tiempo real, ejecutar OCR, persistir observaciones, importar XML como verdad, comparar errores y generar métricas de precisión.
 
+============================================================
+1️⃣ IMPLEMENTADO (ESTABLE)
+============================================================
+CORE
 
+✔ mano.py
+✔ time.py
+✔ noboard.py
+✔ preflop.py
+✔ Tests deterministas pasando
 
+WORKER BASE
 
-IMPLEMENTADAS
-PREFLOP: mano.py returns mano_raw + hand_class (e.g. 9c9d + 99 / AKo / AKs)
-TEST: regression tests for mano.py (JSON output, deterministic templates, fingerprint non-empty)
-PREFLOP: time.py implemented (ROI template match) + regression tests
-PREFLOP: noboard.py implemented (ROI mean/std/dark_ratio, deterministic regression tests)
-PREFLOP: preflop.py orchestrator (runs mano/time/noboard concurrently) + deterministic tests
-WORKERS (BASE): worker.py implementado (watch/replay modes, interval_ms, max_ticks, JSON estable) + deterministic tests
+✔ watch mode
+✔ replay mode
+✔ interval configurable
+✔ max_ticks configurable
+✔ JSON estable
+✔ tests worker pasando
 
-POR IMPLEMENTAR
+⚠️ Aún no integrado con OCR real ni dedupe.
 
-CRITICAS
+DB (COMPLETADO Y ESTABLE)
 
-MODULO WORKERS: SE EJECUTARAN 4 WORKERS QUE INSPECCIONARAN 4 AREAS DE LA PANTALLA QUE DEFINIREMOS.
-primero ejecutaremos modulo preflop, si preflop = continuamos
-luego EJECUTAREMOS EL MODULO OCR
-luego EJECUTAREMOS MODULO DB PARA INTROCUDIR LA INFO DE LA MANO RECONOCIDA A LA TABLA HANDS
-WORKER.PY
+✔ sqlite con migraciones automáticas
+✔ compat legacy (tabla hands)
+✔ hands_obs
+✔ hands_xml
+✔ hand_links
+✔ migraciones robustas
+✔ tests DB pasando
 
-MODULO PREFLOP: HAY QUE EJECUTAR ESTOS 3 SCRIPTS ALA VEZ Y ESPERAR A QUE TODOS TERMINEN. SI MANO = MANO VALIDA , TIME Y NOBOARD = TRUE ENTONCES PREFLOP = TRUE
-MANO.PY
-TIME.PY
-NOBOARD.PY
+OCR (PARCIAL IMPLEMENTADO)
 
-MODULO OCR: HAY QUE EJECUTAR ESTOS 4 SCRIPTS ALA VEZ Y ESPERAR A QUE TODOS TERMINEN.
-STACKEFECTIVO.PY
-NAMES.PY
-STACKS.PY
-BETS.PY
+✔ stackefectivo.py
 
-MODULO DB: CREAREMOS UNA DB CON LA TABLA PALYERS Y HANDS
-DB.PY
+ROI relativo legacy
 
-MODULO IMPORTS
-CHAMPION_POKER.PY : CREAREMOS UN IMPORTADOR DE MANOS. LEEREMOS LOS ARCHIVOS .XML QUE GENERA LA SALA PARA CONVERTIRLO A NUESTRO FORMATO. todas LAS MANOS QUE IMPOPRTEMOS DEBERAN COINCIDIR CON LAS MANOS INTRODUCIDAS DESDE DB.
+Otsu + Adaptive + threshold fallback
 
-MODULO ERRORES:
-ERRORES: ANALIZAREMOS LAS DIFERENCIAS ENTRE LOS DATOS DE LOS XML Y LAS MANOS DE LA DB INTROCUDIDAS PREVIAMENTE. lOS DATOS EXTRAIDO DE LOS XML SON LA VERDAD
+limpieza morfológica
 
-MODULO UI:
-UI.PY CREAREMOS UNA UI EN TINKER PARA GENERAR ESTRATEGIAS. VER LOS ERRORES ENTRE LAS MANOS XML Y LAS MANOS OCR
+whitelist numérica
 
-NO CRITICAS
+parse robusto float
 
+debug opcional OCR_DEBUG_STACK
 
-#Ideas
-- 
+tests deterministas pasando
 
---------------------------------------------------
+Estado OCR:
+→ módulo numérico estable
+→ arquitectura reutilizable para bets.py y stacks.py
+
+============================================================
+2️⃣ CRÍTICO – NO IMPLEMENTADO AÚN
+============================================================
+
+🔴 OCR Rank (cartas 13 clases)
+🔴 Dedupe / cambio de mano en worker
+🔴 Integración worker → hands_obs
+🔴 spawn_workers real (4 mesas)
+
+============================================================
+3️⃣ IMPORTANTE – SIGUIENTE FASE
+============================================================
+
+🟡 bets.py (numérico, similar a stackefectivo)
+🟡 stacks.py (múltiples ROIs)
+🟡 names.py (texto más complejo)
+
+🟡 Importador XML
+🟡 Linking obs ↔ xml
+🟡 Sistema de métricas / errores
+
+============================================================
+4️⃣ IDEAS
+============================================================
+
+• Guardar siempre frame_ref
+• Guardar confidence OCR
+• Tabla futura: hand_diffs
+• Hash ROI para detectar drift visual
+• Métricas por versión OCR
+
+============================================================
+5️⃣ CHECKLIST ANTES DE PUSH
+============================================================
+
+✔ tests verdes
+✔ no duplicados
+✔ DB estable
+✔ stackefectivo implementado
+
+============================================================
+
 #ProyectoInfo
 
-repo_git: https://github.com/mrxv39/musica_new1.0.git
-name_project: musica_new
-backup: Desktop\backups\backup_musica_new_20260217_052851.zip
---------------------------------------------------
+============================================================
 
+repo_git:
+https://github.com/mrxv39/musica_new1.0.git
+
+main_db_path:
+.\data\musica_new.db
+
+dataset_cartas:
+C:\Users\Usuario\Desktop\app.preflop\capturas_regiones_cartas\img
+
+estado_actual:
+OCR numérico iniciado (stackefectivo OK)
