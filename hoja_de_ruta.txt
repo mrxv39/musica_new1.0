@@ -10,6 +10,7 @@ TEST: regression tests for mano.py (JSON output, deterministic templates, finger
 PREFLOP: time.py implemented (ROI template match) + regression tests
 PREFLOP: noboard.py implemented (ROI mean/std/dark_ratio, deterministic regression tests)
 PREFLOP: preflop.py orchestrator (runs mano/time/noboard concurrently) + deterministic tests
+WORKERS (BASE): worker.py implementado (watch/replay modes, interval_ms, max_ticks, JSON estable) + deterministic tests
 
 POR IMPLEMENTAR
 
@@ -55,6 +56,6 @@ NO CRITICAS
 
 repo_git: https://github.com/mrxv39/musica_new1.0.git
 name_project: musica_new
-backup: Desktop\backups\backup_musica_new_20260216_172640.zip
+backup: Desktop\backups\backup_musica_new_20260217_052851.zip
 --------------------------------------------------
-WORKERS: worker.py (watch/replay modes, interval_ms, max_ticks for tests) + deterministic tests
+
