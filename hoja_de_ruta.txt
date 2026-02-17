@@ -3,117 +3,147 @@ HOJA DE RUTA – musica_new
 ============================================================
 
 Fecha: 2026-02-17
+
 Objetivo global:
-Sistema multi-mesa (4 mesas) capaz de detectar manos en tiempo real, ejecutar OCR, persistir observaciones, importar XML como verdad, comparar errores y generar métricas de precisión.
+Sistema multi-mesa (4 mesas) capaz de detectar manos en tiempo real,
+ejecutar OCR modular, persistir observaciones, importar XML como verdad,
+comparar errores y generar métricas de precisión.
 
 ============================================================
-1️⃣ IMPLEMENTADO (ESTABLE)
-============================================================
-CORE
-
-✔ mano.py
-✔ time.py
-✔ noboard.py
-✔ preflop.py
-✔ Tests deterministas pasando
-
-WORKER BASE
-
-✔ watch mode
-✔ replay mode
-✔ interval configurable
-✔ max_ticks configurable
-✔ JSON estable
-✔ tests worker pasando
-
-⚠️ Aún no integrado con OCR real ni dedupe.
-
-DB (COMPLETADO Y ESTABLE)
-
-✔ sqlite con migraciones automáticas
-✔ compat legacy (tabla hands)
-✔ hands_obs
-✔ hands_xml
-✔ hand_links
-✔ migraciones robustas
-✔ tests DB pasando
-
-OCR (PARCIAL IMPLEMENTADO)
-
-✔ stackefectivo.py
-
-ROI relativo legacy
-
-Otsu + Adaptive + threshold fallback
-
-limpieza morfológica
-
-whitelist numérica
-
-parse robusto float
-
-debug opcional OCR_DEBUG_STACK
-
-tests deterministas pasando
-
-Estado OCR:
-→ módulo numérico estable
-→ arquitectura reutilizable para bets.py y stacks.py
-
-============================================================
-2️⃣ CRÍTICO – NO IMPLEMENTADO AÚN
+1️⃣ CORE
 ============================================================
 
-🔴 OCR Rank (cartas 13 clases)
-🔴 Dedupe / cambio de mano en worker
-🔴 Integración worker → hands_obs
-🔴 spawn_workers real (4 mesas)
+[CRÍTICA] mano.py  
+Estado: IMPLEMENTADA  
+Tests: ✔  
+Dependencias: ninguna  
+
+[CRÍTICA] time.py  
+Estado: IMPLEMENTADA  
+Tests: ✔  
+Dependencias: ninguna  
+
+[CRÍTICA] noboard.py  
+Estado: IMPLEMENTADA  
+Tests: ✔  
+Dependencias: ninguna  
+
+[CRÍTICA] preflop.py  
+Estado: IMPLEMENTADA  
+Tests: ✔  
+Dependencias: ninguna  
 
 ============================================================
-3️⃣ IMPORTANTE – SIGUIENTE FASE
+2️⃣ WORKER
 ============================================================
 
-🟡 bets.py (numérico, similar a stackefectivo)
-🟡 stacks.py (múltiples ROIs)
-🟡 names.py (texto más complejo)
+[CRÍTICA] worker base (watch / replay / interval / max_ticks)  
+Estado: IMPLEMENTADA  
+Tests: ✔  
+Dependencias: CORE  
 
-🟡 Importador XML
-🟡 Linking obs ↔ xml
-🟡 Sistema de métricas / errores
+[CRÍTICA] dedupe / cambio de mano  
+Estado: NO IMPLEMENTADA  
+Dependencias: worker base  
 
-============================================================
-4️⃣ IDEAS
-============================================================
+[CRÍTICA] integración worker → hands_obs  
+Estado: NO IMPLEMENTADA  
+Dependencias: dedupe  
 
-• Guardar siempre frame_ref
-• Guardar confidence OCR
-• Tabla futura: hand_diffs
-• Hash ROI para detectar drift visual
-• Métricas por versión OCR
-
-============================================================
-5️⃣ CHECKLIST ANTES DE PUSH
-============================================================
-
-✔ tests verdes
-✔ no duplicados
-✔ DB estable
-✔ stackefectivo implementado
+[CRÍTICA] spawn_workers real (4 mesas)  
+Estado: NO IMPLEMENTADA  
+Dependencias: worker estable  
 
 ============================================================
+3️⃣ BASE DE DATOS
+============================================================
 
+[CRÍTICA] sqlite + migraciones  
+Estado: IMPLEMENTADA  
+Tests: ✔  
+
+[CRÍTICA] tabla hands (legacy)  
+Estado: IMPLEMENTADA  
+
+[CRÍTICA] hands_obs  
+Estado: IMPLEMENTADA  
+
+[CRÍTICA] hands_xml  
+Estado: IMPLEMENTADA  
+
+[CRÍTICA] hand_links  
+Estado: IMPLEMENTADA  
+
+============================================================
+4️⃣ OCR – NUMÉRICO
+============================================================
+
+[CRÍTICA] stackefectivo.py  
+Estado: IMPLEMENTADA  
+Tests: ✔  
+Validado imagen real: ✔  
+Dependencias: ninguna  
+
+[CRÍTICA] bets.py  
+Estado: IMPLEMENTADA  
+Tests: ✔  
+Dependencias: arquitectura OCR  
+
+[CRÍTICA] stacks.py  
+Estado: IMPLEMENTADA  
+Tests: ✔  
+Dependencias: arquitectura OCR  
+
+============================================================
+5️⃣ OCR – TEXTO
+============================================================
+
+[CRÍTICA] names.py  
+Estado: IMPLEMENTADA  
+Tests: ✔  
+Validado CLI real: ✔  
+Commit: 0459abb  
+Dependencias: arquitectura OCR  
+
+[NO CRÍTICA] villano.py  
+Estado: NO IMPLEMENTADA  
+Dependencias: definición conceptual previa  
+
+============================================================
+6️⃣ OCR – CARTAS
+============================================================
+
+[CRÍTICA] OCR Rank (13 clases CNN)  
+Estado: NO IMPLEMENTADA  
+Dependencias: dataset_cartas  
+
+============================================================
+7️⃣ INTEGRACIÓN Y MÉTRICAS
+============================================================
+
+[CRÍTICA] linking obs ↔ xml  
+Estado: NO IMPLEMENTADA  
+Dependencias: integración worker  
+
+[NO CRÍTICA] sistema métricas / errores  
+Estado: NO IMPLEMENTADA  
+Dependencias: linking  
+
+============================================================
+#Ideas
+============================================================
+
+- Guardar siempre frame_ref
+- Guardar confidence OCR
+- Tabla futura: hand_diffs
+- Hash ROI para detectar drift visual
+- Métricas por versión OCR
+- Versionado de módulos OCR
+
+--------------------------------------------------
 #ProyectoInfo
 
-============================================================
-
-repo_git:
-https://github.com/mrxv39/musica_new1.0.git
-
-main_db_path:
-.\data\musica_new.db
-
-dataset_cartas:
-C:\Users\Usuario\Desktop\app.preflop\capturas_regiones_cartas\img
-
-estado_actual:
-OCR numérico iniciado (stackefectivo OK)
+repo_git: https://github.com/mrxv39/musica_new1.0.git
+name_project: musica_new
+backup: Desktop\backups\backup_musica_new_20260217_083500.zip
+--------------------------------------------------
