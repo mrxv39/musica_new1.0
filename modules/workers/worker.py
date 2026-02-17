@@ -19,8 +19,21 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--id", type=int, required=True)
     p.add_argument("--interval_ms", type=int, default=200)
+
+    # Replay (single image)
     p.add_argument("--image", type=str, default=None)
+
+    # Replay (folder of images)
+    p.add_argument("--images_dir", type=str, default=None)
+    p.add_argument("--loop", type=str, default="false")  # true/false
+
+    # Screen mode
     p.add_argument("--region", nargs=4, type=int, default=None)
+
+    # Persist mode
+    p.add_argument("--persist_without_stack", type=str, default="false")  # true/false
+
+    # Tests/dev
     p.add_argument("--max_ticks", type=int, default=None)  # solo para tests/dev
     p.add_argument("--print_every_tick", type=str, default="true")
     return p.parse_args()
@@ -70,17 +83,49 @@ def safe_capture(region):
         return None, str(e)
 
 
-def main():
+def _list_images_in_dir(images_dir: str):
+    # Only bmp + png, sorted by filename
+    exts = {".bmp", ".png"}
+    try:
+        names = os.listdir(images_dir)
+    except Exception:
+        return []
 
+    files = []
+    for n in names:
+        p = os.path.join(images_dir, n)
+        if not os.path.isfile(p):
+            continue
+        _, ext = os.path.splitext(n)
+        if ext.lower() in exts:
+            files.append(p)
+
+    files.sort(key=lambda x: os.path.basename(x).lower())
+    return files
+
+
+def main():
     args = parse_args()
     worker_id = args.id
     interval_ms = args.interval_ms
     image_path = args.image
+    images_dir = args.images_dir
+    loop = (args.loop or "").lower() == "true"
     region = args.region
     max_ticks = args.max_ticks
     print_every_tick = (args.print_every_tick or "").lower() == "true"
+    persist_without_stack = (args.persist_without_stack or "").lower() == "true"
 
-    mode = "replay" if image_path else "screen"
+    # Mode selection:
+    # - replay_dir if images_dir provided
+    # - replay if image provided
+    # - screen otherwise
+    mode = "screen"
+    if images_dir:
+        mode = "replay_dir"
+    elif image_path:
+        mode = "replay"
+
     tick = 0
 
     # Dedupe state: last hand signature
@@ -89,12 +134,20 @@ def main():
     # DB integration
     from modules.db import db as dbmod
 
+    # replay_dir state
+    dir_files = []
+    dir_idx = 0
+    if mode == "replay_dir":
+        images_dir = os.path.abspath(images_dir)
+        dir_files = _list_images_in_dir(images_dir)
+
     try:
         while True:
             tick += 1
             ts = time.time()
             errors = []
             img_path = None
+            image_or_region = "missing"
 
             if mode == "replay":
                 img_path = image_path
@@ -104,7 +157,38 @@ def main():
                     errors.append("replay image not found")
                     img_path = None
 
+            elif mode == "replay_dir":
+                if not images_dir or not os.path.isdir(images_dir):
+                    errors.append("images_dir not found")
+                    img_path = None
+                    image_or_region = images_dir or "missing"
+                else:
+                    # Refresh file list if empty (or if folder changed externally)
+                    if not dir_files:
+                        dir_files = _list_images_in_dir(images_dir)
+
+                    if not dir_files:
+                        errors.append("images_dir empty (no .bmp/.png)")
+                        img_path = None
+                        image_or_region = images_dir
+                    else:
+                        if dir_idx >= len(dir_files):
+                            if loop:
+                                dir_idx = 0
+                            else:
+                                # Finished folder
+                                break
+
+                        img_path = dir_files[dir_idx]
+                        dir_idx += 1
+                        image_or_region = img_path
+
+                        if not os.path.exists(img_path):
+                            errors.append("image missing in dir")
+                            img_path = None
+
             else:
+                # screen mode
                 if region is None or len(region) != 4:
                     errors.append("region required for screen mode")
                     image_or_region = "missing"
@@ -132,14 +216,28 @@ def main():
             dedupe_reason = None
             sig = None
 
-            p1 = stacks_result.get("p1", 0)
-            if p1 is None:
+            # Normalizamos p1
+            p1_raw = stacks_result.get("p1", None)
+            p1 = 0
+            if isinstance(p1_raw, (int, float)) and p1_raw is not None:
+                p1 = p1_raw
+            elif p1_raw is None:
                 p1 = 0
 
-            # DEDUPE SIGNATURE: sha1(f"{mano_raw}|{p1_stack}")
-            if mano_result.get("valid") and p1 > 0:
-                base = f"{mano_result['mano_raw']}|{p1}"
-                sig = hashlib.sha1(base.encode("utf-8")).hexdigest()
+            mano_valid = bool(mano_result.get("valid"))
+            can_persist = mano_valid and (p1 > 0 or persist_without_stack)
+
+            # Dedupe:
+            # - modo normal: sha1(mano_raw|p1)
+            # - persist_without_stack: sha1(mano_raw)  (lo pedido)
+            if can_persist:
+                mano_raw = mano_result.get("mano_raw") or ""
+                if persist_without_stack:
+                    base = f"{mano_raw}"
+                else:
+                    base = f"{mano_raw}|{p1}"
+                sig = hashlib.sha1(base.encode("utf-8", errors="ignore")).hexdigest()
+
                 if sig == last_hand_sig:
                     dedupe_skipped = True
                     dedupe_reason = "duplicate_hand"
@@ -160,10 +258,12 @@ def main():
                 "fingerprint": fingerprint,
                 "dedupe_skipped": dedupe_skipped,
                 "dedupe_reason": dedupe_reason,
+                "image_ref": image_or_region,
+                "persist_without_stack": persist_without_stack,
             }
 
-            # --- Persist hands_obs ONLY when NEW + valid + stack>0 ---
-            if (not dedupe_skipped) and mano_result.get("valid") and p1 > 0 and sig:
+            # --- Persist hands_obs if new ---
+            if (not dedupe_skipped) and can_persist:
                 ocr_json = json.dumps(
                     {
                         "mano": mano_result,
@@ -176,11 +276,11 @@ def main():
                     fingerprint=sig,
                     table_id="",
                     detected_at_ms=int(ts * 1000),
-                    mano_raw=mano_result.get("mano_raw", ""),
-                    hand_class=(preflop.get("hand_class", "") if isinstance(preflop, dict) else ""),
+                    mano_raw=mano_result.get("mano_raw", "") or "",
+                    hand_class=preflop.get("hand_class", "") if isinstance(preflop, dict) else "",
                     time_str=time.strftime("%H:%M:%S", time.localtime(ts)),
-                    preflop_ok=(preflop.get("preflop_ok", False) if isinstance(preflop, dict) else False),
-                    noboard_ok=(preflop.get("noboard_ok", False) if isinstance(preflop, dict) else False),
+                    preflop_ok=preflop.get("preflop_ok", False) if isinstance(preflop, dict) else False,
+                    noboard_ok=preflop.get("noboard_ok", False) if isinstance(preflop, dict) else False,
                     ocr_json=ocr_json,
                     frame_ref=frame_ref,
                 )
