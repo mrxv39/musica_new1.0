@@ -1,0 +1,79 @@
+# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\db\schema.py
+
+# NOTA:
+# - Aquí solo dejamos CREATE TABLE (sin índices que dependan de columnas),
+#   porque podemos estar migrando desde esquemas antiguos.
+# - Los índices se crean desde init_db() cuando ya sabemos que las columnas existen.
+
+SCHEMA_TABLES_SQL = """
+PRAGMA journal_mode=WAL;
+PRAGMA synchronous=NORMAL;
+
+-- =========================
+-- Legacy table (tests antiguos)
+-- =========================
+CREATE TABLE IF NOT EXISTS hands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint TEXT NOT NULL UNIQUE,
+    data_json TEXT DEFAULT ''
+    -- created_at_ms puede no existir en instalaciones antiguas; se añade por migración
+);
+
+-- =========================
+-- Nuevo modelo (observaciones OCR + verdad XML + links)
+-- =========================
+CREATE TABLE IF NOT EXISTS hands_obs (
+    obs_id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    fingerprint TEXT NOT NULL UNIQUE,
+    table_id TEXT DEFAULT '',
+    detected_at_ms INTEGER DEFAULT 0,
+
+    mano_raw TEXT DEFAULT '',
+    hand_class TEXT DEFAULT '',
+    time_str TEXT DEFAULT '',
+    preflop_ok INTEGER DEFAULT 0,
+    noboard_ok INTEGER DEFAULT 0,
+
+    ocr_json TEXT DEFAULT '',
+    frame_ref TEXT DEFAULT '',
+    created_at_ms INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS hands_xml (
+    gamecode TEXT PRIMARY KEY,
+    sessioncode TEXT DEFAULT '',
+    startdate TEXT DEFAULT '',
+    smallblind TEXT DEFAULT '',
+    bigblind TEXT DEFAULT '',
+
+    hero_reg_code TEXT DEFAULT '',
+    hero_name TEXT DEFAULT '',
+    hero_seat TEXT DEFAULT '',
+    hero_cards TEXT DEFAULT '',
+
+    board_flop TEXT DEFAULT '',
+    board_turn TEXT DEFAULT '',
+    board_river TEXT DEFAULT '',
+
+    players_json TEXT DEFAULT '',
+    actions_json TEXT DEFAULT '',
+
+    created_at_ms INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS hand_links (
+    link_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    obs_id INTEGER NOT NULL,
+    gamecode TEXT NOT NULL,
+
+    match_score REAL DEFAULT 0.0,
+    match_method TEXT DEFAULT '',
+    created_at_ms INTEGER DEFAULT 0,
+
+    UNIQUE(obs_id),
+
+    FOREIGN KEY(obs_id) REFERENCES hands_obs(obs_id),
+    FOREIGN KEY(gamecode) REFERENCES hands_xml(gamecode)
+);
+"""
