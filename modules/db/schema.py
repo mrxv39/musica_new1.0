@@ -6,6 +6,15 @@
 # - Los índices se crean desde init_db() cuando ya sabemos que las columnas existen.
 
 SCHEMA_TABLES_SQL = """
+-- =========================
+-- Player classification table for villano OCR
+-- =========================
+CREATE TABLE IF NOT EXISTS players (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    tipo TEXT NOT NULL DEFAULT 'fish',
+    created_at TEXT DEFAULT (datetime('now'))
+);
 PRAGMA journal_mode=WAL;
 PRAGMA synchronous=NORMAL;
 
