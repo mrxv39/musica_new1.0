@@ -5,3 +5,6 @@ config/
 *.bak_*
 __pycache__/
 *.pyc
+
+.vscode/
+

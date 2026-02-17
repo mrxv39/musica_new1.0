@@ -1,6 +1,12 @@
 # C:\Users\Usuario\Desktop\proyectos\musica_new\modules\workers\worker.py
 import sys
 import os
+
+# Ensure repo root is on sys.path when running as a script (tests call python modules/workers/worker.py ...)
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 import json
 import time
 import hashlib
@@ -80,6 +86,9 @@ def main():
     # Dedupe state: last hand signature
     last_hand_sig = None
 
+    # DB integration
+    from modules.db import db as dbmod
+
     try:
         while True:
             tick += 1
@@ -91,7 +100,6 @@ def main():
                 img_path = image_path
                 image_or_region = os.path.abspath(img_path) if img_path else "missing"
 
-                # FIX: si la imagen no existe, añade error (para dev/test y salida clara)
                 if not img_path or not os.path.exists(img_path):
                     errors.append("replay image not found")
                     img_path = None
@@ -108,13 +116,8 @@ def main():
                         errors.append(f"capture failed: {err}")
                         img_path = None
 
-
-
-
-            # Run preflop before dedupe logic
             preflop = run_preflop(img_path) if img_path else {"error": "no image", "preflop_ok": False}
 
-            # --- DEDUPE LOGIC (mano + stacks) ---
             mano_result = {"valid": False, "mano_raw": None}
             stacks_result = {"p1": None}
             if isinstance(preflop, dict):
@@ -122,14 +125,18 @@ def main():
                 if isinstance(mods, dict):
                     mano_result = mods.get("mano", mano_result)
                     stacks_result = mods.get("stacks", stacks_result)
+
             fingerprint = get_fingerprint(worker_id, mode, image_or_region)
 
             dedupe_skipped = False
             dedupe_reason = None
             sig = None
+
             p1 = stacks_result.get("p1", 0)
             if p1 is None:
                 p1 = 0
+
+            # DEDUPE SIGNATURE: sha1(f"{mano_raw}|{p1_stack}")
             if mano_result.get("valid") and p1 > 0:
                 base = f"{mano_result['mano_raw']}|{p1}"
                 sig = hashlib.sha1(base.encode("utf-8")).hexdigest()
@@ -139,7 +146,7 @@ def main():
                 else:
                     last_hand_sig = sig
             else:
-                dedupe_reason = "no_dedupe"  # mano inválida o stack faltante
+                dedupe_reason = "no_dedupe"
 
             out = {
                 "worker_id": worker_id,
@@ -155,11 +162,33 @@ def main():
                 "dedupe_reason": dedupe_reason,
             }
 
+            # --- Persist hands_obs ONLY when NEW + valid + stack>0 ---
+            if (not dedupe_skipped) and mano_result.get("valid") and p1 > 0 and sig:
+                ocr_json = json.dumps(
+                    {
+                        "mano": mano_result,
+                        "stacks": stacks_result,
+                        "preflop": preflop,
+                    }
+                )
+                frame_ref = preflop.get("frame_ref", "") if isinstance(preflop, dict) else ""
+                dbmod.insert_obs(
+                    fingerprint=sig,
+                    table_id="",
+                    detected_at_ms=int(ts * 1000),
+                    mano_raw=mano_result.get("mano_raw", ""),
+                    hand_class=(preflop.get("hand_class", "") if isinstance(preflop, dict) else ""),
+                    time_str=time.strftime("%H:%M:%S", time.localtime(ts)),
+                    preflop_ok=(preflop.get("preflop_ok", False) if isinstance(preflop, dict) else False),
+                    noboard_ok=(preflop.get("noboard_ok", False) if isinstance(preflop, dict) else False),
+                    ocr_json=ocr_json,
+                    frame_ref=frame_ref,
+                )
+
             if print_every_tick:
                 print(json.dumps(out))
 
             if dedupe_skipped:
-                # Skip further processing for this tick
                 if max_ticks is not None and tick >= max_ticks:
                     break
                 time.sleep(interval_ms / 1000.0)
