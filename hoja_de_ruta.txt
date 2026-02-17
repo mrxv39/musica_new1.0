@@ -57,3 +57,4 @@ repo_git: https://github.com/mrxv39/musica_new1.0.git
 name_project: musica_new
 backup: Desktop\backups\backup_musica_new_20260216_172640.zip
 --------------------------------------------------
+WORKERS: worker.py (watch/replay modes, interval_ms, max_ticks for tests) + deterministic tests
