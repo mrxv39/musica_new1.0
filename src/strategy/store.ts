@@ -1,36 +1,60 @@
 import type { StrategyStore, StrategyGlobalData, SubStrategyItem } from "./types";
 import type { StrategyGlobal } from "./constants";
 
-const LS_KEY = "pokerboss.strategy.store.v1";
+// NOTA:
+// - No importamos @tauri-apps/api/fs para que el build web no falle.
+// - Persistencia V1: memoria (si no hay Tauri).
+// - Persistencia V2 (opcional): podemos enchufar plugin-fs o sqlite cuando quieras.
 
-export function loadStrategyStore(): StrategyStore {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return defaultStore();
-    const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== "object") return defaultStore();
-    if (typeof obj.version !== "number" || !obj.globals) return defaultStore();
-    return obj as StrategyStore;
-  } catch {
-    return defaultStore();
-  }
-}
+const STORE_VERSION = 1;
 
-export function saveStrategyStore(store: StrategyStore) {
-  localStorage.setItem(LS_KEY, JSON.stringify(store));
-}
+let _memStore: StrategyStore | null = null;
 
 function defaultStore(): StrategyStore {
   return {
-    version: 1,
+    version: STORE_VERSION,
     globals: {
       BASE: { name: "BASE", subs: [] },
     },
   };
 }
 
+function getMemStore(): StrategyStore {
+  if (_memStore) return _memStore;
+  _memStore = defaultStore();
+  return _memStore;
+}
+
+function isTauriRuntime(): boolean {
+  // Heurística segura para detectar Tauri sin imports
+  // window.__TAURI__ existe en runtime Tauri
+  return typeof window !== "undefined" && typeof (window as any).__TAURI__ !== "undefined";
+}
+
+/**
+ * Carga store.
+ * V1: memoria (web).
+ * Si estás en Tauri y más adelante metemos plugin-fs/sqlite, aquí lo conectamos.
+ */
+export async function loadStrategyStore(): Promise<StrategyStore> {
+  // V1: siempre en memoria para no bloquear builds
+  return getMemStore();
+}
+
+/**
+ * Guarda store.
+ * V1: memoria (web).
+ */
+export async function saveStrategyStore(store: StrategyStore) {
+  _memStore = store;
+  // placeholder: si runtime Tauri y quieres persistencia real, lo implementamos en V2
+  if (isTauriRuntime()) {
+    // no-op en V1
+  }
+}
+
 export function ensureGlobal(store: StrategyStore, globalName: StrategyGlobal) {
-  if (!store.globals) store.globals = {};
+  if (!store.globals) store.globals = {} as any;
   if (!store.globals[globalName]) {
     store.globals[globalName] = { name: globalName, subs: [] } as StrategyGlobalData;
   }

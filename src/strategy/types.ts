@@ -33,9 +33,22 @@ export type SubStrategyPayload = {
   situacion: string;
 };
 
+export type OrMove = "OR" | "PUSH" | "FOLD";
+
+export type OrRangeRow = {
+  id: string;
+  range: string;
+  move: OrMove;
+  value_min: number;
+  value_max: number;
+};
+
 export type SubStrategyItem = {
   id: string;
   payload: SubStrategyPayload;
+
+  // optional (V2): OR Ranges per sub
+  or_ranges?: OrRangeRow[];
 };
 
 export type StrategyGlobalData = {

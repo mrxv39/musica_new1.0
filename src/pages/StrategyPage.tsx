@@ -1,11 +1,28 @@
-// ui/Poker Boss/src/pages/StrategyPage.tsx
+// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\StrategyPage.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import { ESTRATEGIAS_GLOBALES, StrategyGlobal } from "../strategy/constants";
-import { loadStrategyStore, saveStrategyStore, listSubs, upsertSub, deleteSub, ensureGlobal } from "../strategy/store";
+import {
+  loadStrategyStore,
+  saveStrategyStore,
+  listSubs,
+  upsertSub,
+  deleteSub,
+  ensureGlobal,
+} from "../strategy/store";
 import { makeSubId, computeSituacionFromPositions } from "../strategy/utils";
 import type { StrategyStore, SubStrategyItem, SubStrategyPayload } from "../strategy/types";
 import StrategyEditor from "../strategy/components/StrategyEditor";
+
+// ✅ SQLite
+import {
+  initDB,
+  upsertSituationKey,
+  ensureBucketsForSituation,
+  upsertSubStrategy,
+  computeSituationKey_BTN_SB_BB_FISH_FISH,
+  pickBucketName,
+} from "../db/sql";
 
 function defaultPayload(): SubStrategyPayload {
   return {
@@ -37,8 +54,16 @@ function defaultPayload(): SubStrategyPayload {
   };
 }
 
+// ✅ store vacío válido para bootstrap
+function emptyStore(): StrategyStore {
+  return {
+    version: 1,
+    globals: {},
+  };
+}
+
 export default function StrategyPage() {
-  const [store, setStore] = useState<StrategyStore>(() => loadStrategyStore());
+  const [store, setStore] = useState<StrategyStore>(() => emptyStore());
   const [globalName, setGlobalName] = useState<StrategyGlobal>("BASE");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
@@ -48,10 +73,31 @@ export default function StrategyPage() {
   const subs = useMemo(() => listSubs(store, globalName), [store, globalName]);
 
   useEffect(() => {
-    const s: StrategyStore = { ...store };
-    ensureGlobal(s, globalName);
-    setStore(s);
-    saveStrategyStore(s);
+    // 1) Init DB (no rompe si falla)
+    (async () => {
+      try {
+        await initDB();
+      } catch (e: any) {
+        setStatus(`DB init ERROR: ${e?.message || String(e)}`);
+      }
+    })();
+
+    // 2) Cargar store (async-safe)
+    (async () => {
+      try {
+        const loaded = await loadStrategyStore();
+        const nextStore: StrategyStore = loaded && typeof loaded === "object" ? (loaded as StrategyStore) : emptyStore();
+        ensureGlobal(nextStore, globalName);
+        setStore(nextStore);
+        saveStrategyStore(nextStore);
+      } catch (e: any) {
+        // si falla, seguimos con emptyStore
+        const nextStore = emptyStore();
+        ensureGlobal(nextStore, globalName);
+        setStore(nextStore);
+        setStatus((prev) => prev || `Store load ERROR: ${e?.message || String(e)}`);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -73,13 +119,40 @@ export default function StrategyPage() {
     setStatus("Nuevo: editor limpio.");
   };
 
-  const onSave = () => {
-    const nextStore: StrategyStore = { ...store };
-    const idx = upsertSub(nextStore, globalName, generated);
-    setStore(nextStore);
-    saveStrategyStore(nextStore);
-    setSelectedIndex(idx);
-    setStatus(`Guardado: ${generated.id}`);
+  const onSave = async () => {
+    // 1) Guardado UI legacy
+    try {
+      const nextStore: StrategyStore = { ...store };
+      const idx = upsertSub(nextStore, globalName, generated);
+      setStore(nextStore);
+      saveStrategyStore(nextStore);
+      setSelectedIndex(idx);
+    } catch (e: any) {
+      setStatus(`UI Save ERROR: ${e?.message || String(e)}`);
+      return;
+    }
+
+    // 2) Guardado REAL SQLite
+    try {
+      const situationKey = computeSituationKey_BTN_SB_BB_FISH_FISH();
+
+      const situationId = await upsertSituationKey(situationKey);
+      await ensureBucketsForSituation(situationId);
+
+      const bucket = pickBucketName(Number(generated.payload.p1_stack_min), Number(generated.payload.p1_stack_max));
+
+      await upsertSubStrategy(
+        situationId,
+        bucket,
+        generated.payload,
+        Number(generated.payload.p1_stack_min),
+        Number(generated.payload.p1_stack_max)
+      );
+
+      setStatus(`Guardado en SQLite: ${situationKey} / ${bucket}`);
+    } catch (e: any) {
+      setStatus(`DB Save ERROR: ${e?.message || String(e)}`);
+    }
   };
 
   const onDelete = () => {
@@ -92,7 +165,7 @@ export default function StrategyPage() {
     setStore(nextStore);
     saveStrategyStore(nextStore);
     setSelectedIndex(null);
-    setStatus("Subestrategia borrada.");
+    setStatus("Subestrategia borrada (UI).");
   };
 
   const onSelect = (idx: number) => {
@@ -204,6 +277,7 @@ export default function StrategyPage() {
             <div>
               <div className="strategy-h1">Strategy</div>
               <div className="muted">id generado: {generated.id}</div>
+              <div className="muted">SQLite key fijo: BTN_SB_BB_FISH_FISH</div>
             </div>
           </div>
 

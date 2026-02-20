@@ -1,0 +1,189 @@
+.strategy-page {
+  padding: 6px 0;
+}
+
+.strategy-layout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.strategy-sidebar {
+  width: 320px;
+  min-width: 320px;
+  border: 1px solid #e6e6e6;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.sb-title {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.sb-field label {
+  display: block;
+  font-size: 12px;
+  opacity: 0.75;
+  margin: 8px 0 4px 0;
+}
+
+.sb-field select {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.sb-list {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.sb-item {
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.sb-item:hover {
+  background: #f6f7ff;
+}
+
+.sb-item.active {
+  background: #eef0ff;
+  border-color: #cdd3ff;
+}
+
+.sb-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sb-actions button {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.sb-actions button:hover {
+  background: #f8f8f8;
+}
+
+.sb-status {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.85;
+  min-height: 18px;
+}
+
+.strategy-main {
+  flex: 1;
+  min-width: 520px;
+}
+
+.strategy-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.strategy-h1 {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.muted {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.strategy-card {
+  border: 1px solid #e6e6e6;
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.editor-section {
+  margin-top: 12px;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 12px;
+}
+
+.editor-section-title {
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.field-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.field label {
+  display: block;
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.strategy-output {
+  margin-top: 12px;
+}
+
+.strategy-output-title {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.strategy-output textarea {
+  width: 100%;
+  min-height: 220px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid #e6e6e6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}

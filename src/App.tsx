@@ -1,7 +1,9 @@
 // C:\Users\Usuario\Desktop\proyectos\musica_new\ui\Poker Boss\src\App.tsx
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { initDB } from "./db/sql";
 import { DEFAULT_DB_PATH, extractP1Stack, fetchLatestHandsObs, HandsObsRow } from "./db";
+import StrategyPage from "./pages/StrategyPage";
 
 type Tab = "hands" | "strategy" | "account" | "import";
 
@@ -34,7 +36,7 @@ function TopNav({
         <button
           key={t.key}
           type="button"
-          className={`top-nav-tab${activeTab === t.key ? " active" : ""}`}
+          className={"top-nav-tab" + (activeTab === t.key ? " active" : "")}
           onClick={() => onChange(t.key)}
         >
           {t.label}
@@ -54,6 +56,9 @@ function ComingSoon({ title }: { title: string }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    initDB();
+  }, []);
   const [activeTab, setActiveTab] = useState<Tab>("hands");
 
   const [dbPath, setDbPath] = useState<string>(() => localStorage.getItem("dbPath") || DEFAULT_DB_PATH);
@@ -72,10 +77,10 @@ export default function App() {
     try {
       const data = await fetchLatestHandsObs(p, 50);
       setRows(data);
-      setStatus(`ok (${data.length})`);
+      setStatus("ok (" + data.length + ")");
     } catch (e: any) {
       setRows([]);
-      setStatus(`ERROR: ${e?.message || String(e)}`);
+      setStatus("ERROR: " + (e?.message || String(e)));
     }
   }
 
@@ -157,16 +162,16 @@ export default function App() {
               </tbody>
             </table>
 
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-              DB actual: {dbPath.trim()}
-            </div>
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>DB actual: {dbPath.trim()}</div>
           </>
         )}
 
-        {activeTab === "strategy" && <ComingSoon title="Strategy" />}
+        {activeTab === "strategy" && <StrategyPage />}
         {activeTab === "account" && <ComingSoon title="Account" />}
         {activeTab === "import" && <ComingSoon title="Import" />}
       </div>
     </div>
   );
 }
+
+
