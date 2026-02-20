@@ -6,37 +6,47 @@
 [1m[46m RUN [49m[22m [36mv4.0.18 [39m[90mC:/Users/Usuario/Desktop/proyectos/poker_boss[39m
       [2mCoverage enabled with [22m[33mv8[39m
 
- [32m✓[39m src/test/strategy.model.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32m✓[39m src/test/sql.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 9[2mms[22m[39m
- [32m✓[39m src/test/strategy.useStrategyPage.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 608[2mms[22m[39m
- [32m✓[39m src/test/StrategyPage.ui.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 774[2mms[22m[39m
-     [33m[2m✓[22m[39m al pulsar Guardar subestrategia llama a dbSaveSub() [33m 387[2mms[22m[39m
+ [32m✓[39m src/test/strategy.model.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/test/sql.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/test/EditorFields.ui.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 89[2mms[22m[39m
+ [32m✓[39m src/test/VillainCard.ui.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 168[2mms[22m[39m
+ [32m✓[39m src/test/strategy.useStrategyPage.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 619[2mms[22m[39m
+ [32m✓[39m src/test/OrRangesPanel.ui.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 599[2mms[22m[39m
+     [33m[2m✓[22m[39m click + Añadir => llama onChange con 1 fila [33m 397[2mms[22m[39m
+ [32m✓[39m src/test/StrategyPage.ui.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 889[2mms[22m[39m
+     [33m[2m✓[22m[39m al pulsar Guardar subestrategia llama a dbSaveSub() [33m 468[2mms[22m[39m
 
-[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
-[2m      Tests [22m [1m[32m26 passed[39m[22m[90m (26)[39m
-[2m   Start at [22m 10:56:44
-[2m   Duration [22m 3.23s[2m (transform 376ms, setup 1.22s, import 480ms, tests 1.40s, environment 5.99s)[22m
+[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[32m32 passed[39m[22m[90m (32)[39m
+[2m   Start at [22m 11:59:57
+[2m   Duration [22m 4.68s[2m (transform 975ms, setup 3.48s, import 1.27s, tests 2.39s, environment 16.89s)[22m
 
 [34m % [39m[2mCoverage report from [22m[33mv8[39m
 -------------------|---------|----------|---------|---------|-------------------
 File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
 -------------------|---------|----------|---------|---------|-------------------
-All files          |   66.43 |    55.09 |   54.54 |   67.98 |                   
+All files          |   74.77 |    59.66 |   68.75 |   77.06 |                   
  db                |   93.18 |       80 |   88.88 |    97.5 |                   
   sql.ts           |   93.18 |       80 |   88.88 |    97.5 | 167               
  pages             |   66.66 |       80 |      50 |   72.72 |                   
   StrategyPage.tsx |   66.66 |       80 |      50 |   72.72 | 32-33,88-91       
  pages/strategy    |    79.6 |    61.46 |   84.78 |   80.23 |                   
   model.ts         |     100 |      100 |     100 |     100 |                   
-  state.ts         |      75 |    52.38 |      80 |      84 | 42-45             
+  state.ts         |      75 |    52.38 |      80 |      84 | 44-47             
   ...rategyPage.ts |   79.11 |    57.89 |   83.87 |   78.26 | ...79-284,289-299 
- ...egy/components |   83.33 |     62.5 |      75 |   81.81 |                   
+ ...egy/components |   85.71 |       50 |      75 |   84.61 |                   
   ...egyHeader.tsx |      80 |       50 |   66.66 |      80 | 47                
   ...gyPreview.tsx |     100 |      100 |     100 |     100 |                   
-  ...gySidebar.tsx |      75 |       75 |   66.66 |      75 | 29                
+  ...gySidebar.tsx |   83.33 |       50 |   66.66 |   83.33 | 28                
  strategy          |   54.16 |    33.33 |   46.15 |   59.37 |                   
   utils.ts         |   54.16 |    33.33 |   46.15 |   59.37 | 25,46-48,107-178  
- ...egy/components |   23.28 |    22.72 |   18.75 |   24.63 |                   
-  ...ngesPanel.tsx |   20.58 |       10 |   11.76 |   22.58 | ...6-56,60,84-128 
-  ...egyEditor.tsx |   25.64 |    33.33 |   22.58 |   26.31 | ...19,234,253-291 
+ ...egy/components |   65.71 |       44 |      50 |   66.66 |                   
+  ...ngesPanel.tsx |      72 |     37.5 |   57.14 |   73.91 | ...09-116,128-136 
+  ...egyEditor.tsx |      50 |    55.55 |   33.33 |      50 | 49-51,68-75       
+ ...ponents/editor |   76.59 |    90.47 |    62.5 |   79.54 |                   
+  EditorFields.tsx |     100 |      100 |     100 |     100 |                   
+  P1Card.tsx       |      25 |      100 |   14.28 |      25 | 19-26             
+  VillainCard.tsx  |   78.57 |      100 |    62.5 |   78.57 | 85-96             
+  editorStyles.ts  |     100 |      100 |     100 |     100 |                   
+  numberUtils.ts   |      80 |       75 |     100 |     100 | 5,10              
 -------------------|---------|----------|---------|---------|-------------------
