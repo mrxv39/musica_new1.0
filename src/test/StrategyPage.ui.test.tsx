@@ -87,3 +87,6 @@ describe("StrategyPage (UI) - Guardado SQLite", () => {
     expect(await screen.findByText(/boom/i)).toBeTruthy();
   });
 });
+
+
+
