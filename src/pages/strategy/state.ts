@@ -2,11 +2,14 @@
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\strategy\state.ts
  *
  * Estado puro. Tipos oficiales: src/strategy/types
- * - globals[global].subs es array (según tus errores anteriores).
+ * - globals[global].subs es array
  */
 import type { SubStrategyPayload, StrategyStore, SubStrategyItem } from "../../strategy/types";
 import { normalizePayload } from "../../strategy/utils";
 import { getUiTimeKey } from "./model";
+
+// 🔑 Para que otros módulos puedan importar el tipo desde aquí (StrategySidebar, etc.)
+export type { SubStrategyItem };
 
 export function defaultPayload(): SubStrategyPayload {
   return normalizePayload({} as SubStrategyPayload);
@@ -37,12 +40,11 @@ export function getSubById(store: StrategyStore, globalName: string, id: string)
 export function listSubs(store: StrategyStore, globalName: string): SubStrategyItem[] {
   const subs = [...getSubsArray(store, globalName)];
 
-  // Orden “mejor esfuerzo”: si existen timestamps UI-only, ordenar por ellos
   subs.sort((a, b) => {
     const ta = getUiTimeKey(a);
     const tb = getUiTimeKey(b);
     if (ta && tb && ta !== tb) return tb.localeCompare(ta);
-    return 0; // si no hay times, mantenemos orden estable (JS sort es estable en V8 moderno)
+    return 0;
   });
 
   return subs;

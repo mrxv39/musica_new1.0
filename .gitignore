@@ -85,3 +85,6 @@ screenshot_*.jpeg
 !modules/preflop/templates/*.bmp
 coverage/
 .gate/vitest-coverage.txt
+
+proyect_promp.txt
+

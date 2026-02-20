@@ -5,7 +5,7 @@ import { useCallback } from "react";
 import type { StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
 import { isValidPayload } from "../../strategy/substrategy_helpers";
 import { dbSaveSub } from "./db";
-import { defaultPayload, emptyStore, getSubById, listSubs, upsertSub } from "./state";
+import { defaultPayload, emptyStore, getSubById, upsertSub } from "./state";
 import { getUiName, nowIso, uid } from "./model";
 
 export function useStrategyActions(args: {
