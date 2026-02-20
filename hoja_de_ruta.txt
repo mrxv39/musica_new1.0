@@ -1,155 +1,200 @@
-============================================================
 HOJA DE RUTA – musica_new
 ============================================================
-
-Fecha: 2026-02-17
+Fecha: 2026-02-17 (v3 estratégica)
 
 Objetivo global:
-Sistema multi-mesa (4 mesas) capaz de detectar manos en tiempo real,
-ejecutar OCR modular, persistir observaciones, importar XML como verdad,
-comparar errores y generar métricas de precisión.
+Motor OCR multi-mesa capaz de:
+- Detectar manos en tiempo real
+- Persistir observaciones robustamente
+- Comparar contra XML (verdad)
+- Generar métricas de precisión
+- Escalar a 4 mesas operativas
 
 ============================================================
-1️⃣ CORE
+ESTADO ACTUAL (BASE FUNCIONAL)
 ============================================================
 
-[CRÍTICA] mano.py  
-Estado: IMPLEMENTADA  
-Tests: ✔  
-Dependencias: ninguna  
+✔ Motor OCR modular estable
+✔ Worker replay_dir funcional
+✔ Persistencia flexible (--persist_without_stack)
+✔ Dedupe operativo
+✔ DB estructurada
+✔ UI Tauri base operativa
+✔ Hands visualizable en tiempo real
 
-[CRÍTICA] time.py  
-Estado: IMPLEMENTADA  
-Tests: ✔  
-Dependencias: ninguna  
-
-[CRÍTICA] noboard.py  
-Estado: IMPLEMENTADA  
-Tests: ✔  
-Dependencias: ninguna  
-
-[CRÍTICA] preflop.py  
-Estado: IMPLEMENTADA  
-Tests: ✔  
-Dependencias: ninguna  
+Sistema actual = MOTOR FUNCIONAL + UI DE MONITORIZACIÓN
 
 ============================================================
-2️⃣ WORKER
+FASE 1 – MVP OPERATIVO MULTI-MESA
 ============================================================
 
-[CRÍTICA] worker base (watch / replay / interval / max_ticks)  
-Estado: IMPLEMENTADA  
-Tests: ✔  
-Dependencias: CORE  
+Objetivo:
+Convertir el sistema en herramienta usable real.
 
-[CRÍTICA] dedupe / cambio de mano
-Estado: IMPLEMENTADA
-Tests: ✔
-Commit: 459cf21
-Dependencias: worker base  
+------------------------------------------------------------
+1️⃣ spawn_workers real
+------------------------------------------------------------
+CRÍTICO
+Dependencias: worker estable
+Resultado esperado:
+- 4 workers paralelos
+- Config independiente por mesa
+- Estado por mesa (running/stopped/error)
+- Restart automático si crashea
 
-[CRÍTICA] integración worker → hands_obs  
-Estado: NO IMPLEMENTADA  
-Dependencias: dedupe  
+Riesgo:
+Concurrencia DB (SQLite write locking)
 
-[CRÍTICA] spawn_workers real (4 mesas)  
-Estado: NO IMPLEMENTADA  
-Dependencias: worker estable  
+------------------------------------------------------------
+2️⃣ Control workers desde UI
+------------------------------------------------------------
+CRÍTICO
+Dependencias: spawn_workers
 
-============================================================
-3️⃣ BASE DE DATOS
-============================================================
+UI debe poder:
+- Start/Stop mesa individual
+- Mostrar estado worker
+- Mostrar errores
+- Configurar interval
 
-[CRÍTICA] sqlite + migraciones  
-Estado: IMPLEMENTADA  
-Tests: ✔  
+------------------------------------------------------------
+3️⃣ Import Tab REAL
+------------------------------------------------------------
+CRÍTICO
+Dependencias: worker replay estable
 
-[CRÍTICA] tabla hands (legacy)  
-Estado: IMPLEMENTADA  
+- Seleccionar carpeta
+- Ejecutar replay_dir
+- Ver progreso
+- Ver número inserts
+- Ver errores
 
-[CRÍTICA] hands_obs  
-Estado: IMPLEMENTADA  
+------------------------------------------------------------
 
-[CRÍTICA] hands_xml  
-Estado: IMPLEMENTADA  
-
-[CRÍTICA] hand_links  
-Estado: IMPLEMENTADA  
-
-============================================================
-4️⃣ OCR – NUMÉRICO
-============================================================
-
-[CRÍTICA] stackefectivo.py  
-Estado: IMPLEMENTADA  
-Tests: ✔  
-Validado imagen real: ✔  
-Dependencias: ninguna  
-
-[CRÍTICA] bets.py  
-Estado: IMPLEMENTADA  
-Tests: ✔  
-Dependencias: arquitectura OCR  
-
-[CRÍTICA] stacks.py  
-Estado: IMPLEMENTADA  
-Tests: ✔  
-Dependencias: arquitectura OCR  
+Resultado FASE 1:
+Sistema usable para testear datasets y operar mesas reales.
 
 ============================================================
-5️⃣ OCR – TEXTO
+FASE 2 – VALIDACIÓN Y CALIDAD
 ============================================================
 
-[CRÍTICA] names.py  
-Estado: IMPLEMENTADA  
-Tests: ✔  
-Validado CLI real: ✔  
-Commit: 0459abb  
-Dependencias: arquitectura OCR  
+Objetivo:
+Convertir el motor en sistema medible.
 
-[NO CRÍTICA] villano.py
-Estado: IMPLEMENTADA
-Tests: ✔
-Commit: 81e53dd
-Dependencias: names.py + db(players.tipo)  
+------------------------------------------------------------
+1️⃣ linking obs ↔ xml
+------------------------------------------------------------
+CRÍTICO
+Matching:
+- timestamp aproximado
+- mano_raw
+- table_id
+
+------------------------------------------------------------
+2️⃣ Tabla hand_diffs
+------------------------------------------------------------
+Guardar:
+- rank_error
+- suit_error
+- stack_error
+- false_positive
+- false_negative
+
+------------------------------------------------------------
+3️⃣ Métricas
+------------------------------------------------------------
+- Accuracy por módulo
+- Accuracy por mesa
+- Accuracy por versión OCR
+- % error por tipo
+
+Resultado FASE 2:
+Sistema auditable.
 
 ============================================================
-6️⃣ OCR – CARTAS
+FASE 3 – HARDENING DEL MOTOR
 ============================================================
 
-[CRÍTICA] OCR Rank (13 clases CNN)  
-Estado: NO IMPLEMENTADA  
-Dependencias: dataset_cartas  
-
-============================================================
-7️⃣ INTEGRACIÓN Y MÉTRICAS
-============================================================
-
-[CRÍTICA] linking obs ↔ xml  
-Estado: NO IMPLEMENTADA  
-Dependencias: integración worker  
-
-[NO CRÍTICA] sistema métricas / errores  
-Estado: NO IMPLEMENTADA  
-Dependencias: linking  
-
-============================================================
-#Ideas
-============================================================
-
-- Guardar siempre frame_ref
+- Logging estructurado por mesa
+- Nivel debug configurable
 - Guardar confidence OCR
-- Tabla futura: hand_diffs
-- Hash ROI para detectar drift visual
-- Métricas por versión OCR
-- Versionado de módulos OCR
+- Versionado OCR
+- Detección drift visual (hash ROI)
+- Control de regresión automática
 
---------------------------------------------------
-#ProyectoInfo
+Resultado:
+Sistema profesional robusto.
+
+============================================================
+FASE 4 – IA CARTAS (CNN)
+============================================================
+
+Solo empezar cuando:
+- Métricas estén implementadas
+- Pipeline esté estable
+
+OCR Rank CNN:
+- Dataset 13 clases
+- Entrenamiento
+- Validación contra XML
+- Sustitución del método actual
+
+============================================================
+FASE 5 – ESCALABILIDAD
+============================================================
+
+- Migrar a arquitectura multiproceso robusta
+- Evaluar migración SQLite → Postgres si necesario
+- Worker supervisor
+- Sistema de colas
+
+============================================================
+ORDEN ÓPTIMO REAL (NO CAMBIAR)
+============================================================
+
+1️⃣ spawn_workers
+2️⃣ Control desde UI
+3️⃣ Import tab real
+4️⃣ linking XML
+5️⃣ métricas
+6️⃣ hardening
+7️⃣ IA cartas
+
+No saltar pasos.
+
+============================================================
+LO QUE NO HACER AHORA
+============================================================
+
+✘ No entrenar CNN todavía
+✘ No optimizar métricas antes de linking
+✘ No refactorizar todo el worker
+✘ No tocar arquitectura DB
+
+============================================================
+RIESGOS TÉCNICOS A VIGILAR
+============================================================
+
+- SQLite locking con 4 workers
+- Consumo CPU si interval muy bajo
+- Falsos positivos por persist_without_stack
+- Drift visual ROI
+
+============================================================
+VISION FINAL
+============================================================
+
+Poker Boss:
+- Motor OCR profesional
+- Auditor de precisión
+- Herramienta de validación automática
+- Sistema multi-mesa escalable
+- Base para modelo IA supervisado
+
+============================================================
+ProyectoInfo
+============================================================
 
 repo_git: https://github.com/mrxv39/musica_new1.0.git
 name_project: musica_new
 backup: Desktop\backups\backup_musica_new_20260217_080837.zip
---------------------------------------------------
-
-
