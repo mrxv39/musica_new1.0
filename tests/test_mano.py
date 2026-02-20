@@ -1,4 +1,5 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\tests\test_mano.py
+
+# [test_id:BASE_OCR_Modular]
 import os
 import sys
 import json

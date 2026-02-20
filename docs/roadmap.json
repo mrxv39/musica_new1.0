@@ -1,0 +1,259 @@
+{
+  "project": "musica_new",
+  "version": 2,
+  "tasks": [
+    {
+      "id": "BASE_OCR_Modular",
+      "title": "Motor OCR modular estable (módulos ocr/preflop + tests) ✅",
+      "implemented": true,
+      "critical": true,
+      "state": "done",
+      "deps": [],
+      "test_id": "BASE_OCR_Modular"
+    },
+    {
+      "id": "BASE_WorkerReplayDir",
+      "title": "Worker replay_dir funcional (procesa carpeta de capturas) ✅",
+      "implemented": true,
+      "critical": true,
+      "state": "done",
+      "deps": [
+        "BASE_OCR_Modular"
+      ],
+      "test_id": "BASE_WorkerReplayDir"
+    },
+    {
+      "id": "BASE_PersistWithoutStack",
+      "title": "Persistencia flexible: flag --persist_without_stack ✅",
+      "implemented": true,
+      "critical": false,
+      "state": "done",
+      "deps": [
+        "BASE_WorkerReplayDir"
+      ],
+      "test_id": "BASE_PersistWithoutStack"
+    },
+    {
+      "id": "BASE_Dedupe",
+      "title": "Dedupe operativo en worker (evita duplicados en observaciones) ✅",
+      "implemented": true,
+      "critical": false,
+      "state": "done",
+      "deps": [
+        "BASE_WorkerReplayDir"
+      ],
+      "test_id": "BASE_Dedupe"
+    },
+    {
+      "id": "BASE_DB_Structured",
+      "title": "DB estructurada (schema + helpers + tests) ✅",
+      "implemented": true,
+      "critical": true,
+      "state": "done",
+      "deps": [],
+      "test_id": "BASE_DB_Structured"
+    },
+    {
+      "id": "UI_Tauri_Base",
+      "title": "UI Tauri base operativa (Vite + src-tauri)",
+      "implemented": true,
+      "critical": true,
+      "state": "done",
+      "deps": [],
+      "test_id": null
+    },
+    {
+      "id": "UI_Hands_Realtime",
+      "title": "Hands visualizable en tiempo real en la UI (auto-refresh desde SQLite)",
+      "implemented": true,
+      "critical": true,
+      "state": "done",
+      "deps": [
+        "UI_Tauri_Base",
+        "BASE_DB_Structured"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "UI_Strategy_Module",
+      "title": "Strategy module integrado en UI (store + editor + OrRangesPanel)",
+      "implemented": true,
+      "critical": false,
+      "state": "done",
+      "deps": [
+        "UI_Tauri_Base"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "BUILD_ViteConfig_Fixed",
+      "title": "Vite config arreglado para build (imports/paths)",
+      "implemented": true,
+      "critical": false,
+      "state": "done",
+      "deps": [
+        "UI_Tauri_Base"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "REFACTOR_RemoveRootSrc",
+      "title": "Refactor: eliminado src/ en raíz, repo coherente (backend en modules/ + ui/ separado)",
+      "implemented": true,
+      "critical": false,
+      "state": "done",
+      "deps": [],
+      "test_id": null
+    },
+    {
+      "id": "MVP_SpawnWorkers",
+      "title": "spawn_workers real: 4 workers paralelos con config independiente, estado por mesa y restart automático",
+      "implemented": false,
+      "critical": true,
+      "state": "todo",
+      "deps": [],
+      "test_id": null
+    },
+    {
+      "id": "UI_WorkerControl",
+      "title": "Control workers desde UI: start/stop por mesa, estado, errores, configuración de interval",
+      "implemented": false,
+      "critical": true,
+      "state": "todo",
+      "deps": [
+        "MVP_SpawnWorkers"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "UI_ImportTabReal",
+      "title": "Import Tab REAL: seleccionar carpeta, ejecutar replay_dir, progreso, inserts y errores",
+      "implemented": false,
+      "critical": true,
+      "state": "todo",
+      "deps": [
+        "UI_WorkerControl"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "VAL_LinkObsXml",
+      "title": "Linking obs ↔ XML (matching por timestamp aproximado, mano_raw y table_id)",
+      "implemented": false,
+      "critical": true,
+      "state": "todo",
+      "deps": [
+        "UI_ImportTabReal"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "VAL_HandDiffsTable",
+      "title": "Crear tabla hand_diffs (rank_error, suit_error, stack_error, false_positive, false_negative)",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [
+        "VAL_LinkObsXml"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "VAL_Metrics",
+      "title": "Métricas: accuracy por módulo/mesa/versión OCR y % error por tipo",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [
+        "VAL_HandDiffsTable"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "HARD_EngineHarden",
+      "title": "Hardening motor: logging estructurado por mesa, debug configurable, guardar confidence, versionado OCR, drift visual (hash ROI), control regresión automática",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [
+        "VAL_Metrics"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "IA_CNN_RankOCR",
+      "title": "IA cartas (CNN rank): dataset 13 clases, entrenamiento, validación contra XML y sustitución del método actual",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [
+        "HARD_EngineHarden"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "SCALE_Architecture",
+      "title": "Escalabilidad: arquitectura multiproceso robusta, evaluar SQLite→Postgres, supervisor y sistema de colas",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [
+        "IA_CNN_RankOCR"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "RISK_SQLiteLocking",
+      "title": "Mitigar riesgo SQLite locking con 4 workers (estrategia de colas/commit batching/WAL)",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [
+        "MVP_SpawnWorkers"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "RISK_CPUInterval",
+      "title": "Mitigar consumo CPU si interval muy bajo (throttling/backoff y límites por mesa)",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [
+        "UI_WorkerControl"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "RISK_FalsePosPersist",
+      "title": "Mitigar falsos positivos por persist_without_stack (reglas/flags y review pipeline)",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [
+        "VAL_LinkObsXml"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "RISK_DriftROI",
+      "title": "Mitigar drift visual ROI (hash ROI + alertas + dataset de regresión)",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [
+        "HARD_EngineHarden"
+      ],
+      "test_id": null
+    },
+    {
+      "id": "T_USER_001",
+      "title": "no se reflejan los test con las tareas",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [],
+      "test_id": null
+    }
+  ]
+}

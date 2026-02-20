@@ -1,4 +1,6 @@
 import unittest
+# [test_id:BASE_PersistWithoutStack]
+# [test_id:BASE_Dedupe]
 import tempfile
 import os
 import sys

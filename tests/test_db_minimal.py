@@ -1,4 +1,5 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\tests\test_db_minimal.py
+
+# [test_id:BASE_DB_Structured]
 
 import os
 import json

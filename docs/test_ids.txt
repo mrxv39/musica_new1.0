@@ -1,0 +1,5 @@
+[test_id:BASE_OCR_Modular]
+[test_id:BASE_WorkerReplayDir]
+[test_id:BASE_PersistWithoutStack]
+[test_id:BASE_Dedupe]
+[test_id:BASE_DB_Structured]

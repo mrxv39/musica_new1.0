@@ -1,4 +1,5 @@
 import unittest
+# [test_id:BASE_DB_Structured]
 import os
 import json
 from modules.db import db
