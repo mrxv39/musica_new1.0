@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { SubStrategyPayload, PlayerPos, PlayerTipo } from "../types";
+import type { OrRangeRow, PlayerPos, PlayerTipo, SubStrategyPayload } from "../types";
 import { computeSituacionFromPositions } from "../utils";
 import OrRangesPanel from "./OrRangesPanel";
 
@@ -7,6 +7,9 @@ type Props = {
   value: SubStrategyPayload;
   onChange: (next: SubStrategyPayload) => void;
   showOrPanel?: boolean;
+
+  orRanges?: OrRangeRow[];
+  onChangeOrRanges?: (rows: OrRangeRow[]) => void;
 };
 
 function clampNum(v: number, min = 0, max = 9999) {
@@ -22,7 +25,13 @@ function numFromInput(s: string) {
 const POS: PlayerPos[] = ["BTN", "SB", "BB"];
 const TIPOS: PlayerTipo[] = ["fish", "reg", "unknown"];
 
-export default function StrategyEditor({ value, onChange, showOrPanel = false }: Props) {
+export default function StrategyEditor({
+  value,
+  onChange,
+  showOrPanel = false,
+  orRanges = [],
+  onChangeOrRanges,
+}: Props) {
   const computedSituacion = useMemo(() => {
     return computeSituacionFromPositions(value.hero_pos, value.p2_pos, value.p3_pos);
   }, [value.hero_pos, value.p2_pos, value.p3_pos]);
@@ -275,7 +284,13 @@ export default function StrategyEditor({ value, onChange, showOrPanel = false }:
         </div>
       </div>
 
-      {showOrPanel ? <OrRangesPanel value={value} /> : null}
+      {showOrPanel ? (
+        <OrRangesPanel
+          situacion={computedSituacion}
+          rows={orRanges}
+          onChange={(rows) => onChangeOrRanges?.(rows)}
+        />
+      ) : null}
     </div>
   );
 }

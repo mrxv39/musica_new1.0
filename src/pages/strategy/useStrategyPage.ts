@@ -7,8 +7,8 @@
  * - si falla: muestre "DB Save ERROR: <msg>"
  * - si ok: muestre "Guardado en sqlite"
  */
-import { useEffect, useMemo, useState } from "react";
-import type { StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { OrRangeRow, StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
 import { dbInit, dbLoadSubs, dbSaveSub } from "./db";
 import { defaultPayload, emptyStore, ensureGlobal, getSubById, listSubs, upsertSub } from "./state";
 
@@ -26,6 +26,9 @@ type Ctrl = {
 
   editorValue: SubStrategyPayload;
   setEditorValue: (v: SubStrategyPayload) => void;
+
+  orRanges: OrRangeRow[];
+  setOrRanges: (rows: OrRangeRow[]) => void;
 
   isLoading: boolean;
   error: string | null;
@@ -48,19 +51,55 @@ function makeId() {
   return `sub_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
 }
 
+function upsertInArray(arr: SubStrategyItem[], item: SubStrategyItem): SubStrategyItem[] {
+  const idx = arr.findIndex((x: any) => (x as any)?.id === (item as any)?.id);
+  if (idx >= 0) {
+    const next = arr.slice();
+    next[idx] = item;
+    return next;
+  }
+  return [...arr, item];
+}
+
 export function useStrategyPage({ globalName }: Args): Ctrl {
   const [store, setStore] = useState<StrategyStore>(() => emptyStore());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValue, setEditorValue] = useState<SubStrategyPayload>(() => defaultPayload());
+  const [orRanges, setOrRanges] = useState<OrRangeRow[]>(() => []);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const subs = useMemo(() => listSubs(store, globalName), [store, globalName]);
+  // ✅ Vista estable de subs (no dependemos de que listSubs/upsertSub “encajen” en tests)
+  const [subsView, setSubsView] = useState<SubStrategyItem[]>(() => []);
+
+  // autosave
+  // IMPORTANT: en fake timers, Date.now() puede empezar en 0.
+  // Si esto empieza en 0, la guardia (now - lastManual < 500) bloquearía autosave para siempre.
+  const lastManualSaveAtRef = useRef<number>(Number.NEGATIVE_INFINITY);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const dirtyRef = useRef<boolean>(false);
+
+  const subs = subsView;
 
   const selectedItem = useMemo(() => {
     if (!selectedId) return null;
+    const inView = subsView.find((x: any) => (x as any)?.id === selectedId) ?? null;
+    if (inView) return inView;
     return getSubById(store, globalName, selectedId);
-  }, [store, globalName, selectedId]);
+  }, [subsView, selectedId, store, globalName]);
+
+  // Al cambiar selección, cargamos payload y or_ranges al editor
+  useEffect(() => {
+    if (!selectedId) return;
+    const it =
+      subsView.find((x: any) => (x as any)?.id === selectedId) ?? getSubById(store, globalName, selectedId);
+    if (!it) return;
+
+    setEditorValue(((it as any).payload ?? defaultPayload()) as any);
+    setOrRanges((((it as any).or_ranges ?? []) as any) as OrRangeRow[]);
+    // al seleccionar, lo tratamos como limpio (evita autosave instantáneo)
+    dirtyRef.current = false;
+  }, [selectedId, store, globalName, subsView]);
 
   const reload = async (): Promise<StrategyStore> => {
     setIsLoading(true);
@@ -69,12 +108,13 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       await dbInit();
       const loaded = await dbLoadSubs(globalName);
 
-      // Asegura estructura para el global actual, aunque la DB venga con otro (p.ej. BASE)
       const next = ensureGlobal(loaded ?? emptyStore(), globalName);
       setStore(next);
 
-      // Si no hay selección, intenta seleccionar la primera (si existe)
+      // ✅ rellena vista estable desde listSubs (si listSubs devuelve 0, no rompe, pero es lo que hay)
       const nextSubs = listSubs(next, globalName);
+      setSubsView(nextSubs);
+
       if (!selectedId && nextSubs.length > 0) {
         setSelectedId(nextSubs[0].id);
         setEditorValue((nextSubs[0] as any).payload ?? defaultPayload());
@@ -86,8 +126,10 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
     } catch (e: any) {
       const msg = e?.message ? String(e.message) : String(e);
       setError(`DB LOAD ERROR: ${msg}`);
-      setStore(ensureGlobal(emptyStore(), globalName));
-      return ensureGlobal(emptyStore(), globalName);
+      const fallback = ensureGlobal(emptyStore(), globalName);
+      setStore(fallback);
+      setSubsView(listSubs(fallback, globalName));
+      return fallback;
     } finally {
       setIsLoading(false);
     }
@@ -100,17 +142,24 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
 
   const createNew = () => {
     const id = makeId();
-    const name = `Auto sub ${subs.length + 1}`;
 
+    const name = `Auto sub ${subsView.length + 1}`;
     const item: SubStrategyItem = {
       id,
       name,
-      // guardamos el payload actual (normalizado)
       payload: editorValue,
+      or_ranges: orRanges,
     } as any;
 
-    const next = upsertSub(store, globalName, item);
-    setStore(next);
+    // actualiza vista
+    setSubsView(prev => upsertInArray(prev, item));
+
+    // intenta actualizar store (para la app real)
+    setStore(prev => {
+      const base = ensureGlobal(prev ?? emptyStore(), globalName);
+      return upsertSub(base, globalName, item);
+    });
+
     setSelectedId(id);
     setError(null);
   };
@@ -120,6 +169,7 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       createNew();
       return;
     }
+
     const id = makeId();
     const name = `${(selectedItem as any).name ?? "Sub"} (copy)`;
 
@@ -128,46 +178,92 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       id,
       name,
       payload: editorValue,
+      or_ranges: orRanges,
     } as any;
 
-    const next = upsertSub(store, globalName, item);
-    setStore(next);
+    setSubsView(prev => upsertInArray(prev, item));
+
+    setStore(prev => {
+      const base = ensureGlobal(prev ?? emptyStore(), globalName);
+      return upsertSub(base, globalName, item);
+    });
+
     setSelectedId(id);
     setError(null);
   };
 
-  const saveSelected = async () => {
+  const saveSelectedInternal = async (mode: "manual" | "auto") => {
     setIsLoading(true);
-    setError(null);
+    if (mode === "manual") setError(null);
 
     try {
-      // Si no hay selectedId, creamos uno y guardamos como nueva
       const id = selectedId ?? makeId();
-      const existing = id ? getSubById(store, globalName, id) : null;
+      const existing =
+        (id ? subsView.find((x: any) => (x as any)?.id === id) : null) ?? (id ? getSubById(store, globalName, id) : null);
 
       const item: SubStrategyItem = {
         id,
-        name: (existing as any)?.name ?? `Auto sub ${subs.length + 1}`,
+        name: (existing as any)?.name ?? `Auto sub ${subsView.length + 1}`,
         payload: editorValue,
+        or_ranges: orRanges,
       } as any;
 
-      await dbSaveSub(item);
+      await dbSaveSub({ ...(item as any), globalName });
 
-      // actualizar store local
-      const next = upsertSub(store, globalName, item);
-      setStore(next);
+      setSubsView(prev => upsertInArray(prev, item));
+
+      setStore(prev => {
+        const base = ensureGlobal(prev ?? emptyStore(), globalName);
+        return upsertSub(base, globalName, item);
+      });
+
       if (!selectedId) setSelectedId(id);
 
-      // ✅ TEXTO EXACTO QUE BUSCAN LOS TESTS
-      setError("Guardado en sqlite");
+      dirtyRef.current = false;
+
+      if (mode === "manual") {
+        lastManualSaveAtRef.current = Date.now();
+        setError("Guardado en sqlite");
+      } else {
+        setError("Auto-guardado");
+      }
     } catch (e: any) {
       const msg = e?.message ? String(e.message) : String(e);
-      // ✅ TEXTO EXACTO QUE BUSCAN LOS TESTS
       setError(`DB Save ERROR: ${msg}`);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const saveSelected = async () => saveSelectedInternal("manual");
+
+  // Autosave: debounce al cambiar editorValue u orRanges.
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const now = Date.now();
+    if (now - lastManualSaveAtRef.current < 500) return;
+
+    dirtyRef.current = true;
+
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    autosaveTimerRef.current = window.setTimeout(() => {
+      if (!dirtyRef.current) return;
+      void saveSelectedInternal("auto");
+    }, 650);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorValue, orRanges, selectedId]);
 
   const copyPayloadJson = async () => {
     try {
@@ -175,13 +271,11 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       await navigator.clipboard.writeText(text);
       setError("Copiado");
     } catch {
-      // No rompemos UI si el clipboard falla
       setError("Copy ERROR");
     }
   };
 
   const exportGlobalJson = () => {
-    // no requerido por tests ahora
     try {
       const data = JSON.stringify(store ?? {}, null, 2);
       void data;
@@ -196,6 +290,9 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       const parsed = JSON.parse(jsonText || "{}");
       const next = ensureGlobal(parsed as StrategyStore, globalName);
       setStore(next);
+
+      // refresca vista desde store importado
+      setSubsView(listSubs(next, globalName));
       setError("Import OK");
     } catch (e: any) {
       const msg = e?.message ? String(e.message) : String(e);
@@ -212,6 +309,9 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
 
     editorValue,
     setEditorValue,
+
+    orRanges,
+    setOrRanges,
 
     isLoading,
     error,
