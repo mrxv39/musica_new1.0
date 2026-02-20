@@ -10,6 +10,15 @@ export function emptyStore(): StrategyStore {
   return { version: 1, globals: {} };
 }
 
+function defaultOrRanges() {
+  return {
+    OR_TO_CALL_ANY: "",
+    OPEN_PUSH: "",
+    OR_TO_CALL_SMALL: "",
+    OR_TO_FOLD: "",
+  };
+}
+
 export function defaultPayload(): SubStrategyPayload {
   return {
     spot: "BTN",
@@ -37,12 +46,21 @@ export function defaultPayload(): SubStrategyPayload {
     p3_stack_max: 75,
 
     situacion: computeSituacionFromPositions("BTN", "SB", "BB"),
+
+    // ✅ requerido por SubStrategyPayload
+    orRanges: defaultOrRanges(),
   };
 }
 
 export function deriveGenerated(payload: SubStrategyPayload): SubStrategyItem {
   const p: SubStrategyPayload = { ...payload };
+
+  // situacion siempre derivada
   p.situacion = computeSituacionFromPositions(p.hero_pos, p.p2_pos, p.p3_pos);
+
+  // fallback defensivo: orRanges siempre existe
+  if (!p.orRanges) p.orRanges = defaultOrRanges();
+
   const id = makeSubId(p);
   return { id, payload: p };
 }

@@ -1,14 +1,12 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\test\StrategyEditor.ui.more.test.tsx
  */
-
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-// ✅ SIN alias @/ (en FAST puede no estar disponible)
 import StrategyEditor from "../strategy/components/StrategyEditor";
-import type { SubStrategyPayload } from "../strategy/types";
+import type { SubStrategyPayload, OrRanges } from "../strategy/types";
 
 function makePayload(): SubStrategyPayload {
   return {
@@ -41,40 +39,56 @@ function makePayload(): SubStrategyPayload {
     p3_stack_max: 75,
 
     situacion: "BTN_vs_SB_BB",
+
+    // ✅ requerido
+    orRanges: {
+      OR_TO_CALL_ANY: "",
+      OPEN_PUSH: "",
+      OR_TO_CALL_SMALL: "",
+      OR_TO_FOLD: "",
+    },
   };
 }
+
+const EMPTY_OR: OrRanges = {
+  OR_TO_CALL_ANY: "",
+  OPEN_PUSH: "",
+  OR_TO_CALL_SMALL: "",
+  OR_TO_FOLD: "",
+};
 
 describe("StrategyEditor UI extra coverage", () => {
   it("renders OR inputs without crashing (strict OR)", () => {
     const onChange = vi.fn();
 
-    render(
-      <StrategyEditor value={makePayload()} onChange={onChange} showOrPanel />
-    );
+    render(<StrategyEditor value={makePayload()} onChange={onChange} showOrPanel />);
 
-    // Ya no hay botón Añadir; ahora son 4 inputs OR fijos.
-    const inputs = screen.getAllByPlaceholderText(
-      /AA-TT,AKs-A6s,KQs,JTs-J6s,T9s-T8s/i
-    );
+    const inputs = screen.getAllByPlaceholderText(/AA-TT,AKs-A6s,KQs,JTs-J6s,T9s-T8s/i);
     expect(inputs).toHaveLength(4);
   });
 
-  it("updates situacion when hero pos changes", async () => {
-    const user = userEvent.setup();
+  it("typing a VALID OR value triggers onChangeOrRanges (after blur)", async () => {
     const onChange = vi.fn();
+    const onChangeOrRanges = vi.fn();
+    const user = userEvent.setup();
 
     render(
-      <StrategyEditor value={makePayload()} onChange={onChange} showOrPanel />
+      <StrategyEditor
+        value={makePayload()}
+        onChange={onChange}
+        showOrPanel
+        orRanges={EMPTY_OR}
+        onChangeOrRanges={onChangeOrRanges}
+      />
     );
 
-    const heroPos = screen.getByLabelText("Hero pos");
-    await user.selectOptions(heroPos, "SB");
+    const inputs = screen.getAllByPlaceholderText(/AA-TT,AKs-A6s,KQs,JTs-J6s,T9s-T8s/i);
 
-    expect(onChange).toHaveBeenCalled();
+    await user.clear(inputs[0]);
+    await user.type(inputs[0], "AA-TT");
 
-    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1][0];
+    fireEvent.blur(inputs[0]);
 
-    // ✅ Ahora sí: p2_pos/p3_pos existen, así que debe calcular bien
-    expect(lastCall.situacion).toBe("SB_vs_SB_BB");
+    expect(onChangeOrRanges).toHaveBeenCalled();
   });
 });

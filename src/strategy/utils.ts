@@ -1,4 +1,7 @@
-import type { SubStrategyPayload, PlayerPos } from "./types";
+/**
+ * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\strategy\utils.ts
+ */
+import type { SubStrategyPayload, PlayerPos, OrRanges } from "./types";
 
 /**
  * Situación textual simple.
@@ -58,8 +61,6 @@ export function coerceMinMax(
  * - clamp bounds
  * - step 0.5
  */
-import type { OrRangeKey, OrRanges } from "./types";
-
 export function normalizePayload(p: SubStrategyPayload): SubStrategyPayload {
   const next: SubStrategyPayload = { ...p };
 
@@ -105,12 +106,14 @@ export function normalizePayload(p: SubStrategyPayload): SubStrategyPayload {
     OR_TO_CALL_SMALL: "",
     OR_TO_FOLD: "",
   };
+
   // Migrate legacy or_ranges (array) if present
   if ((next as any).or_ranges && Array.isArray((next as any).or_ranges)) {
     // Not implemented: migration logic (if needed)
     // For now, ignore and use default
     delete (next as any).or_ranges;
   }
+
   next.orRanges = { ...defaultOrRanges, ...(next.orRanges || {}) };
 
   return next;

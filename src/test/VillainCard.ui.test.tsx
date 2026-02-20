@@ -30,6 +30,14 @@ function makePayload(): SubStrategyPayload {
     p3_stack_max: 40,
 
     situacion: "BTN_vs_SB_BB",
+
+    // ✅ requerido
+    orRanges: {
+      OR_TO_CALL_ANY: "",
+      OPEN_PUSH: "",
+      OR_TO_CALL_SMALL: "",
+      OR_TO_FOLD: "",
+    },
   };
 }
 
@@ -51,18 +59,18 @@ describe("VillainCard", () => {
     expect(patch).toHaveBeenCalledWith({ p2_tipo: "reg" });
   });
 
-  it("cuando which='p3' parchea keys p3_* (bet min)", () => {
+  it("cuando which='p3' parchea keys p3_* (pos/tipo)", () => {
     const patch = vi.fn();
     const value = makePayload();
 
     render(<VillainCard which="p3" title="P3" value={value} patch={patch} />);
 
-    const betMin = screen.getByLabelText("bet min") as HTMLInputElement;
-    fireEvent.change(betMin, { target: { value: "9.999" } });
+    const posSelect = screen.getByLabelText("pos") as HTMLSelectElement;
+    fireEvent.change(posSelect, { target: { value: "SB" } });
+    expect(patch).toHaveBeenCalledWith({ p3_pos: "SB" });
 
-    // NumberField redondea a 2 decimales
-    expect(patch).toHaveBeenCalled();
-    const last = patch.mock.calls[patch.mock.calls.length - 1][0];
-    expect(last).toEqual({ p3_bet_min: 10 });
+    const tipoSelect = screen.getByLabelText("tipo") as HTMLSelectElement;
+    fireEvent.change(tipoSelect, { target: { value: "fish" } });
+    expect(patch).toHaveBeenCalledWith({ p3_tipo: "fish" });
   });
 });

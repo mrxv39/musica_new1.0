@@ -1,5 +1,10 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\strategy\actions.ts
+ *
+ * FIX anti-parpadeo:
+ * - onSave NO recarga desde DB (no refreshFromDB).
+ * - Guarda en SQLite y actualiza store en memoria con upsertSub.
+ * - Mantiene selección estable.
  */
 import type { StrategyGlobal } from "../../strategy/constants";
 import type { StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
@@ -18,6 +23,11 @@ export function createStrategyActions(args: {
   getPayload: () => SubStrategyPayload;
   setPayload: (p: SubStrategyPayload) => void;
   setStatus: (s: string) => void;
+
+  /**
+   * Nota: se mantiene por compatibilidad, pero YA NO se usa en onSave.
+   * Úsalo solo en import/export o refresh manual.
+   */
   refreshFromDB: (g?: StrategyGlobal) => Promise<void>;
 }) {
   const {
@@ -29,7 +39,6 @@ export function createStrategyActions(args: {
     getPayload,
     setPayload,
     setStatus,
-    refreshFromDB,
   } = args;
 
   function getSubs(): SubStrategyItem[] {
@@ -60,6 +69,7 @@ export function createStrategyActions(args: {
   const onSave = async () => {
     try {
       const generated = getGenerated();
+
       if (!isValidPayload(generated.payload)) {
         setStatus("DB Save ERROR: payload inválido (campos undefined/null)");
         return;
@@ -68,8 +78,15 @@ export function createStrategyActions(args: {
       const { situationKey, bucket } = await dbSaveSub(generated);
       setStatus(`Guardado en SQLite: ${situationKey} / ${bucket}`);
 
-      await refreshFromDB(getGlobal());
+      // ✅ IMPORTANT: NO recargar desde DB (evita parpadeo y resets)
+      const nextStore: StrategyStore = { ...(getStore() || emptyStore()) };
+      ensureGlobal(nextStore, getGlobal());
+      upsertSub(nextStore, getGlobal(), generated);
+      setStore(nextStore);
+
+      // Mantener selección estable
       setSelectedId(generated.id);
+      setPayload(normalizePayload(generated.payload));
     } catch (e: any) {
       setStatus(`DB Save ERROR: ${e?.message || String(e)}`);
     }
@@ -105,6 +122,7 @@ export function createStrategyActions(args: {
     const p: SubStrategyPayload = { ...p0 };
     p.situacion = computeSituacionFromPositions(p.hero_pos, p.p2_pos, p.p3_pos);
 
+    // Mantén id temporal único, pero NO afecta a imagen salvo selección
     const newItem: SubStrategyItem = { id: makeSubId(p) + `|copy:${Date.now()}`, payload: p };
 
     const nextStore: StrategyStore = { ...(getStore() || emptyStore()) };

@@ -4,14 +4,11 @@
  * Hook "pegamento" mínimo para que:
  * - al montar llame a dbInit() y dbLoadSubs()
  * - Guardar llame a dbSaveSub()
- * - si falla: muestre "DB Save ERROR: <msg>"
- * - si ok: muestre "Guardado en sqlite"
  *
- * NOTA (2026-02-20):
- * Migración OR ranges:
- * - Antes: orRanges: OrRangeRow[]
- * - Ahora: orRanges: OrRanges (objeto fijo con 4 keys)
- * - Se incluye coerción defensiva desde formatos legacy (array u objeto parcial)
+ * FIX anti-parpadeo (2026-02-20):
+ * - Autosave NO toca isLoading
+ * - Autosave NO escribe en "error" (que se usa como status/toast)
+ * - "error" queda para errores reales y para "Guardado en sqlite" SOLO en guardado manual
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { OrRanges, StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
@@ -75,12 +72,11 @@ function coerceToOrRanges(input: any): OrRanges {
 
   if (!input) return base;
 
-  // Caso: ya es objeto con keys nuevas (parcial o completo)
   const looksLikeObject =
     typeof input === "object" &&
     !Array.isArray(input) &&
-    (OR_KEYS.some(k => Object.prototype.hasOwnProperty.call(input, k)) ||
-      OR_KEYS.some(k => typeof (input as any)[k] === "string"));
+    (OR_KEYS.some((k) => Object.prototype.hasOwnProperty.call(input, k)) ||
+      OR_KEYS.some((k) => typeof (input as any)[k] === "string"));
 
   if (looksLikeObject) {
     const obj = input as any;
@@ -92,14 +88,12 @@ function coerceToOrRanges(input: any): OrRanges {
     };
   }
 
-  // Caso legacy: array de filas
   if (Array.isArray(input)) {
     const next = { ...base } as any;
 
     for (const row of input) {
       if (!row || typeof row !== "object") continue;
 
-      // Intentos de encontrar la key (dependiendo de cómo fuese OrRangeRow)
       const key =
         (row as any).key ??
         (row as any).type ??
@@ -110,7 +104,6 @@ function coerceToOrRanges(input: any): OrRanges {
       if (typeof key !== "string") continue;
       if (!OR_KEYS.includes(key as any)) continue;
 
-      // Intentos de encontrar el valor
       const val =
         (row as any).value ??
         (row as any).range ??
@@ -124,7 +117,6 @@ function coerceToOrRanges(input: any): OrRanges {
     return next as OrRanges;
   }
 
-  // Fallback: desconocido
   return base;
 }
 
@@ -147,13 +139,11 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValue, setEditorValue] = useState<SubStrategyPayload>(() => defaultPayload());
 
-  // ✅ Migrado a OrRanges (objeto fijo)
   const [orRanges, setOrRanges] = useState<OrRanges>(() => emptyOrRanges());
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ Vista estable de subs (no dependemos de que listSubs/upsertSub “encajen” en tests)
   const [subsView, setSubsView] = useState<SubStrategyItem[]>(() => []);
 
   // autosave
@@ -170,7 +160,6 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
     return getSubById(store, globalName, selectedId);
   }, [subsView, selectedId, store, globalName]);
 
-  // Al cambiar selección, cargamos payload y or_ranges al editor
   useEffect(() => {
     if (!selectedId) return;
     const it =
@@ -178,11 +167,8 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
     if (!it) return;
 
     setEditorValue(((it as any).payload ?? defaultPayload()) as any);
-
-    // ✅ coerción defensiva (legacy array u objeto parcial)
     setOrRanges(coerceToOrRanges((it as any).or_ranges));
 
-    // al seleccionar, lo tratamos como limpio (evita autosave instantáneo)
     dirtyRef.current = false;
   }, [selectedId, store, globalName, subsView]);
 
@@ -202,8 +188,6 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       if (!selectedId && nextSubs.length > 0) {
         setSelectedId(nextSubs[0].id);
         setEditorValue((nextSubs[0] as any).payload ?? defaultPayload());
-
-        // opcional: también precargar OR de la primera
         setOrRanges(coerceToOrRanges((nextSubs[0] as any).or_ranges));
       } else if (!selectedId) {
         setEditorValue(defaultPayload());
@@ -241,9 +225,9 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       or_ranges: orRanges,
     } as any;
 
-    setSubsView(prev => upsertInArray(prev, item));
+    setSubsView((prev) => upsertInArray(prev, item));
 
-    setStore(prev => {
+    setStore((prev) => {
       const base = ensureGlobal(prev ?? emptyStore(), globalName);
       return upsertSub(base, globalName, item);
     });
@@ -269,9 +253,9 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       or_ranges: orRanges,
     } as any;
 
-    setSubsView(prev => upsertInArray(prev, item));
+    setSubsView((prev) => upsertInArray(prev, item));
 
-    setStore(prev => {
+    setStore((prev) => {
       const base = ensureGlobal(prev ?? emptyStore(), globalName);
       return upsertSub(base, globalName, item);
     });
@@ -281,14 +265,16 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
   };
 
   const saveSelectedInternal = async (mode: "manual" | "auto") => {
-    setIsLoading(true);
-    if (mode === "manual") setError(null);
+    // ✅ solo "loading" en guardado manual (el autosave no debe parpadear UI)
+    if (mode === "manual") {
+      setIsLoading(true);
+      setError(null);
+    }
 
     try {
       const id = selectedId ?? makeId();
       const existing =
-        (id ? subsView.find((x: any) => (x as any)?.id === id) : null) ??
-        (id ? getSubById(store, globalName, id) : null);
+        (id ? subsView.find((x: any) => (x as any)?.id === id) : null) ?? (id ? getSubById(store, globalName, id) : null);
 
       const item: SubStrategyItem = {
         id,
@@ -299,9 +285,10 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
 
       await dbSaveSub({ ...(item as any), globalName });
 
-      setSubsView(prev => upsertInArray(prev, item));
+      // actualizar vistas en memoria (no debería “parpadear” si no tocamos status/loading)
+      setSubsView((prev) => upsertInArray(prev, item));
 
-      setStore(prev => {
+      setStore((prev) => {
         const base = ensureGlobal(prev ?? emptyStore(), globalName);
         return upsertSub(base, globalName, item);
       });
@@ -313,20 +300,18 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       if (mode === "manual") {
         lastManualSaveAtRef.current = Date.now();
         setError("Guardado en sqlite");
-      } else {
-        setError("Auto-guardado");
       }
+      // ✅ en autosave NO seteamos error/status
     } catch (e: any) {
       const msg = e?.message ? String(e.message) : String(e);
       setError(`DB Save ERROR: ${msg}`);
     } finally {
-      setIsLoading(false);
+      if (mode === "manual") setIsLoading(false);
     }
   };
 
   const saveSelected = async () => saveSelectedInternal("manual");
 
-  // Autosave: debounce al cambiar editorValue u orRanges.
   useEffect(() => {
     if (!selectedId) return;
 

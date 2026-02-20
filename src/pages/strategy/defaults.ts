@@ -8,6 +8,15 @@ export function emptyStore(): StrategyStore {
   return { version: 1, globals: {} };
 }
 
+function defaultOrRanges() {
+  return {
+    OR_TO_CALL_ANY: "",
+    OPEN_PUSH: "",
+    OR_TO_CALL_SMALL: "",
+    OR_TO_FOLD: "",
+  };
+}
+
 export function defaultPayload(): SubStrategyPayload {
   return {
     spot: "BTN",
@@ -35,5 +44,8 @@ export function defaultPayload(): SubStrategyPayload {
     p3_stack_max: 75,
 
     situacion: computeSituacionFromPositions("BTN", "SB", "BB"),
+
+    // ✅ requerido por el tipo SubStrategyPayload
+    orRanges: defaultOrRanges(),
   };
 }

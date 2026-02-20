@@ -7,46 +7,55 @@
       [2mCoverage enabled with [22m[33mv8[39m
 
  [32m✓[39m src/test/strategy.model.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 11[2mms[22m[39m
- [32m✓[39m src/test/sql.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 13[2mms[22m[39m
- [32m✓[39m src/test/EditorFields.ui.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 89[2mms[22m[39m
- [32m✓[39m src/test/VillainCard.ui.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 168[2mms[22m[39m
- [32m✓[39m src/test/strategy.useStrategyPage.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 619[2mms[22m[39m
- [32m✓[39m src/test/OrRangesPanel.ui.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 599[2mms[22m[39m
-     [33m[2m✓[22m[39m click + Añadir => llama onChange con 1 fila [33m 397[2mms[22m[39m
- [32m✓[39m src/test/StrategyPage.ui.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 889[2mms[22m[39m
-     [33m[2m✓[22m[39m al pulsar Guardar subestrategia llama a dbSaveSub() [33m 468[2mms[22m[39m
+ [32m✓[39m src/test/strategy.utils.more.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/test/sql.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/test/strategy.state.more.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m src/test/pokerRange.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/test/EditorFields.ui.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+ [32m✓[39m src/test/OrRangesPanel.ui.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 220[2mms[22m[39m
+ [32m✓[39m src/test/VillainCard.ui.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 222[2mms[22m[39m
+ [32m✓[39m src/test/P1Card.ui.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 223[2mms[22m[39m
+ [32m✓[39m src/test/VillainCard.ui.more.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 247[2mms[22m[39m
+ [32m✓[39m src/test/strategy.useStrategyPage.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 640[2mms[22m[39m
+ [32m✓[39m src/test/StrategyEditor.ui.more.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 585[2mms[22m[39m
+     [33m[2m✓[22m[39m updates situacion when hero pos changes [33m 355[2mms[22m[39m
+ [32m✓[39m src/test/StrategyPage.ui.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 792[2mms[22m[39m
+     [33m[2m✓[22m[39m renderiza sin crash y muestra el sidebar [33m 471[2mms[22m[39m
 
-[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
-[2m      Tests [22m [1m[32m32 passed[39m[22m[90m (32)[39m
-[2m   Start at [22m 11:59:57
-[2m   Duration [22m 4.68s[2m (transform 975ms, setup 3.48s, import 1.27s, tests 2.39s, environment 16.89s)[22m
+[2m Test Files [22m [1m[32m13 passed[39m[22m[90m (13)[39m
+[2m      Tests [22m [1m[32m61 passed[39m[22m[90m (61)[39m
+[2m   Start at [22m 15:18:21
+[2m   Duration [22m 6.42s[2m (transform 1.81s, setup 8.51s, import 2.60s, tests 3.13s, environment 48.51s)[22m
 
 [34m % [39m[2mCoverage report from [22m[33mv8[39m
 -------------------|---------|----------|---------|---------|-------------------
 File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
 -------------------|---------|----------|---------|---------|-------------------
-All files          |   74.77 |    59.66 |   68.75 |   77.06 |                   
+All files          |   86.18 |     69.5 |   90.62 |   89.93 |                   
  db                |   93.18 |       80 |   88.88 |    97.5 |                   
   sql.ts           |   93.18 |       80 |   88.88 |    97.5 | 167               
- pages             |   66.66 |       80 |      50 |   72.72 |                   
-  StrategyPage.tsx |   66.66 |       80 |      50 |   72.72 | 32-33,88-91       
- pages/strategy    |    79.6 |    61.46 |   84.78 |   80.23 |                   
+ pages             |   94.11 |    58.82 |      80 |     100 |                   
+  StrategyPage.tsx |   94.11 |    58.82 |      80 |     100 | 19,36-51          
+ pages/strategy    |   78.54 |     55.7 |   88.23 |      79 |                   
+  db.ts            |     100 |       50 |     100 |     100 | 29                
   model.ts         |     100 |      100 |     100 |     100 |                   
-  state.ts         |      75 |    52.38 |      80 |      84 | 44-47             
-  ...rategyPage.ts |   79.11 |    57.89 |   83.87 |   78.26 | ...79-284,289-299 
- ...egy/components |   85.71 |       50 |      75 |   84.61 |                   
-  ...egyHeader.tsx |      80 |       50 |   66.66 |      80 | 47                
+  state.ts         |   96.87 |    85.71 |      90 |     100 | 30,39-40          
+  strategyPage.css |       0 |        0 |       0 |       0 |                   
+  ...rategyPage.ts |   73.51 |    45.61 |   84.84 |   73.91 | ...68-373,378-387 
+ ...egy/components |   83.33 |       70 |   71.42 |   81.81 |                   
   ...gyPreview.tsx |     100 |      100 |     100 |     100 |                   
-  ...gySidebar.tsx |   83.33 |       50 |   66.66 |   83.33 | 28                
- strategy          |   54.16 |    33.33 |   46.15 |   59.37 |                   
-  utils.ts         |   54.16 |    33.33 |   46.15 |   59.37 | 25,46-48,107-178  
- ...egy/components |   65.71 |       44 |      50 |   66.66 |                   
-  ...ngesPanel.tsx |      72 |     37.5 |   57.14 |   73.91 | ...09-116,128-136 
-  ...egyEditor.tsx |      50 |    55.55 |   33.33 |      50 | 49-51,68-75       
- ...ponents/editor |   76.59 |    90.47 |    62.5 |   79.54 |                   
+  ...gySidebar.tsx |   77.77 |       70 |      60 |   77.77 | 55,81             
+ strategy          |   91.01 |    81.74 |     100 |   99.26 |                   
+  pokerRange.ts    |   87.91 |    84.61 |     100 |     100 | ...56,68-74,83,92 
+  strategy.css     |       0 |        0 |       0 |       0 |                   
+  utils.ts         |   94.73 |    77.08 |     100 |   98.52 | 112               
+ ...egy/components |    91.3 |    71.42 |      80 |   95.45 |                   
+  ...ngesPanel.tsx |    92.3 |    58.33 |     100 |     100 | 48,66-69          
+  ...egyEditor.tsx |      90 |    88.88 |   66.66 |      90 | 61                
+ ...ponents/editor |   95.74 |    90.47 |     100 |     100 |                   
   EditorFields.tsx |     100 |      100 |     100 |     100 |                   
-  P1Card.tsx       |      25 |      100 |   14.28 |      25 | 19-26             
-  VillainCard.tsx  |   78.57 |      100 |    62.5 |   78.57 | 85-96             
+  P1Card.tsx       |     100 |      100 |     100 |     100 |                   
+  VillainCard.tsx  |     100 |      100 |     100 |     100 |                   
   editorStyles.ts  |     100 |      100 |     100 |     100 |                   
   numberUtils.ts   |      80 |       75 |     100 |     100 | 5,10              
 -------------------|---------|----------|---------|---------|-------------------

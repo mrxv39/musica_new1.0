@@ -1,60 +1,116 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\strategy\hooks.ts
+ *
+ * Composición estable de Strategy:
+ * - Loader solo mount/global
+ * - Actions no recargan, solo upsert in-memory
  */
-import { useEffect } from "react";
-import type { StrategyGlobal } from "../../strategy/constants";
-import type { StrategyStore, SubStrategyPayload } from "../../strategy/types";
-import { listSubs } from "../../strategy/store";
+import { useCallback, useMemo, useState } from "react";
+import type { StrategyStore, SubStrategyItem, SubStrategyPayload, OrRanges } from "../../strategy/types";
+import { ensureGlobal, listSubs } from "../../strategy/store";
 import { normalizePayload } from "../../strategy/utils";
-import { defaultPayload } from "./defaults";
-import { dbInit, dbLoadSubs } from "./db";
+import { emptyStore as emptyStoreDefaults, defaultPayload } from "./defaults";
+import { useStrategyLoader } from "./useStrategyLoader";
+import { useStrategyActions } from "./useStrategyActions";
 
-export function useStrategyDBLifecycle(args: {
-  globalName: StrategyGlobal;
-  setStore: (s: StrategyStore) => void;
-  setSelectedId: (id: string | null) => void;
-  setPayload: (p: SubStrategyPayload) => void;
-  setStatus: (s: string) => void;
-}) {
-  const { globalName, setStore, setSelectedId, setPayload, setStatus } = args;
+const DEFAULT_OR: OrRanges = {
+  OR_TO_CALL_ANY: "",
+  OPEN_PUSH: "",
+  OR_TO_CALL_SMALL: "",
+  OR_TO_FOLD: "",
+};
 
-  async function refreshFromDB(nextGlobal = globalName) {
-    try {
-      const next = await dbLoadSubs(nextGlobal);
-      setStore(next);
+export function useStrategyHooks() {
+  const [globalName, setGlobalName] = useState("default");
+  const [store, setStore] = useState<StrategyStore>(() => emptyStoreDefaults());
 
-      const loaded = listSubs(next, nextGlobal);
-      if (loaded.length > 0) {
-        const first = loaded[0];
-        setSelectedId(first.id);
-        setPayload(normalizePayload(first.payload));
-      } else {
-        setSelectedId(null);
-        setPayload(defaultPayload());
-      }
-    } catch (e: any) {
-      setStatus(`DB Load ERROR: ${e?.message || String(e)}`);
+  const [activeId, setActiveId] = useState("");
+  const [payload, setPayload] = useState<SubStrategyPayload | null>(defaultPayload());
+  const [orRanges, setOrRanges] = useState<OrRanges>({ ...DEFAULT_OR });
+
+  const subs = useMemo(() => {
+    const s = ensureGlobal(store, globalName as any);
+    return listSubs(s as any, globalName as any);
+  }, [store, globalName]);
+
+  const selectItem = useCallback((it: SubStrategyItem | null) => {
+    if (!it) {
+      setActiveId("");
+      setPayload(null);
+      setOrRanges({ ...DEFAULT_OR });
+      return;
     }
-  }
+    const p = normalizePayload(it.payload as SubStrategyPayload);
+    setPayload(p);
+    setActiveId(it.id);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        await dbInit();
-        await refreshFromDB(globalName);
-      } catch (e: any) {
-        setStatus(`DB init/load ERROR: ${e?.message || String(e)}`);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const fromItem = (it as any).or_ranges;
+    const fromPayload = (p as any).orRanges;
+    setOrRanges({ ...DEFAULT_OR, ...(fromPayload || {}), ...(fromItem || {}) });
   }, []);
 
-  useEffect(() => {
-    setSelectedId(null);
-    setStatus("");
-    refreshFromDB(globalName);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [globalName]);
+  const loader = useStrategyLoader({
+    globalName,
+    setStore,
+    onLoadedSelectFirst: selectItem,
+  });
 
-  return { refreshFromDB };
+  const actions = useStrategyActions({
+    globalName,
+    store,
+    setStore,
+
+    activeId,
+    setActiveId,
+
+    payload,
+    setPayload,
+
+    orRanges,
+    setOrRanges,
+
+    onSelectItem: selectItem,
+  });
+
+  const patchPayload = useCallback((patch: Partial<SubStrategyPayload>) => {
+    setPayload((prev) => {
+      const base = prev ?? defaultPayload();
+      const next = normalizePayload({ ...(base as any), ...(patch as any) });
+      return next;
+    });
+    // ✅ autosave "programado" aquí
+    actions.scheduleAutosave();
+  }, [actions]);
+
+  const patchOrRanges = useCallback((r: OrRanges) => {
+    setOrRanges({ ...DEFAULT_OR, ...(r || {}) });
+    // ✅ autosave "programado" aquí
+    actions.scheduleAutosave();
+  }, [actions]);
+
+  const selectById = useCallback((id: string) => {
+    const it = subs.find((x) => x.id === id) || null;
+    selectItem(it);
+  }, [subs, selectItem]);
+
+  return {
+    globalName,
+    setGlobalName,
+
+    store,
+    subs,
+
+    activeId,
+    payload,
+    orRanges,
+
+    patchPayload,
+    patchOrRanges,
+
+    selectById,
+    selectItem,
+
+    ...loader,
+    ...actions,
+  };
 }

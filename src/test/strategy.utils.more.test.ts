@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { SubStrategyPayload } from "../strategy/types";
+import type { SubStrategyPayload, OrRanges } from "../strategy/types";
 import {
   clampNum,
   roundToStep,
@@ -10,8 +10,17 @@ import {
   specificityScore,
 } from "../strategy/utils";
 
-function basePayload(overrides: Partial<SubStrategyPayload> = {}): SubStrategyPayload {
-  return {
+const DEFAULT_OR: OrRanges = {
+  OR_TO_CALL_ANY: "",
+  OPEN_PUSH: "",
+  OR_TO_CALL_SMALL: "",
+  OR_TO_FOLD: "",
+};
+
+function basePayload(
+  overrides: Partial<Omit<SubStrategyPayload, "orRanges">> & { orRanges?: Partial<OrRanges> } = {}
+): SubStrategyPayload {
+  const base: SubStrategyPayload = {
     spot: "BTN",
     hero_pos: "BTN",
 
@@ -37,8 +46,14 @@ function basePayload(overrides: Partial<SubStrategyPayload> = {}): SubStrategyPa
     p3_stack_max: 50,
 
     situacion: "x",
-    ...overrides,
+
+    // ✅ requerido
+    orRanges: { ...DEFAULT_OR },
   };
+
+  const merged: any = { ...base, ...overrides };
+  merged.orRanges = { ...DEFAULT_OR, ...(overrides.orRanges || {}) };
+  return merged as SubStrategyPayload;
 }
 
 describe("strategy/utils.ts extra coverage", () => {
@@ -120,7 +135,7 @@ describe("strategy/utils.ts extra coverage", () => {
       p2_tipo: "reg",
       p3_tipo: "fish",
       p1_stack_min: 10,
-      p1_stack_max: 10,
+      p1_stack_max: 12,
     });
 
     expect(specificityScore(tightKnown)).toBeGreaterThan(specificityScore(wideUnknown));

@@ -1,5 +1,5 @@
-// C:\Users\Usuario\Desktop\proyectos\musica_new\ui\Poker Boss\src\App.tsx
-import { useEffect, useMemo, useState } from "react";
+// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\App.tsx
+import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { initDB } from "./db/sql";
 import { DEFAULT_DB_PATH, extractP1Stack, fetchLatestHandsObs, HandsObsRow } from "./db";
@@ -59,6 +59,7 @@ export default function App() {
   useEffect(() => {
     initDB();
   }, []);
+
   const [activeTab, setActiveTab] = useState<Tab>("hands");
 
   const [dbPath, setDbPath] = useState<string>(() => localStorage.getItem("dbPath") || DEFAULT_DB_PATH);
@@ -68,7 +69,7 @@ export default function App() {
 
   const canLoad = useMemo(() => dbPath.trim().length > 0, [dbPath]);
 
-  async function loadOnce() {
+  const loadOnce = useCallback(async () => {
     const p = dbPath.trim();
     if (!p) return;
     localStorage.setItem("dbPath", p);
@@ -82,23 +83,27 @@ export default function App() {
       setRows([]);
       setStatus("ERROR: " + (e?.message || String(e)));
     }
-  }
+  }, [dbPath]);
 
   useEffect(() => {
     localStorage.setItem("autoRefresh", String(auto));
   }, [auto]);
 
+  // ✅ IMPORTANTE: polling SOLO en la pestaña Hands (evita parpadeo en Strategy)
   useEffect(() => {
-    // first load
+    if (activeTab !== "hands") return;
+
+    // first load al entrar en Hands
     loadOnce();
 
     if (!auto) return;
+
     const t = window.setInterval(() => {
       loadOnce();
     }, 1500);
+
     return () => window.clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auto]);
+  }, [activeTab, auto, loadOnce]);
 
   return (
     <div style={{ padding: 16, fontFamily: "system-ui, sans-serif" }}>
@@ -173,5 +178,3 @@ export default function App() {
     </div>
   );
 }
-
-

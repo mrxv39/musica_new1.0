@@ -1,111 +1,71 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\strategy\useStrategyLoader.ts
  *
- * Loader:
- * - dbInit + dbLoadSubs al montar
- * - garantiza que exista al menos 1 sub (para que Guardar funcione en tests)
+ * Loader estable:
+ * - Carga DB SOLO en mount y cuando cambia globalName.
+ * - NO recarga cuando cambia el editor (payload/orRanges/store).
+ * - Expone reload() manual para import/export.
  */
-import { useCallback, useEffect } from "react";
-import type { StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { StrategyStore, SubStrategyItem } from "../../strategy/types";
+import { ensureGlobal, listSubs } from "../../strategy/store";
 import { dbInit, dbLoadSubs } from "./db";
-import { defaultPayload, ensureGlobal, getSubById, listSubs, upsertSub } from "./state";
-import { nowIso, uid } from "./model";
 
-function payloadOrDefault(v: any): SubStrategyPayload {
-  return (v && typeof v === "object") ? (v as any) : (defaultPayload() as any);
-}
-
-export function useStrategyLoader(args: {
+export type UseStrategyLoaderArgs = {
   globalName: string;
-  store: StrategyStore;
-
-  selectedId: string | null;
-
   setStore: (s: StrategyStore) => void;
-  setSelectedId: (id: string | null) => void;
-  setEditorValue: (v: SubStrategyPayload) => void;
-  setIsLoading: (v: boolean) => void;
-  setError: (v: string | null) => void;
-}) {
-  const {
-    globalName,
-    store,
-    selectedId,
-    setStore,
-    setSelectedId,
-    setEditorValue,
-    setIsLoading,
-    setError,
-  } = args;
+  // callback opcional para seleccionar el primer item tras cargar
+  onLoadedSelectFirst?: (item: SubStrategyItem | null) => void;
+};
 
-  const reload = useCallback(async (): Promise<StrategyStore> => {
-    setIsLoading(true);
-    try {
-      setError(null);
+export function useStrategyLoader({ globalName, setStore, onLoadedSelectFirst }: UseStrategyLoaderArgs) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>("");
 
-      await dbInit();
+  const loadedOnceByGlobal = useRef<Set<string>>(new Set());
+  const inFlight = useRef(false);
 
-      // load
-      const loaded = (await dbLoadSubs(globalName)) as any as StrategyStore;
-      let nextStore: StrategyStore = (loaded ?? store) as StrategyStore;
+  const load = useCallback(
+    async (force = false) => {
+      if (inFlight.current) return;
+      if (!force && loadedOnceByGlobal.current.has(globalName)) return;
 
-      // asegúrate de que exista el global solicitado
-      nextStore = ensureGlobal(nextStore, globalName);
+      inFlight.current = true;
+      setLoading(true);
+      setError("");
 
-      // si no hay subs, autocrea 1 (esto es lo que los tests necesitan)
-      const subs = listSubs(nextStore, globalName);
-      if (subs.length === 0) {
-        const id = uid();
-        const item: SubStrategyItem = {
-          ...( {} as any ),
-          id,
-          global: globalName,
-          payload: defaultPayload(),
-          name: "Auto sub 1",
-          createdAt: nowIso(),
-          updatedAt: nowIso(),
-        } as any;
+      try {
+        await dbInit();
+        const loaded = await dbLoadSubs(globalName);
+        setStore(loaded);
 
-        // upsert en store y refrescar referencia
-        nextStore = upsertSub(nextStore, globalName, item);
+        loadedOnceByGlobal.current.add(globalName);
+
+        // Selección inicial (solo tras load)
+        const g = ensureGlobal(loaded, globalName as any);
+        const subs = listSubs(g as any, globalName as any);
+        const first = subs.length ? subs[0] : null;
+        onLoadedSelectFirst?.(first);
+      } catch (e: any) {
+        setError(String(e?.message || e));
+      } finally {
+        setLoading(false);
+        inFlight.current = false;
       }
+    },
+    [globalName, setStore, onLoadedSelectFirst]
+  );
 
-      setStore(nextStore);
-
-      // selección/editorValue coherentes
-      const finalSubs = listSubs(nextStore, globalName);
-
-      const effectiveId = selectedId ?? (finalSubs[0]?.id ?? null);
-      if (effectiveId) {
-        setSelectedId(effectiveId);
-        const it = getSubById(nextStore, globalName, effectiveId);
-        setEditorValue(payloadOrDefault((it as any)?.payload));
-      } else {
-        setEditorValue(defaultPayload() as any);
-      }
-
-      return nextStore;
-    } catch (e: any) {
-      const msg = e?.message ? String(e.message) : "unknown";
-      setError(`DB load error: ${msg}`);
-      return store;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    globalName,
-    selectedId,
-    setStore,
-    setSelectedId,
-    setEditorValue,
-    setIsLoading,
-    setError,
-    store,
-  ]);
-
+  // ✅ Carga SOLO al entrar / cambiar globalName
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalName]);
 
-  return { reload };
+  // ✅ Reload manual (para Import/Export)
+  const reload = useCallback(async () => {
+    await load(true);
+  }, [load]);
+
+  return { loading, error, reload };
 }
