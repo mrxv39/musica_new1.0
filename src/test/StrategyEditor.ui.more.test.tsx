@@ -45,15 +45,18 @@ function makePayload(): SubStrategyPayload {
 }
 
 describe("StrategyEditor UI extra coverage", () => {
-  it("renders add button without crashing", () => {
+  it("renders OR inputs without crashing (strict OR)", () => {
     const onChange = vi.fn();
 
     render(
       <StrategyEditor value={makePayload()} onChange={onChange} showOrPanel />
     );
 
-    const btn = screen.getByRole("button", { name: /añadir/i });
-    expect(btn).toBeTruthy();
+    // Ya no hay botón Añadir; ahora son 4 inputs OR fijos.
+    const inputs = screen.getAllByPlaceholderText(
+      /AA-TT,AKs-A6s,KQs,JTs-J6s,T9s-T8s/i
+    );
+    expect(inputs).toHaveLength(4);
   });
 
   it("updates situacion when hero pos changes", async () => {

@@ -4,6 +4,9 @@ export type Spot = "BTN" | "SB" | "BB";
 export type PlayerPos = "BTN" | "SB" | "BB";
 export type PlayerTipo = "fish" | "reg" | "unknown";
 
+export type OrRangeKey = "OR_TO_CALL_ANY" | "OPEN_PUSH" | "OR_TO_CALL_SMALL" | "OR_TO_FOLD";
+export type OrRanges = Record<OrRangeKey, string>;
+
 export type SubStrategyPayload = {
   spot: Spot;
 
@@ -31,6 +34,8 @@ export type SubStrategyPayload = {
   p3_stack_max: number;
 
   situacion: string;
+
+  orRanges: OrRanges;
 };
 
 export type OrMove = "OR" | "PUSH" | "FOLD";

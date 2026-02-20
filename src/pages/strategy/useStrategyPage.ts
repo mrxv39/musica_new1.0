@@ -6,9 +6,15 @@
  * - Guardar llame a dbSaveSub()
  * - si falla: muestre "DB Save ERROR: <msg>"
  * - si ok: muestre "Guardado en sqlite"
+ *
+ * NOTA (2026-02-20):
+ * Migración OR ranges:
+ * - Antes: orRanges: OrRangeRow[]
+ * - Ahora: orRanges: OrRanges (objeto fijo con 4 keys)
+ * - Se incluye coerción defensiva desde formatos legacy (array u objeto parcial)
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { OrRangeRow, StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
+import type { OrRanges, StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
 import { dbInit, dbLoadSubs, dbSaveSub } from "./db";
 import { defaultPayload, emptyStore, ensureGlobal, getSubById, listSubs, upsertSub } from "./state";
 
@@ -27,8 +33,8 @@ type Ctrl = {
   editorValue: SubStrategyPayload;
   setEditorValue: (v: SubStrategyPayload) => void;
 
-  orRanges: OrRangeRow[];
-  setOrRanges: (rows: OrRangeRow[]) => void;
+  orRanges: OrRanges;
+  setOrRanges: (next: OrRanges) => void;
 
   isLoading: boolean;
   error: string | null;
@@ -46,6 +52,81 @@ type Ctrl = {
   exportGlobalJson: () => void;
   importGlobalJsonText: (jsonText: string) => Promise<void>;
 };
+
+const OR_KEYS = ["OR_TO_CALL_ANY", "OPEN_PUSH", "OR_TO_CALL_SMALL", "OR_TO_FOLD"] as const;
+
+function emptyOrRanges(): OrRanges {
+  return {
+    OR_TO_CALL_ANY: "",
+    OPEN_PUSH: "",
+    OR_TO_CALL_SMALL: "",
+    OR_TO_FOLD: "",
+  };
+}
+
+/**
+ * Coerce defensivo:
+ * - Si viene un objeto con keys -> lo rellena con defaults
+ * - Si viene un array legacy (OrRangeRow[]) -> intenta mapear por campos comunes; si no puede, lo ignora y deja "".
+ * - Si viene null/undefined -> empty
+ */
+function coerceToOrRanges(input: any): OrRanges {
+  const base = emptyOrRanges();
+
+  if (!input) return base;
+
+  // Caso: ya es objeto con keys nuevas (parcial o completo)
+  const looksLikeObject =
+    typeof input === "object" &&
+    !Array.isArray(input) &&
+    (OR_KEYS.some(k => Object.prototype.hasOwnProperty.call(input, k)) ||
+      OR_KEYS.some(k => typeof (input as any)[k] === "string"));
+
+  if (looksLikeObject) {
+    const obj = input as any;
+    return {
+      OR_TO_CALL_ANY: typeof obj.OR_TO_CALL_ANY === "string" ? obj.OR_TO_CALL_ANY : "",
+      OPEN_PUSH: typeof obj.OPEN_PUSH === "string" ? obj.OPEN_PUSH : "",
+      OR_TO_CALL_SMALL: typeof obj.OR_TO_CALL_SMALL === "string" ? obj.OR_TO_CALL_SMALL : "",
+      OR_TO_FOLD: typeof obj.OR_TO_FOLD === "string" ? obj.OR_TO_FOLD : "",
+    };
+  }
+
+  // Caso legacy: array de filas
+  if (Array.isArray(input)) {
+    const next = { ...base } as any;
+
+    for (const row of input) {
+      if (!row || typeof row !== "object") continue;
+
+      // Intentos de encontrar la key (dependiendo de cómo fuese OrRangeRow)
+      const key =
+        (row as any).key ??
+        (row as any).type ??
+        (row as any).name ??
+        (row as any).kind ??
+        (row as any).id;
+
+      if (typeof key !== "string") continue;
+      if (!OR_KEYS.includes(key as any)) continue;
+
+      // Intentos de encontrar el valor
+      const val =
+        (row as any).value ??
+        (row as any).range ??
+        (row as any).text ??
+        (row as any).hands ??
+        "";
+
+      next[key] = typeof val === "string" ? val : String(val ?? "");
+    }
+
+    return next as OrRanges;
+  }
+
+  // Fallback: desconocido
+  return base;
+}
 
 function makeId() {
   return `sub_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
@@ -65,7 +146,10 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
   const [store, setStore] = useState<StrategyStore>(() => emptyStore());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValue, setEditorValue] = useState<SubStrategyPayload>(() => defaultPayload());
-  const [orRanges, setOrRanges] = useState<OrRangeRow[]>(() => []);
+
+  // ✅ Migrado a OrRanges (objeto fijo)
+  const [orRanges, setOrRanges] = useState<OrRanges>(() => emptyOrRanges());
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,8 +157,6 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
   const [subsView, setSubsView] = useState<SubStrategyItem[]>(() => []);
 
   // autosave
-  // IMPORTANT: en fake timers, Date.now() puede empezar en 0.
-  // Si esto empieza en 0, la guardia (now - lastManual < 500) bloquearía autosave para siempre.
   const lastManualSaveAtRef = useRef<number>(Number.NEGATIVE_INFINITY);
   const autosaveTimerRef = useRef<number | null>(null);
   const dirtyRef = useRef<boolean>(false);
@@ -96,7 +178,10 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
     if (!it) return;
 
     setEditorValue(((it as any).payload ?? defaultPayload()) as any);
-    setOrRanges((((it as any).or_ranges ?? []) as any) as OrRangeRow[]);
+
+    // ✅ coerción defensiva (legacy array u objeto parcial)
+    setOrRanges(coerceToOrRanges((it as any).or_ranges));
+
     // al seleccionar, lo tratamos como limpio (evita autosave instantáneo)
     dirtyRef.current = false;
   }, [selectedId, store, globalName, subsView]);
@@ -111,15 +196,18 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       const next = ensureGlobal(loaded ?? emptyStore(), globalName);
       setStore(next);
 
-      // ✅ rellena vista estable desde listSubs (si listSubs devuelve 0, no rompe, pero es lo que hay)
       const nextSubs = listSubs(next, globalName);
       setSubsView(nextSubs);
 
       if (!selectedId && nextSubs.length > 0) {
         setSelectedId(nextSubs[0].id);
         setEditorValue((nextSubs[0] as any).payload ?? defaultPayload());
+
+        // opcional: también precargar OR de la primera
+        setOrRanges(coerceToOrRanges((nextSubs[0] as any).or_ranges));
       } else if (!selectedId) {
         setEditorValue(defaultPayload());
+        setOrRanges(emptyOrRanges());
       }
 
       return next;
@@ -129,6 +217,8 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       const fallback = ensureGlobal(emptyStore(), globalName);
       setStore(fallback);
       setSubsView(listSubs(fallback, globalName));
+      setEditorValue(defaultPayload());
+      setOrRanges(emptyOrRanges());
       return fallback;
     } finally {
       setIsLoading(false);
@@ -142,8 +232,8 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
 
   const createNew = () => {
     const id = makeId();
-
     const name = `Auto sub ${subsView.length + 1}`;
+
     const item: SubStrategyItem = {
       id,
       name,
@@ -151,10 +241,8 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       or_ranges: orRanges,
     } as any;
 
-    // actualiza vista
     setSubsView(prev => upsertInArray(prev, item));
 
-    // intenta actualizar store (para la app real)
     setStore(prev => {
       const base = ensureGlobal(prev ?? emptyStore(), globalName);
       return upsertSub(base, globalName, item);
@@ -199,7 +287,8 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
     try {
       const id = selectedId ?? makeId();
       const existing =
-        (id ? subsView.find((x: any) => (x as any)?.id === id) : null) ?? (id ? getSubById(store, globalName, id) : null);
+        (id ? subsView.find((x: any) => (x as any)?.id === id) : null) ??
+        (id ? getSubById(store, globalName, id) : null);
 
       const item: SubStrategyItem = {
         id,
@@ -291,7 +380,6 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       const next = ensureGlobal(parsed as StrategyStore, globalName);
       setStore(next);
 
-      // refresca vista desde store importado
       setSubsView(listSubs(next, globalName));
       setError("Import OK");
     } catch (e: any) {

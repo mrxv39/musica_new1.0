@@ -6,7 +6,7 @@
  * - P2 debajo de P1, P3 debajo de P2
  */
 import { useMemo } from "react";
-import type { OrRangeRow, PlayerPos, SubStrategyPayload } from "../types";
+import type { OrRanges, PlayerPos, SubStrategyPayload } from "../types";
 import { computeSituacionFromPositions } from "../utils";
 import OrRangesPanel from "./OrRangesPanel";
 
@@ -20,8 +20,8 @@ type Props = {
   onChange: (next: SubStrategyPayload) => void;
   showOrPanel?: boolean;
 
-  orRanges?: OrRangeRow[];
-  onChangeOrRanges?: (rows: OrRangeRow[]) => void;
+  orRanges?: OrRanges;
+  onChangeOrRanges?: (next: OrRanges) => void;
 };
 
 const SPOTS = ["BTN", "SB", "BB"] as const;
@@ -80,7 +80,7 @@ export default function StrategyEditor({
       {showOrPanel ? (
         <OrRangesPanel
           situationKey={computedSituacion}
-          rows={orRanges ?? []}
+          value={orRanges ?? { OR_TO_CALL_ANY: "", OPEN_PUSH: "", OR_TO_CALL_SMALL: "", OR_TO_FOLD: "" }}
           onChange={onChangeOrRanges ?? (() => {})}
         />
       ) : null}

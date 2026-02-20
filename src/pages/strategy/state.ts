@@ -12,7 +12,14 @@ import { getUiTimeKey } from "./model";
 export type { SubStrategyItem };
 
 export function defaultPayload(): SubStrategyPayload {
-  return normalizePayload({} as SubStrategyPayload);
+  return normalizePayload({
+    orRanges: {
+      OR_TO_CALL_ANY: "",
+      OPEN_PUSH: "",
+      OR_TO_CALL_SMALL: "",
+      OR_TO_FOLD: "",
+    },
+  } as SubStrategyPayload);
 }
 
 export function emptyStore(): StrategyStore {

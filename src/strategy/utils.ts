@@ -58,6 +58,8 @@ export function coerceMinMax(
  * - clamp bounds
  * - step 0.5
  */
+import type { OrRangeKey, OrRanges } from "./types";
+
 export function normalizePayload(p: SubStrategyPayload): SubStrategyPayload {
   const next: SubStrategyPayload = { ...p };
 
@@ -95,6 +97,21 @@ export function normalizePayload(p: SubStrategyPayload): SubStrategyPayload {
   // fallback defensivo
   if (!isFiniteNum(next.p1_bet_min)) next.p1_bet_min = 0;
   if (!isFiniteNum(next.p1_bet_max)) next.p1_bet_max = 0;
+
+  // Ensure orRanges present and all keys filled
+  const defaultOrRanges: OrRanges = {
+    OR_TO_CALL_ANY: "",
+    OPEN_PUSH: "",
+    OR_TO_CALL_SMALL: "",
+    OR_TO_FOLD: "",
+  };
+  // Migrate legacy or_ranges (array) if present
+  if ((next as any).or_ranges && Array.isArray((next as any).or_ranges)) {
+    // Not implemented: migration logic (if needed)
+    // For now, ignore and use default
+    delete (next as any).or_ranges;
+  }
+  next.orRanges = { ...defaultOrRanges, ...(next.orRanges || {}) };
 
   return next;
 }

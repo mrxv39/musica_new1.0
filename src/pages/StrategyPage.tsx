@@ -88,7 +88,7 @@ export default function StrategyPage() {
         <div className="strategy-orCol">
           <OrRangesPanel
             situationKey={situationKey}
-            rows={ctrl.orRanges}
+            value={ctrl.orRanges}
             onChange={ctrl.setOrRanges}
           />
         </div>
