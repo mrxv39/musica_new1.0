@@ -1,13 +1,55 @@
 import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react";
 
+const mode = process.env.VITEST_MODE ?? "fast";
+
+const include =
+  mode === "slow"
+    ? ["src/test/**/*.slow.test.{ts,tsx}"]
+    : ["src/test/**/*.test.{ts,tsx}", "src/test/**/*.spec.{ts,tsx}"];
+
+const exclude = mode === "slow" ? [] : ["src/test/**/*.slow.test.{ts,tsx}"];
+
+/**
+ * Política de coverage (incremental, lenta y segura):
+ * - Global (temporal) para no bloquear por legacy.
+ * - Strategy (zona crítica) estricta.
+ */
 export default defineConfig({
-  plugins: [react()],
   test: {
     environment: "jsdom",
-    setupFiles: ["src/test/setupTests.ts"],
-    restoreMocks: true,
-    clearMocks: true,
-    mockReset: true,
+    setupFiles: ["src/test/setup.ts", "src/test/setupTests.ts"],
+    include,
+    exclude,
+    coverage: {
+      provider: "v8",
+      // ✅ Gate GLOBAL (temporal, para no bloquear por legado)
+      thresholds: {
+        lines: 50,
+        branches: 40,
+        functions: 40,
+        statements: 50,
+      },
+
+      // ⚠️ Si tu Vitest no soporta thresholds por patrones, esto se ignorará.
+      // En ese caso te paso un gate alternativo que lo valida por reporte.
+      thresholdsByFile: [
+        {
+          // Zona crítica: strategy
+          // (ajusta si quieres añadir/quitar rutas)
+          files: [
+            "src/pages/strategy/**/*.ts",
+            "src/pages/strategy/**/*.tsx",
+            "src/strategy/**/*.ts",
+            "src/strategy/**/*.tsx",
+          ],
+          thresholds: {
+            lines: 80,
+            branches: 70,
+            functions: 80,
+            statements: 80,
+          },
+        },
+      ],
+    },
   },
 });

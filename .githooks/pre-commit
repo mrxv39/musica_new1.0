@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+
+echo "[pre-commit] Running gate:fast (frontend+backend)..."
+npm run gate:fast
+echo "[pre-commit] OK"
