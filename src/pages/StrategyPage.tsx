@@ -85,19 +85,17 @@ export default function StrategyPage() {
         accept="application/json"
         style={{ display: "none" }}
         onChange={async (e) => {
-          const f = e.target.files?.[0];
+          // FIX: capturamos el input antes del await para evitar que currentTarget se vuelva null
+          const input = e.currentTarget;
+          const f = input.files?.[0];
           if (!f) return;
           await onImportFile(f);
-          e.currentTarget.value = "";
+          input.value = "";
         }}
       />
 
       <div className="strategy-layout">
-        <StrategySidebar
-          subs={ctrl.subs}
-          selectedId={ctrl.selectedId}
-          onSelect={ctrl.setSelectedId}
-        />
+        <StrategySidebar subs={ctrl.subs} selectedId={ctrl.selectedId} onSelect={ctrl.setSelectedId} />
 
         <main className="strategy-main">
           <div className="strategy-main__editor">
