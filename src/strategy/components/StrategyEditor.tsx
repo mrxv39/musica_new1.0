@@ -1,16 +1,9 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\strategy\components\StrategyEditor.tsx
  *
- * Orquestador (split):
- * - editor/editorStyles.ts
- * - editor/EditorFields.tsx
- * - editor/P1Card.tsx
- * - editor/VillainCard.tsx
- *
- * Props:
- * - value / onChange
- * - showOrPanel
- * - orRanges / onChangeOrRanges
+ * Cambios:
+ * - Hero pos debajo de Spot
+ * - P2 debajo de P1, P3 debajo de P2
  */
 import { useMemo } from "react";
 import type { OrRangeRow, PlayerPos, SubStrategyPayload } from "../types";
@@ -18,7 +11,7 @@ import { computeSituacionFromPositions } from "../utils";
 import OrRangesPanel from "./OrRangesPanel";
 
 import { SelectField } from "./editor/EditorFields";
-import { cardStyle, grid3Cols, headerRow } from "./editor/editorStyles";
+import { cardStyle, headerRow } from "./editor/editorStyles";
 import P1Card from "./editor/P1Card";
 import VillainCard from "./editor/VillainCard";
 
@@ -59,8 +52,8 @@ export default function StrategyEditor({
           <div style={{ fontSize: 12, opacity: 0.75 }}>situacion: {computedSituacion}</div>
         </div>
 
-        {/* Top */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(180px, 1fr))", gap: 10 }}>
+        {/* Top (Spot arriba, Hero pos debajo) */}
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 320px)", gap: 10 }}>
           <SelectField
             label="Spot"
             value={value.spot as (typeof SPOTS)[number]}
@@ -74,12 +67,10 @@ export default function StrategyEditor({
             options={POS}
             onChange={(v) => patch({ hero_pos: v as PlayerPos })}
           />
-
-          <div />
         </div>
 
-        {/* 3 cards */}
-        <div style={{ ...grid3Cols, marginTop: 14 }}>
+        {/* Cards apiladas: P1 -> P2 -> P3 */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12, marginTop: 14 }}>
           <P1Card value={value} patch={patch} />
           <VillainCard which="p2" title="P2" value={value} patch={patch} />
           <VillainCard which="p3" title="P3" value={value} patch={patch} />

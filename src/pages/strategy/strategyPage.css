@@ -1,0 +1,70 @@
+/**
+ * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\strategy\strategyPage.css
+ * Layout TOP horizontal: Estrategia(1) | Editor(1) | OR(2)
+ */
+
+.strategy-page {
+  padding: 16px;
+  width: 100%;
+}
+
+/* 3 columnas SIEMPRE (salvo móvil muy estrecho) */
+.strategy-top3 {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr) !important;
+  gap: 16px !important;
+  align-items: stretch !important;
+  width: 100% !important;
+}
+
+/* Forzar colocación */
+.strategy-top3 > .strategy-sidebar {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.strategy-top3 > .strategy-editorCol {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.strategy-top3 > .strategy-orCol {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+/* Preview debajo */
+.strategy-previewWrap {
+  margin-top: 16px;
+  width: 100%;
+}
+
+/* Evitar desbordes */
+.strategy-editorCol,
+.strategy-orCol {
+  min-width: 0 !important;
+}
+
+.strategy-editorCol * ,
+.strategy-orCol * {
+  min-width: 0;
+}
+
+/* Solo apilar si es MUY estrecho */
+@media (max-width: 700px) {
+  .strategy-top3 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .strategy-top3 > .strategy-sidebar,
+  .strategy-top3 > .strategy-editorCol,
+  .strategy-top3 > .strategy-orCol {
+    grid-column: 1 !important;
+  }
+}

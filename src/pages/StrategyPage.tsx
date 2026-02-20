@@ -1,10 +1,14 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\StrategyPage.tsx
+ * Layout top: Estrategia(1) | Editor(1) | OR(2)
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import "../strategy/strategy.css";
+import "./strategy/strategyPage.css";
+
 import StrategyEditor from "../strategy/components/StrategyEditor";
+import OrRangesPanel from "../strategy/components/OrRangesPanel";
 import { useStrategyPage } from "./strategy/useStrategyPage";
-import StrategyHeader from "./strategy/components/StrategyHeader";
 import StrategySidebar from "./strategy/components/StrategySidebar";
 import StrategyPreview from "./strategy/components/StrategyPreview";
 
@@ -16,7 +20,6 @@ export default function StrategyPage() {
 
   const ctrl = useStrategyPage({ globalName });
 
-  // toast auto-hide (pero mantiene texto para tests)
   const [toastVisible, setToastVisible] = useState(false);
   useEffect(() => {
     if (!ctrl.error) return;
@@ -25,37 +28,15 @@ export default function StrategyPage() {
     return () => window.clearTimeout(t);
   }, [ctrl.error]);
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const importClick = () => fileInputRef.current?.click();
-
-  const onImportFile = async (file: File) => {
-    const text = await file.text();
-    await ctrl.importGlobalJsonText(text);
-  };
-
   const editorKey = useMemo(
     () => `${String(globalName)}:${ctrl.selectedId ?? "none"}`,
     [globalName, ctrl.selectedId]
   );
 
+  const situationKey = ctrl.editorValue?.situacion ?? "unknown";
+
   return (
     <div className="strategy-page">
-      <StrategyHeader
-        globalName={String(globalName)}
-        globals={globals}
-        onChangeGlobal={setGlobalName}
-        isLoading={ctrl.isLoading}
-        // ⚠️ CLAVE: NO duplicar el texto de error. El alert ya lo muestra abajo.
-        error={null}
-        onNew={ctrl.createNew}
-        onDuplicate={ctrl.duplicateSelected}
-        onSave={ctrl.saveSelected}
-        onCopy={ctrl.copyPayloadJson}
-        onExport={ctrl.exportGlobalJson}
-        onImportClick={importClick}
-      />
-
-      {/* Toast (en vez de alert inline) — mantiene el texto en DOM para los tests */}
       {ctrl.error && toastVisible && (
         <div
           role="alert"
@@ -79,40 +60,42 @@ export default function StrategyPage() {
         </div>
       )}
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="application/json"
-        style={{ display: "none" }}
-        onChange={async (e) => {
-          // FIX: capturamos el input antes del await para evitar que currentTarget se vuelva null
-          const input = e.currentTarget;
-          const f = input.files?.[0];
-          if (!f) return;
-          await onImportFile(f);
-          input.value = "";
-        }}
-      />
+      <div className="strategy-top3">
+        <StrategySidebar
+          globalName={String(globalName)}
+          globals={globals}
+          onChangeGlobal={setGlobalName}
+          isLoading={ctrl.isLoading}
+          status={ctrl.error ?? ""}
+          subs={ctrl.subs}
+          selectedId={ctrl.selectedId}
+          onSelect={ctrl.setSelectedId}
+          onNew={ctrl.createNew}
+          onDuplicate={ctrl.duplicateSelected}
+          onSave={ctrl.saveSelected}
+          onCopy={ctrl.copyPayloadJson}
+        />
 
-      <div className="strategy-layout">
-        <StrategySidebar subs={ctrl.subs} selectedId={ctrl.selectedId} onSelect={ctrl.setSelectedId} />
+        <div className="strategy-editorCol">
+          <StrategyEditor
+            key={editorKey}
+            value={ctrl.editorValue}
+            onChange={ctrl.setEditorValue}
+            showOrPanel={false}
+          />
+        </div>
 
-        <main className="strategy-main">
-          <div className="strategy-main__editor">
-            <StrategyEditor
-              key={editorKey}
-              value={ctrl.editorValue}
-              onChange={ctrl.setEditorValue}
-              showOrPanel
-              orRanges={ctrl.orRanges}
-              onChangeOrRanges={ctrl.setOrRanges}
-            />
-          </div>
+        <div className="strategy-orCol">
+          <OrRangesPanel
+            situationKey={situationKey}
+            rows={ctrl.orRanges}
+            onChange={ctrl.setOrRanges}
+          />
+        </div>
+      </div>
 
-          <div className="strategy-main__preview">
-            <StrategyPreview payload={ctrl.editorValue} />
-          </div>
-        </main>
+      <div className="strategy-previewWrap">
+        <StrategyPreview payload={ctrl.editorValue} />
       </div>
     </div>
   );
