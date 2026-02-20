@@ -263,6 +263,24 @@
       "state": "todo",
       "deps": [],
       "test_id": null
+    },
+    {
+      "id": "T_USER_003",
+      "title": "transcribir cualquir podcast que quiera ver, para ver si tiene cosas que me puedan ayudar o no o si contradicen estrategia o procesos que estoy realizando de otraq manera. Objetivo solo ver lo que me va a aportar valor",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [],
+      "test_id": null
+    },
+    {
+      "id": "T_USER_004",
+      "title": "implmentar test coverange",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [],
+      "test_id": null
     }
   ]
 }
