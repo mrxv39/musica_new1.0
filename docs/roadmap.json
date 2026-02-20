@@ -254,6 +254,15 @@
       "state": "todo",
       "deps": [],
       "test_id": null
+    },
+    {
+      "id": "T_USER_002",
+      "title": "proyecto implemementar todas estas herrramientas de manera facil y guiada https://lunaticoin.blog/nostr/nostr-lista-de-recursos?l",
+      "implemented": false,
+      "critical": false,
+      "state": "todo",
+      "deps": [],
+      "test_id": null
     }
   ]
 }

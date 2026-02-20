@@ -1,5 +1,6 @@
 import type { StrategyStore, StrategyGlobalData, SubStrategyItem } from "./types";
 import type { StrategyGlobal } from "./constants";
+import { formatSubLabel, specificityScore } from "./utils";
 
 // NOTA:
 // - No importamos @tauri-apps/api/fs para que el build web no falle.
@@ -60,14 +61,39 @@ export function ensureGlobal(store: StrategyStore, globalName: StrategyGlobal) {
   }
 }
 
+function sortSubsDeterministic(items: SubStrategyItem[]): SubStrategyItem[] {
+  const copy = [...items];
+  copy.sort((a, b) => {
+    const sa = specificityScore(a.payload);
+    const sb = specificityScore(b.payload);
+    if (sb !== sa) return sb - sa;
+
+    const sita = a.payload.situacion || "";
+    const sitb = b.payload.situacion || "";
+    if (sita !== sitb) return sita.localeCompare(sitb);
+
+    const la = formatSubLabel(a.payload);
+    const lb = formatSubLabel(b.payload);
+    if (la !== lb) return la.localeCompare(lb);
+
+    return a.id.localeCompare(b.id);
+  });
+  return copy;
+}
+
+/**
+ * Lista subestrategias para UI.
+ * IMPORTANTE: Devuelve una copia ORDENADA (no muta el array interno).
+ */
 export function listSubs(store: StrategyStore, globalName: StrategyGlobal): SubStrategyItem[] {
   ensureGlobal(store, globalName);
-  return store.globals[globalName].subs || [];
+  const subs = store.globals[globalName].subs || [];
+  return sortSubsDeterministic(subs);
 }
 
 /**
  * Upsert por id.
- * Devuelve índice seleccionado.
+ * Devuelve índice interno (no ordenado).
  */
 export function upsertSub(store: StrategyStore, globalName: StrategyGlobal, item: SubStrategyItem): number {
   ensureGlobal(store, globalName);
@@ -81,6 +107,22 @@ export function upsertSub(store: StrategyStore, globalName: StrategyGlobal, item
   return 0;
 }
 
+/**
+ * Borrado por id (robusto aunque UI esté ordenada).
+ */
+export function deleteSubById(store: StrategyStore, globalName: StrategyGlobal, id: string): boolean {
+  ensureGlobal(store, globalName);
+  const subs = store.globals[globalName].subs || [];
+  const idx = subs.findIndex((x) => x.id === id);
+  if (idx < 0) return false;
+  subs.splice(idx, 1);
+  return true;
+}
+
+/**
+ * Compat legacy (índice interno).
+ * Si tu UI está ordenada, usa deleteSubById.
+ */
 export function deleteSub(store: StrategyStore, globalName: StrategyGlobal, index: number) {
   ensureGlobal(store, globalName);
   const subs = store.globals[globalName].subs || [];

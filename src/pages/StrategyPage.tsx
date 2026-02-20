@@ -1,293 +1,89 @@
-// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\StrategyPage.tsx
+/**
+ * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\StrategyPage.tsx
+ */
+import { useMemo, useRef, useState } from "react";
+import type { StrategyGlobal } from "../strategy/constants";
+import { listSubs } from "../strategy/store";
+import type { StrategyStore, SubStrategyPayload } from "../strategy/types";
+import { normalizePayload, makeSubId, computeSituacionFromPositions } from "../strategy/utils";
 
-import { useEffect, useMemo, useState } from "react";
-import { ESTRATEGIAS_GLOBALES, StrategyGlobal } from "../strategy/constants";
-import {
-  loadStrategyStore,
-  saveStrategyStore,
-  listSubs,
-  upsertSub,
-  deleteSub,
-  ensureGlobal,
-} from "../strategy/store";
-import { makeSubId, computeSituacionFromPositions } from "../strategy/utils";
-import type { StrategyStore, SubStrategyItem, SubStrategyPayload } from "../strategy/types";
-import StrategyEditor from "../strategy/components/StrategyEditor";
-
-// ✅ SQLite
-import {
-  initDB,
-  upsertSituationKey,
-  ensureBucketsForSituation,
-  upsertSubStrategy,
-  computeSituationKey_BTN_SB_BB_FISH_FISH,
-  pickBucketName,
-} from "../db/sql";
-
-function defaultPayload(): SubStrategyPayload {
-  return {
-    spot: "BTN",
-
-    hero_pos: "BTN",
-    p1_bet_min: 0,
-    p1_bet_max: 75,
-    p1_stack_min: 0,
-    p1_stack_max: 75,
-    p1_se_min: 0,
-    p1_se_max: 75,
-
-    p2_pos: "SB",
-    p2_tipo: "fish",
-    p2_bet_min: 0,
-    p2_bet_max: 75,
-    p2_stack_min: 0,
-    p2_stack_max: 75,
-
-    p3_pos: "BB",
-    p3_tipo: "fish",
-    p3_bet_min: 0,
-    p3_bet_max: 75,
-    p3_stack_min: 0,
-    p3_stack_max: 75,
-
-    situacion: computeSituacionFromPositions("BTN", "SB", "BB"),
-  };
-}
-
-// ✅ store vacío válido para bootstrap
-function emptyStore(): StrategyStore {
-  return {
-    version: 1,
-    globals: {},
-  };
-}
+import { emptyStore, defaultPayload } from "./strategy/defaults";
+import { useStrategyDBLifecycle } from "./strategy/hooks";
+import { createStrategyActions } from "./strategy/actions";
+import Sidebar from "./strategy/Sidebar";
+import Main from "./strategy/Main";
 
 export default function StrategyPage() {
   const [store, setStore] = useState<StrategyStore>(() => emptyStore());
   const [globalName, setGlobalName] = useState<StrategyGlobal>("BASE");
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [payload, setPayload] = useState<SubStrategyPayload>(() => defaultPayload());
   const [status, setStatus] = useState<string>("");
 
+  const { refreshFromDB } = useStrategyDBLifecycle({
+    globalName,
+    setStore,
+    setSelectedId,
+    setPayload,
+    setStatus,
+  });
+
+  // refs para acciones (evita deps infinitas)
+  const storeRef = useRef(store);
+  const globalRef = useRef(globalName);
+  const selectedRef = useRef(selectedId);
+  const payloadRef = useRef(payload);
+
+  storeRef.current = store;
+  globalRef.current = globalName;
+  selectedRef.current = selectedId;
+  payloadRef.current = payload;
+
   const subs = useMemo(() => listSubs(store, globalName), [store, globalName]);
 
-  useEffect(() => {
-    // 1) Init DB (no rompe si falla)
-    (async () => {
-      try {
-        await initDB();
-      } catch (e: any) {
-        setStatus(`DB init ERROR: ${e?.message || String(e)}`);
-      }
-    })();
-
-    // 2) Cargar store (async-safe)
-    (async () => {
-      try {
-        const loaded = await loadStrategyStore();
-        const nextStore: StrategyStore = loaded && typeof loaded === "object" ? (loaded as StrategyStore) : emptyStore();
-        ensureGlobal(nextStore, globalName);
-        setStore(nextStore);
-        saveStrategyStore(nextStore);
-      } catch (e: any) {
-        // si falla, seguimos con emptyStore
-        const nextStore = emptyStore();
-        ensureGlobal(nextStore, globalName);
-        setStore(nextStore);
-        setStatus((prev) => prev || `Store load ERROR: ${e?.message || String(e)}`);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    setSelectedIndex(null);
-    setStatus("");
-  }, [globalName]);
-
   const generated = useMemo(() => {
-    const p: SubStrategyPayload = { ...payload };
+    const p0 = normalizePayload(payload);
+    const p: SubStrategyPayload = { ...p0 };
     p.situacion = computeSituacionFromPositions(p.hero_pos, p.p2_pos, p.p3_pos);
-    const id = makeSubId(p);
-    return { id, payload: p } as SubStrategyItem;
+    return { id: makeSubId(p), payload: p };
   }, [payload]);
 
-  const onNew = () => {
-    setSelectedIndex(null);
-    setPayload(defaultPayload());
-    setStatus("Nuevo: editor limpio.");
-  };
-
-  const onSave = async () => {
-    // 1) Guardado UI legacy
-    try {
-      const nextStore: StrategyStore = { ...store };
-      const idx = upsertSub(nextStore, globalName, generated);
-      setStore(nextStore);
-      saveStrategyStore(nextStore);
-      setSelectedIndex(idx);
-    } catch (e: any) {
-      setStatus(`UI Save ERROR: ${e?.message || String(e)}`);
-      return;
-    }
-
-    // 2) Guardado REAL SQLite
-    try {
-      const situationKey = computeSituationKey_BTN_SB_BB_FISH_FISH();
-
-      const situationId = await upsertSituationKey(situationKey);
-      await ensureBucketsForSituation(situationId);
-
-      const bucket = pickBucketName(Number(generated.payload.p1_stack_min), Number(generated.payload.p1_stack_max));
-
-      await upsertSubStrategy(
-        situationId,
-        bucket,
-        generated.payload,
-        Number(generated.payload.p1_stack_min),
-        Number(generated.payload.p1_stack_max)
-      );
-
-      setStatus(`Guardado en SQLite: ${situationKey} / ${bucket}`);
-    } catch (e: any) {
-      setStatus(`DB Save ERROR: ${e?.message || String(e)}`);
-    }
-  };
-
-  const onDelete = () => {
-    if (selectedIndex === null) {
-      setStatus("Selecciona una subestrategia para borrar.");
-      return;
-    }
-    const nextStore: StrategyStore = { ...store };
-    deleteSub(nextStore, globalName, selectedIndex);
-    setStore(nextStore);
-    saveStrategyStore(nextStore);
-    setSelectedIndex(null);
-    setStatus("Subestrategia borrada (UI).");
-  };
-
-  const onSelect = (idx: number) => {
-    const item = subs[idx];
-    if (!item) return;
-    setSelectedIndex(idx);
-    setPayload(item.payload);
-    setStatus(`Cargado: ${item.id}`);
-  };
-
-  const onCopyJson = async () => {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(generated, null, 2));
-      setStatus("Copiado al portapapeles (item + payload).");
-    } catch {
-      setStatus("No pude copiar (permiso). Puedes copiar desde el textarea.");
-    }
-  };
-
-  const onExportStore = async () => {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(store, null, 2));
-      setStatus("Copiado al portapapeles (STORE completo).");
-    } catch {
-      setStatus("No pude copiar el STORE (permiso).");
-    }
-  };
-
-  const onImportStore = () => {
-    const raw = window.prompt("Pega aquí el STORE (JSON) para importar/reescribir:");
-    if (raw === null) return;
-    try {
-      const obj = JSON.parse(raw);
-      if (!obj || typeof obj !== "object") throw new Error("JSON inválido");
-      const nextStore = obj as StrategyStore;
-      setStore(nextStore);
-      saveStrategyStore(nextStore);
-      setSelectedIndex(null);
-      setStatus("Import OK (store reemplazado).");
-    } catch (e: any) {
-      setStatus(`Import ERROR: ${e?.message || String(e)}`);
-    }
-  };
+  const actions = useMemo(
+    () =>
+      createStrategyActions({
+        getStore: () => storeRef.current,
+        setStore,
+        getGlobal: () => globalRef.current,
+        getSelectedId: () => selectedRef.current,
+        setSelectedId,
+        getPayload: () => payloadRef.current,
+        setPayload,
+        setStatus,
+        refreshFromDB,
+      }),
+    [refreshFromDB]
+  );
 
   return (
     <div className="strategy-page">
       <div className="strategy-layout">
-        <aside className="strategy-sidebar">
-          <div className="sb-title">Estrategias</div>
+        <Sidebar
+          globalName={globalName}
+          setGlobalName={setGlobalName}
+          subs={subs}
+          selectedId={selectedId}
+          onSelect={actions.onSelect}
+          onNew={actions.onNew}
+          onSave={actions.onSave}
+          onDelete={actions.onDelete}
+          onDuplicate={actions.onDuplicate}
+          onCopyJson={actions.onCopyJson}
+          onExportStore={actions.onExportStore}
+          onImportStore={actions.onImportStore}
+          status={status}
+        />
 
-          <div className="sb-field">
-            <label>estrategia global</label>
-            <select value={globalName} onChange={(e) => setGlobalName(e.target.value as StrategyGlobal)}>
-              {ESTRATEGIAS_GLOBALES.map((g: StrategyGlobal) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="sb-field">
-            <label>subestrategias</label>
-            <div className="sb-list">
-              {subs.length === 0 ? (
-                <div className="muted">— vacío —</div>
-              ) : (
-                subs.map((it: SubStrategyItem, idx: number) => (
-                  <button
-                    key={it.id}
-                    type="button"
-                    className={`sb-item${selectedIndex === idx ? " active" : ""}`}
-                    onClick={() => onSelect(idx)}
-                    title={it.id}
-                  >
-                    {it.id}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="sb-actions">
-            <button type="button" onClick={onNew}>
-              Nuevo (limpiar)
-            </button>
-            <button type="button" onClick={onSave}>
-              Guardar subestrategia
-            </button>
-            <button type="button" onClick={onDelete}>
-              Borrar subestrategia
-            </button>
-            <button type="button" onClick={onCopyJson}>
-              Copiar JSON (item)
-            </button>
-            <button type="button" onClick={onExportStore}>
-              Copiar STORE
-            </button>
-            <button type="button" onClick={onImportStore}>
-              Import STORE
-            </button>
-          </div>
-
-          <div className="sb-status">{status || " "}</div>
-        </aside>
-
-        <main className="strategy-main">
-          <div className="strategy-header">
-            <div>
-              <div className="strategy-h1">Strategy</div>
-              <div className="muted">id generado: {generated.id}</div>
-              <div className="muted">SQLite key fijo: BTN_SB_BB_FISH_FISH</div>
-            </div>
-          </div>
-
-          <StrategyEditor value={payload} onChange={setPayload} showOrPanel={selectedIndex !== null} />
-
-          <div className="strategy-output">
-            <div className="strategy-output-title">Salida (preview)</div>
-            <textarea readOnly value={JSON.stringify(generated, null, 2)} />
-          </div>
-        </main>
+        <Main payload={payload} generated={generated} onChange={setPayload} />
       </div>
     </div>
   );

@@ -123,3 +123,57 @@ export function makeSubId(p: SubStrategyPayload): string {
 
   return parts.join("|");
 }
+
+function fmtRange(min: number, max: number) {
+  return min === max ? String(min) : `${min}-${max}`;
+}
+
+function truncate(s: string, maxLen: number) {
+  if (s.length <= maxLen) return s;
+  if (maxLen <= 1) return "…";
+  return s.slice(0, Math.max(0, maxLen - 1)) + "…";
+}
+
+/**
+ * Label amigable para UI (no depende del id infinito).
+ */
+export function formatSubLabel(p: SubStrategyPayload, maxLen = 90): string {
+  const n = normalizePayload(p);
+
+  const base = `${n.hero_pos} vs ${n.p2_pos}/${n.p3_pos} (${n.p2_tipo}/${n.p3_tipo})`;
+  const st = `ST ${fmtRange(n.p1_stack_min, n.p1_stack_max)}`;
+  const se = `SE ${fmtRange(n.p1_se_min, n.p1_se_max)}`;
+
+  // Incluir bet solo si no es el default típico 0-75
+  const betIsDefault = n.p1_bet_min === 0 && n.p1_bet_max === 75;
+  const bet = betIsDefault ? "" : ` | bet ${fmtRange(n.p1_bet_min, n.p1_bet_max)}`;
+
+  const sit = n.situacion ? ` | ${n.situacion}` : "";
+  const out = `${base} | ${st} | ${se}${bet}${sit}`;
+
+  return truncate(out, maxLen);
+}
+
+/**
+ * Score para ordenar: más específico (rangos más estrechos) primero.
+ * Devuelve un número mayor cuando los rangos son más pequeños.
+ */
+export function specificityScore(p: SubStrategyPayload): number {
+  const n = normalizePayload(p);
+
+  const widths = [
+    n.p1_bet_max - n.p1_bet_min,
+    n.p1_stack_max - n.p1_stack_min,
+    n.p1_se_max - n.p1_se_min,
+    n.p2_bet_max - n.p2_bet_min,
+    n.p2_stack_max - n.p2_stack_min,
+    n.p3_bet_max - n.p3_bet_min,
+    n.p3_stack_max - n.p3_stack_min,
+  ];
+
+  const safe = widths.map((w) => (Number.isFinite(w) ? Math.max(0, w) : 9999));
+  const inv = safe.reduce((acc, w) => acc + 10000 / (1 + w), 0);
+
+  const tipoBonus = (n.p2_tipo !== "unknown" ? 50 : 0) + (n.p3_tipo !== "unknown" ? 50 : 0);
+  return inv + tipoBonus;
+}
