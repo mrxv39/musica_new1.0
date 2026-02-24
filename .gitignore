@@ -84,13 +84,12 @@ screenshot_*.jpeg
 # Mantener fixtures bmp de templates
 !modules/preflop/templates/*.bmp
 coverage/
-.gate/vitest-coverage.txt
 
 proyect_promp.txt
 
 
-.gate/vitest-coverage.txt
+
+
 
 
 .gate/vitest-coverage.txt
-
