@@ -1,7 +1,7 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\strategy\defaults.ts
  */
-import type { StrategyStore, SubStrategyPayload } from "../../strategy/types";
+import type { StrategyStore, SubStrategyPayload, OrRangesPlan } from "../../strategy/types";
 import { computeSituacionFromPositions } from "../../strategy/utils";
 
 export function emptyStore(): StrategyStore {
@@ -14,6 +14,15 @@ function defaultOrRanges() {
     OPEN_PUSH: "",
     OR_TO_CALL_SMALL: "",
     OR_TO_FOLD: "",
+  };
+}
+
+function defaultOrRangesPlan(): OrRangesPlan {
+  return {
+    OR_TO_CALL_ANY: { move: "OR", bet_min_bb: 0, bet_max_bb: 0 },
+    OPEN_PUSH: { move: "OR", bet_min_bb: 0, bet_max_bb: 0 },
+    OR_TO_CALL_SMALL: { move: "OR", bet_min_bb: 0, bet_max_bb: 0 },
+    OR_TO_FOLD: { move: "OR", bet_min_bb: 0, bet_max_bb: 0 },
   };
 }
 
@@ -45,7 +54,10 @@ export function defaultPayload(): SubStrategyPayload {
 
     situacion: computeSituacionFromPositions("BTN", "SB", "BB"),
 
-    // ✅ requerido por el tipo SubStrategyPayload
+    // rangos estrictos
     orRanges: defaultOrRanges(),
+
+    // plan UI por fila (move + bet min/max BB)
+    orRangesPlan: defaultOrRangesPlan(),
   };
 }
