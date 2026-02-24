@@ -14,9 +14,10 @@ import {
   upsertSituationKey,
   ensureBucketsForSituation,
   upsertSubStrategy,
+  deleteSubStrategyById,
 } from "../../db/sql";
 import { ensureGlobal, emptyStore } from "./state";
-import { OR_KEYS, emptyOrRangesPlan, coerceOrRangesPlan } from "./orRangesAdapter";
+import { emptyOrRangesPlan, coerceOrRangesPlan } from "./orRangesAdapter";
 
 export type DbSaveSubResult = {
   situationKey: string;
@@ -150,4 +151,17 @@ export async function dbSaveSub(item: SubStrategyItem & { globalName?: string })
   await upsertSubStrategy(situationId, bucket, payloadForJson, stackMin, stackMax, orRanges);
 
   return { situationKey, bucket };
+}
+
+/**
+ * Borrar subestrategia por id UI "db_{id}".
+ */
+export async function dbDeleteSub(uiId: string): Promise<void> {
+  await initDB();
+
+  const m = String(uiId || "").match(/^db_(\d+)$/);
+  if (!m) throw new Error(`Invalid sub id: ${uiId}`);
+
+  const ok = await deleteSubStrategyById(Number(m[1]));
+  if (!ok) throw new Error(`Not found: ${uiId}`);
 }

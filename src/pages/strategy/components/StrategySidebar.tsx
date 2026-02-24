@@ -24,6 +24,9 @@ type Props = {
   onDuplicate: () => void;
   onSave: () => void | Promise<void>;
   onCopy: () => void | Promise<void>;
+
+  // delete
+  onDelete: (id: string) => void | Promise<void>;
 };
 
 export default function StrategySidebar(props: Props) {
@@ -40,9 +43,19 @@ export default function StrategySidebar(props: Props) {
     onDuplicate,
     onSave,
     onCopy,
+    onDelete,
   } = props;
 
   const disabled = !!isLoading;
+
+  const handleDelete = async (id: string, name: string) => {
+    if (disabled) return;
+
+    const ok = window.confirm(`¿Eliminar la subestrategia "${name}"?\n\nEsta acción no se puede deshacer.`);
+    if (!ok) return;
+
+    await onDelete(id);
+  };
 
   return (
     <aside className="strategy-sidebar">
@@ -50,11 +63,7 @@ export default function StrategySidebar(props: Props) {
 
       <div className="sb-field">
         <label>estrategia global</label>
-        <select
-          value={globalName}
-          onChange={(e) => onChangeGlobal(e.target.value)}
-          disabled={disabled}
-        >
+        <select value={globalName} onChange={(e) => onChangeGlobal(e.target.value)} disabled={disabled}>
           {(globals?.length ? globals : [globalName]).map((g) => (
             <option key={g} value={g}>
               {g}
@@ -84,7 +93,25 @@ export default function StrategySidebar(props: Props) {
                 >
                   <div className="sb-item-row">
                     <span className="sb-item-label">{name}</span>
-                    {active ? <span className="sb-badge">ACTIVE</span> : null}
+
+                    <span className="sb-item-actions">
+                      {active ? <span className="sb-badge">ACTIVE</span> : null}
+
+                      <button
+                        type="button"
+                        className="sb-del"
+                        title="Eliminar"
+                        aria-label={`Eliminar ${name}`}
+                        disabled={disabled}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void handleDelete(s.id, name);
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </span>
                   </div>
                 </button>
               );

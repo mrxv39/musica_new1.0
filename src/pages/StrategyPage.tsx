@@ -28,10 +28,7 @@ export default function StrategyPage() {
     return () => window.clearTimeout(t);
   }, [ctrl.error]);
 
-  const editorKey = useMemo(
-    () => `${String(globalName)}:${ctrl.selectedId ?? "none"}`,
-    [globalName, ctrl.selectedId]
-  );
+  const editorKey = useMemo(() => `${String(globalName)}:${ctrl.selectedId ?? "none"}`, [globalName, ctrl.selectedId]);
 
   const situationKey = ctrl.editorValue?.situacion ?? "unknown";
 
@@ -74,23 +71,15 @@ export default function StrategyPage() {
           onDuplicate={ctrl.duplicateSelected}
           onSave={ctrl.saveSelected}
           onCopy={ctrl.copyPayloadJson}
+          onDelete={ctrl.deleteSub}
         />
 
         <div className="strategy-editorCol">
-          <StrategyEditor
-            key={editorKey}
-            value={ctrl.editorValue}
-            onChange={ctrl.setEditorValue}
-            showOrPanel={false}
-          />
+          <StrategyEditor key={editorKey} value={ctrl.editorValue} onChange={ctrl.setEditorValue} showOrPanel={false} />
         </div>
 
         <div className="strategy-orCol">
-          <OrRangesPanel
-            situationKey={situationKey}
-            orRanges={ctrl.orRangesRows}
-            onChangeOrRanges={ctrl.setOrRangesRows}
-          />
+          <OrRangesPanel situationKey={situationKey} orRanges={ctrl.orRangesRows} onChangeOrRanges={ctrl.setOrRangesRows} />
         </div>
       </div>
 

@@ -174,7 +174,7 @@ type OrRangesLike = {
 };
 
 function coerceOrCols(input: any): { a: string; p: string; s: string; f: string } {
-  const r: OrRangesLike = (input && typeof input === "object") ? input : {};
+  const r: OrRangesLike = input && typeof input === "object" ? input : {};
   const a = typeof r.OR_TO_CALL_ANY === "string" ? r.OR_TO_CALL_ANY : "";
   const p = typeof r.OPEN_PUSH === "string" ? r.OPEN_PUSH : "";
   const s = typeof r.OR_TO_CALL_SMALL === "string" ? r.OR_TO_CALL_SMALL : "";
@@ -227,17 +227,7 @@ export async function upsertSubStrategy(
 
       updated_at = datetime('now');
   `,
-    [
-      situationId,
-      name,
-      stackMin,
-      stackMax,
-      payload_json,
-      cols.a,
-      cols.p,
-      cols.s,
-      cols.f,
-    ]
+    [situationId, name, stackMin, stackMax, payload_json, cols.a, cols.p, cols.s, cols.f]
   );
 }
 
@@ -301,4 +291,15 @@ export function pickBucketName(stackMin: number, stackMax: number): BucketName {
     }
   }
   return best;
+}
+
+/**
+ * Borrado por PK de sub_strategies.
+ * Devuelve true si borró algo.
+ */
+export async function deleteSubStrategyById(id: number): Promise<boolean> {
+  const db = await getDB();
+  const res: any = await db.execute(`DELETE FROM sub_strategies WHERE id = ?1;`, [id]);
+  const rowsAffected = Number((res as any)?.rowsAffected ?? 0);
+  return rowsAffected > 0;
 }

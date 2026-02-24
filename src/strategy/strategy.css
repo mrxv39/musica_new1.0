@@ -210,3 +210,29 @@
   border: 1px solid #cdd3ff;
   background: #eef0ff;
 }
+
+/* --- delete control --- */
+.sb-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sb-del {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  border-radius: 8px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.sb-del:hover {
+  background: #fff5f5;
+}
+
+.sb-del:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

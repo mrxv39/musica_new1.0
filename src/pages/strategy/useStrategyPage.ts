@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { OrRangeRow, StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
 
-import { dbSaveSub } from "./db";
+import { dbDeleteSub, dbSaveSub } from "./db";
 import { defaultPayload, emptyStore, ensureGlobal, getSubById, listSubs, upsertSub } from "./state";
 
 import { buildRows, rowsToOrRanges, rowsToOrRangesPlan } from "./orRangesAdapter";
@@ -149,6 +149,44 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
     dirtyRef.current = true;
   };
 
+  const deleteSub = async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await dbDeleteSub(id);
+
+      const nextSubs = subsView.filter((s) => (s as any)?.id !== id);
+      setSubsView(nextSubs);
+
+      setStore((prev) => {
+        const next = ensureGlobal(prev ?? emptyStore(), globalName) as any;
+        const arr = Array.isArray(next.globals?.[globalName]?.subs) ? next.globals[globalName].subs : [];
+        next.globals[globalName].subs = (arr as any[]).filter((x) => (x as any)?.id !== id);
+        return next as StrategyStore;
+      });
+
+      if (selectedId === id) {
+        const nextId = nextSubs[0]?.id ?? null;
+        setSelectedId(nextId);
+
+        if (!nextId) {
+          const dp = defaultPayload();
+          setEditorValue(dp);
+          setOrRangesRows(buildRows((dp as any).orRanges, (dp as any).orRangesPlan));
+          dirtyRef.current = false;
+        }
+      }
+
+      setError("Eliminado");
+    } catch (e: any) {
+      const msg = e?.message ? String(e.message) : String(e);
+      setError(`DB Delete ERROR: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // -------- SAVE (manual/auto) ----------
   const saveSelectedInternal = async (mode: "manual" | "auto") => {
     if (mode === "manual") {
@@ -270,6 +308,7 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
 
     createNew,
     duplicateSelected,
+    deleteSub,
 
     saveSelected,
 
