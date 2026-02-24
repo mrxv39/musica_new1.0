@@ -5,12 +5,20 @@
  * - sub_strategies: payload_json + 4 columnas OR fijas:
  *   or_to_call_any, open_push, or_to_call_small, or_to_fold
  * - initDB hace migración defensiva (PRAGMA table_info + ALTER TABLE)
+ *
+ * 🔒 FORZADO: esta app debe leer/escribir SOLO en:
+ *   C:\Users\Usuario\Desktop\proyectos\poker_boss\data\musica_new.db
  */
 import Database from "@tauri-apps/plugin-sql";
 
 let _db: Database | null = null;
 
-export const DB_URL = "sqlite:pokerboss.db";
+/**
+ * ✅ DB única (absoluta).
+ * Nota: plugin-sql acepta "sqlite:<path>".
+ * Usamos forward slashes para evitar escapes en Windows.
+ */
+export const DB_URL = "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/musica_new.db";
 
 // Buckets fijos (BB)
 export const DEFAULT_BUCKETS = [
