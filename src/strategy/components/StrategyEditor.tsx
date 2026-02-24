@@ -1,15 +1,10 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\strategy\components\StrategyEditor.tsx
- *
- * Cambios:
- * - Cablea OR Ranges a payload.orRanges y payload.orRangesPlan
- * - Mantiene compat con props orRanges/onChangeOrRanges (tests)
  */
 import { useMemo } from "react";
 import type { OrRanges, OrRangesPlan, PlayerPos, SubStrategyPayload } from "../types";
 import { computeSituacionFromPositions } from "../utils";
 import OrRangesPanel from "./OrRangesPanel";
-
 import { SelectField } from "./editor/EditorFields";
 import { cardStyle, headerRow } from "./editor/editorStyles";
 import P1Card from "./editor/P1Card";
@@ -18,13 +13,12 @@ import VillainCard from "./editor/VillainCard";
 type Props = {
   value: SubStrategyPayload;
   onChange: (next: SubStrategyPayload) => void;
+
   showOrPanel?: boolean;
 
-  // compat (tests)
   orRanges?: OrRanges;
   onChangeOrRanges?: (next: OrRanges) => void;
 
-  // compat (por si quieres controlar externamente)
   orRangesPlan?: OrRangesPlan;
   onChangeOrRangesPlan?: (next: OrRangesPlan) => void;
 };
@@ -32,16 +26,19 @@ type Props = {
 const SPOTS = ["BTN", "SB", "BB"] as const;
 const POS: PlayerPos[] = ["BTN", "SB", "BB"];
 
-const EMPTY_OR: OrRanges = { OR_TO_CALL_ANY: "", OPEN_PUSH: "", OR_TO_CALL_SMALL: "", OR_TO_FOLD: "" };
+const EMPTY_OR: OrRanges = {
+  OR_TO_CALL_ANY: "",
+  OPEN_PUSH: "",
+  OR_TO_CALL_SMALL: "",
+  OR_TO_FOLD: "",
+};
 
 export default function StrategyEditor({
   value,
   onChange,
   showOrPanel = false,
-
   orRanges,
   onChangeOrRanges,
-
   orRangesPlan,
   onChangeOrRangesPlan,
 }: Props) {
@@ -50,13 +47,13 @@ export default function StrategyEditor({
   }, [value.hero_pos, value.p2_pos, value.p3_pos]);
 
   function patch(p: Partial<SubStrategyPayload>) {
-    const next = { ...value, ...p };
+    const next: SubStrategyPayload = { ...value, ...p };
     next.situacion = computeSituacionFromPositions(next.hero_pos, next.p2_pos, next.p3_pos);
     onChange(next);
   }
 
-  // ---- OR wiring (por defecto desde payload) ----
   const effectiveOrRanges = orRanges ?? value.orRanges ?? EMPTY_OR;
+
   const handleOrRangesChange =
     onChangeOrRanges ??
     ((next: OrRanges) => {
@@ -64,6 +61,7 @@ export default function StrategyEditor({
     });
 
   const effectivePlan = orRangesPlan ?? value.orRangesPlan;
+
   const handlePlanChange =
     onChangeOrRangesPlan ??
     ((next: OrRangesPlan) => {
@@ -71,46 +69,45 @@ export default function StrategyEditor({
     });
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: showOrPanel ? "1fr 360px" : "1fr", gap: 14 }}>
-      <div style={cardStyle}>
-        <div style={headerRow}>
-          <div style={{ fontWeight: 700 }}>Editor</div>
-          <div style={{ fontSize: 12, opacity: 0.75 }}>situacion: {computedSituacion}</div>
-        </div>
+    <div style={cardStyle}>
+      <div style={headerRow}>
+        <div style={{ fontWeight: 700 }}>Editor</div>
+        <div style={{ opacity: 0.7 }}>situacion: {computedSituacion}</div>
+      </div>
 
-        {/* Top (Spot arriba, Hero pos debajo) */}
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 320px)", gap: 10 }}>
-          <SelectField
-            label="Spot"
-            value={value.spot as (typeof SPOTS)[number]}
-            options={SPOTS}
-            onChange={(v) => patch({ spot: v as any })}
-          />
+      <div style={{ display: "grid", gap: 10 }}>
+        <SelectField
+          label="Spot"
+          value={value.spot}
+          options={SPOTS as unknown as string[]}
+          onChange={(v) => patch({ spot: v as any })}
+        />
+        <SelectField
+          label="Hero Pos"
+          value={value.hero_pos}
+          options={POS as unknown as string[]}
+          onChange={(v) => patch({ hero_pos: v as PlayerPos })}
+        />
+      </div>
 
-          <SelectField
-            label="Hero pos"
-            value={value.hero_pos}
-            options={POS}
-            onChange={(v) => patch({ hero_pos: v as PlayerPos })}
-          />
-        </div>
-
-        {/* Cards apiladas: P1 -> P2 -> P3 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12, marginTop: 14 }}>
-          <P1Card value={value} patch={patch} />
-          <VillainCard which="p2" title="P2" value={value} patch={patch} />
-          <VillainCard which="p3" title="P3" value={value} patch={patch} />
-        </div>
+      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+        <P1Card value={value} onChange={patch} />
+        <VillainCard index={2} value={value} onChange={patch} />
+        <VillainCard index={3} value={value} onChange={patch} />
       </div>
 
       {showOrPanel ? (
-        <OrRangesPanel
-          situationKey={computedSituacion}
-          value={effectiveOrRanges}
-          onChange={handleOrRangesChange}
-          plan={effectivePlan}
-          onChangePlan={handlePlanChange}
-        />
+        <div style={{ marginTop: 12 }}>
+          <OrRangesPanel
+            situationKey={value.situacion}
+            value={effectiveOrRanges}
+            onChange={handleOrRangesChange}
+            plan={effectivePlan}
+            onChangePlan={handlePlanChange}
+            p1_stack_min={value.p1_stack_min}
+            p1_stack_max={value.p1_stack_max}
+          />
+        </div>
       ) : null}
     </div>
   );

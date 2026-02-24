@@ -1,18 +1,27 @@
+/**
+ * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\strategy\types.ts
+ */
 import type { StrategyGlobal } from "./constants";
 
 export type Spot = "BTN" | "SB" | "BB";
 export type PlayerPos = "BTN" | "SB" | "BB";
 export type PlayerTipo = "fish" | "reg" | "unknown";
 
-export type OrRangeKey = "OR_TO_CALL_ANY" | "OPEN_PUSH" | "OR_TO_CALL_SMALL" | "OR_TO_FOLD";
+export type OrRangeKey =
+  | "OR_TO_CALL_ANY"
+  | "OPEN_PUSH"
+  | "OR_TO_CALL_SMALL"
+  | "OR_TO_FOLD";
+
 export type OrRanges = Record<OrRangeKey, string>;
 
-/**
- * Nuevo plan por fila (UI):
- * - move: Select fijo (OR/CALL/RAISE/FOLD/LIMP)
- * - bet_min_bb / bet_max_bb: números en BB
- */
-export type OrMoveSelect = "OR" | "CALL" | "RAISE" | "FOLD" | "LIMP";
+export type OrMoveSelect =
+  | "OR"
+  | "CALL"
+  | "RAISE"
+  | "FOLD"
+  | "LIMP"
+  | "OPEN_PUSH";
 
 export type OrRangePlanEntry = {
   move: OrMoveSelect;
@@ -24,7 +33,6 @@ export type OrRangesPlan = Record<OrRangeKey, OrRangePlanEntry>;
 
 export type SubStrategyPayload = {
   spot: Spot;
-
   hero_pos: PlayerPos;
 
   p1_bet_min: number;
@@ -50,10 +58,8 @@ export type SubStrategyPayload = {
 
   situacion: string;
 
-  // Rangos estrictos (texto)
   orRanges: OrRanges;
 
-  // Plan UI por rango (move + bet min/max BB) -> opcional, normalizePayload lo garantiza
   orRangesPlan?: OrRangesPlan;
 };
 
@@ -70,8 +76,6 @@ export type OrRangeRow = {
 export type SubStrategyItem = {
   id: string;
   payload: SubStrategyPayload;
-
-  // optional (V2): OR Ranges per sub (legacy)
   or_ranges?: OrRangeRow[];
 };
 
