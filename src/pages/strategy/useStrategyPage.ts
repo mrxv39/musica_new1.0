@@ -2,7 +2,7 @@
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\strategy\useStrategyPage.ts
  *
  * Hook "pegamento" mínimo:
- * - monta: dbInit + dbLoadSubs
+ * - monta: dbInit + dbLoadSubs (via reloadFromDb)
  * - mantiene store + subsView (UI)
  * - selected: hidrata editorValue (incluye orRanges + orRangesPlan)
  * - rows UI se derivan y se sincronizan -> editorValue (fuente de verdad)
@@ -13,37 +13,19 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { OrRangeRow, StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
-import { dbInit, dbLoadSubs, dbSaveSub } from "./db";
+
+import { dbSaveSub } from "./db";
 import { defaultPayload, emptyStore, ensureGlobal, getSubById, listSubs, upsertSub } from "./state";
-import { normalizePayload } from "../../strategy/utils";
-import {
-  buildRows,
-  rowsToOrRanges,
-  rowsToOrRangesPlan,
-  isSameRows,
-} from "./orRangesAdapter";
 
-function makeId() {
-  return `sub_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
-}
+import { buildRows, rowsToOrRanges, rowsToOrRangesPlan } from "./orRangesAdapter";
 
-function upsertInArray(arr: SubStrategyItem[], item: SubStrategyItem): SubStrategyItem[] {
-  const idx = arr.findIndex((x: any) => (x as any)?.id === (item as any)?.id);
-  if (idx >= 0) {
-    const next = arr.slice();
-    next[idx] = item;
-    return next;
-  }
-  return [...arr, item];
-}
-
-function coercePayload(p: any): SubStrategyPayload {
-  try {
-    return normalizePayload((p ?? defaultPayload()) as SubStrategyPayload);
-  } catch {
-    return defaultPayload();
-  }
-}
+import { makeId } from "./useStrategyPage/ids";
+import { upsertInArray } from "./useStrategyPage/array";
+import { coercePayload } from "./useStrategyPage/payload";
+import { useRowsSync } from "./useStrategyPage/rowsSync";
+import { useSelectionHydration } from "./useStrategyPage/selection";
+import { useAutosaveDebounce } from "./useStrategyPage/autosave";
+import { reloadFromDb } from "./useStrategyPage/reload";
 
 export function useStrategyPage({ globalName }: { globalName: string }) {
   const [store, setStore] = useState<StrategyStore>(() => emptyStore());
@@ -61,7 +43,7 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
   const [error, setError] = useState<string | null>(null);
   const [subsView, setSubsView] = useState<SubStrategyItem[]>(() => []);
 
-  // autosave
+  // autosave refs
   const lastManualSaveAtRef = useRef<number>(Number.NEGATIVE_INFINITY);
   const autosaveTimerRef = useRef<number | null>(null);
   const dirtyRef = useRef<boolean>(false);
@@ -75,56 +57,18 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
 
   // -------- load/reload ----------
   const reload = async (): Promise<StrategyStore> => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      await dbInit();
-      const loaded = await dbLoadSubs(globalName);
-      const next = ensureGlobal(loaded ?? emptyStore(), globalName);
-
-      setStore(next);
-
-      const nextSubs = listSubs(next, globalName);
-      setSubsView(nextSubs);
-
-      if (!selectedId && nextSubs.length > 0) {
-        const first = nextSubs[0] as any;
-        setSelectedId(first.id);
-
-        const p = coercePayload(first.payload);
-        setEditorValue(p);
-
-        const rows = buildRows((p as any).orRanges, (p as any).orRangesPlan);
-        setOrRangesRows(rows);
-
-        dirtyRef.current = false;
-      }
-
-      if (!selectedId && nextSubs.length === 0) {
-        const p = defaultPayload();
-        setEditorValue(p);
-        setOrRangesRows(buildRows((p as any).orRanges, (p as any).orRangesPlan));
-        dirtyRef.current = false;
-      }
-
-      return next;
-    } catch (e: any) {
-      const msg = e?.message ? String(e.message) : String(e);
-      setError(`DB LOAD ERROR: ${msg}`);
-
-      const fallback = ensureGlobal(emptyStore(), globalName);
-      setStore(fallback);
-
-      const p = defaultPayload();
-      setEditorValue(p);
-      setOrRangesRows(buildRows((p as any).orRanges, (p as any).orRangesPlan));
-      setSubsView(listSubs(fallback, globalName));
-
-      dirtyRef.current = false;
-      return fallback;
-    } finally {
-      setIsLoading(false);
-    }
+    return reloadFromDb({
+      globalName,
+      selectedId,
+      setIsLoading,
+      setError,
+      setStore,
+      setSubsView,
+      setSelectedId,
+      setEditorValue,
+      setOrRangesRows,
+      dirtyRef,
+    });
   };
 
   useEffect(() => {
@@ -133,40 +77,23 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
   }, [globalName]);
 
   // -------- hydrate on selection ----------
-  useEffect(() => {
-    if (!selectedId) return;
+  useSelectionHydration({
+    selectedId,
+    store,
+    subsView,
+    globalName,
+    setEditorValue,
+    setOrRangesRows,
+    dirtyRef,
+  });
 
-    const it =
-      subsView.find((x: any) => (x as any)?.id === selectedId) ?? getSubById(store, globalName, selectedId);
-    if (!it) return;
-
-    const p = coercePayload((it as any).payload);
-    setEditorValue(p);
-
-    const rows = buildRows((p as any).orRanges, (p as any).orRangesPlan);
-    setOrRangesRows(rows);
-
-    dirtyRef.current = false;
-  }, [selectedId, store, globalName, subsView]);
-
-  // -------- keep rows in sync if editorValue changes via import/reload ----------
-  useEffect(() => {
-    const desired = buildRows((editorValue as any).orRanges, (editorValue as any).orRangesPlan);
-    if (!isSameRows(orRangesRows, desired)) {
-      setOrRangesRows(desired);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorValue]);
-
-  // -------- row edits -> update editorValue (single source of truth) ----------
-  const setOrRangesRowsAndSync = (rows: OrRangeRow[]) => {
-    setOrRangesRows(rows);
-
-    const nextOrRanges = rowsToOrRanges(rows);
-    const nextPlan = rowsToOrRangesPlan(rows);
-
-    setEditorValue((prev) => coercePayload({ ...(prev as any), orRanges: nextOrRanges, orRangesPlan: nextPlan }));
-  };
+  // -------- rows sync (editorValue <-> rows) ----------
+  const { setOrRangesRowsAndSync } = useRowsSync({
+    editorValue,
+    setEditorValue,
+    orRangesRows,
+    setOrRangesRows,
+  });
 
   // -------- CRUD ----------
   const createNew = () => {
@@ -274,32 +201,15 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
   const saveSelected = async () => saveSelectedInternal("manual");
 
   // autosave debounce
-  useEffect(() => {
-    if (!selectedId) return;
-
-    const now = Date.now();
-    if (now - lastManualSaveAtRef.current < 500) return;
-
-    dirtyRef.current = true;
-
-    if (autosaveTimerRef.current) {
-      window.clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
-    }
-
-    autosaveTimerRef.current = window.setTimeout(() => {
-      if (!dirtyRef.current) return;
-      void saveSelectedInternal("auto");
-    }, 650);
-
-    return () => {
-      if (autosaveTimerRef.current) {
-        window.clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorValue, orRangesRows, selectedId]);
+  useAutosaveDebounce({
+    selectedId,
+    editorValue,
+    orRangesRows,
+    lastManualSaveAtRef,
+    autosaveTimerRef,
+    dirtyRef,
+    saveAuto: () => void saveSelectedInternal("auto"),
+  });
 
   // -------- misc ----------
   const copyPayloadJson = async () => {
