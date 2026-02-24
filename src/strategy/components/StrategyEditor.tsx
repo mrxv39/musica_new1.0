@@ -2,11 +2,11 @@
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\strategy\components\StrategyEditor.tsx
  *
  * Cambios:
- * - Hero pos debajo de Spot
- * - P2 debajo de P1, P3 debajo de P2
+ * - Cablea OR Ranges a payload.orRanges y payload.orRangesPlan
+ * - Mantiene compat con props orRanges/onChangeOrRanges (tests)
  */
 import { useMemo } from "react";
-import type { OrRanges, PlayerPos, SubStrategyPayload } from "../types";
+import type { OrRanges, OrRangesPlan, PlayerPos, SubStrategyPayload } from "../types";
 import { computeSituacionFromPositions } from "../utils";
 import OrRangesPanel from "./OrRangesPanel";
 
@@ -20,19 +20,30 @@ type Props = {
   onChange: (next: SubStrategyPayload) => void;
   showOrPanel?: boolean;
 
+  // compat (tests)
   orRanges?: OrRanges;
   onChangeOrRanges?: (next: OrRanges) => void;
+
+  // compat (por si quieres controlar externamente)
+  orRangesPlan?: OrRangesPlan;
+  onChangeOrRangesPlan?: (next: OrRangesPlan) => void;
 };
 
 const SPOTS = ["BTN", "SB", "BB"] as const;
 const POS: PlayerPos[] = ["BTN", "SB", "BB"];
 
+const EMPTY_OR: OrRanges = { OR_TO_CALL_ANY: "", OPEN_PUSH: "", OR_TO_CALL_SMALL: "", OR_TO_FOLD: "" };
+
 export default function StrategyEditor({
   value,
   onChange,
   showOrPanel = false,
+
   orRanges,
   onChangeOrRanges,
+
+  orRangesPlan,
+  onChangeOrRangesPlan,
 }: Props) {
   const computedSituacion = useMemo(() => {
     return computeSituacionFromPositions(value.hero_pos, value.p2_pos, value.p3_pos);
@@ -43,6 +54,21 @@ export default function StrategyEditor({
     next.situacion = computeSituacionFromPositions(next.hero_pos, next.p2_pos, next.p3_pos);
     onChange(next);
   }
+
+  // ---- OR wiring (por defecto desde payload) ----
+  const effectiveOrRanges = orRanges ?? value.orRanges ?? EMPTY_OR;
+  const handleOrRangesChange =
+    onChangeOrRanges ??
+    ((next: OrRanges) => {
+      patch({ orRanges: next });
+    });
+
+  const effectivePlan = orRangesPlan ?? value.orRangesPlan;
+  const handlePlanChange =
+    onChangeOrRangesPlan ??
+    ((next: OrRangesPlan) => {
+      patch({ orRangesPlan: next });
+    });
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: showOrPanel ? "1fr 360px" : "1fr", gap: 14 }}>
@@ -80,8 +106,10 @@ export default function StrategyEditor({
       {showOrPanel ? (
         <OrRangesPanel
           situationKey={computedSituacion}
-          value={orRanges ?? { OR_TO_CALL_ANY: "", OPEN_PUSH: "", OR_TO_CALL_SMALL: "", OR_TO_FOLD: "" }}
-          onChange={onChangeOrRanges ?? (() => {})}
+          value={effectiveOrRanges}
+          onChange={handleOrRangesChange}
+          plan={effectivePlan}
+          onChangePlan={handlePlanChange}
         />
       ) : null}
     </div>
