@@ -45,6 +45,7 @@ export default function OrRangesPanel({
     planOnChange(next);
   }
 
+  // OPEN_PUSH sigue derivado del stack P1
   useEffect(() => {
     const row = effectivePlan.OPEN_PUSH;
     const mustMove = row.move !== "OPEN_PUSH";
@@ -63,6 +64,7 @@ export default function OrRangesPanel({
   function normalizeMinMax(key: OrRangeKey) {
     const row = effectivePlan[key];
 
+    // OPEN_PUSH derivado: siempre fuerza valores
     if (key === "OPEN_PUSH") {
       return patchPlan(key, {
         move: "OPEN_PUSH",
@@ -71,10 +73,8 @@ export default function OrRangesPanel({
       });
     }
 
-    if (row.move === "FOLD") return patchPlan(key, { ...row, bet_min_bb: 0, bet_max_bb: 0 });
-    if (row.move === "LIMP") return patchPlan(key, { ...row, bet_min_bb: 1, bet_max_bb: 1 });
-    if (row.move === "CALL") return patchPlan(key, { ...row, bet_min_bb: 0, bet_max_bb: 0 });
-
+    // Ahora: NO forzamos 0/0 o 1/1 por move.
+    // Solo normalizamos min<=max y step.
     const mm = coerceMinMax(row.bet_min_bb, row.bet_max_bb, {
       min: 0,
       max: 9999,
@@ -99,6 +99,8 @@ export default function OrRangesPanel({
             }
           : row;
 
+        // Bloqueos por move desactivados (model.ts devuelve false).
+        // OPEN_PUSH sigue bloqueado por diseño derivado.
         const locked = isOpenPush ? true : isLockedRow(derivedRow.move);
 
         return (

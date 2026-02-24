@@ -33,16 +33,24 @@ export function safeNum(v: string): number {
   return n;
 }
 
+/**
+ * Antes: CALL/FOLD/LIMP forzaban bet_min/max (0/0 o 1/1).
+ * Ahora: el usuario puede editar bet_min/max en cualquier move.
+ * OPEN_PUSH sigue siendo derivado y se fuerza fuera de aquí.
+ */
 export function applyMoveRules(move: OrMoveSelect, row: OrRangesPlan[OrRangeKey]) {
   // OPEN_PUSH es derivado (se fuerza fuera), pero si llega aquí no rompemos:
   if (move === "OPEN_PUSH") return { ...row, move };
 
-  if (move === "FOLD") return { ...row, move, bet_min_bb: 0, bet_max_bb: 0 };
-  if (move === "LIMP") return { ...row, move, bet_min_bb: 1, bet_max_bb: 1 };
-  if (move === "CALL") return { ...row, move, bet_min_bb: 0, bet_max_bb: 0 };
+  // No forzar bet_min/max por move
   return { ...row, move };
 }
 
-export function isLockedRow(move: OrMoveSelect): boolean {
-  return move === "FOLD" || move === "LIMP" || move === "CALL" || move === "OPEN_PUSH";
+/**
+ * Antes: bloqueábamos inputs por move.
+ * Ahora: no bloqueamos por move (el usuario quiere editar siempre).
+ * OPEN_PUSH se bloquea/deriva a nivel de panel.
+ */
+export function isLockedRow(_move: OrMoveSelect): boolean {
+  return false;
 }

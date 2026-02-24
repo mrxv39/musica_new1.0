@@ -1,5 +1,11 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\strategy\components\StrategyEditor.tsx
+ *
+ * Fix TS:
+ * - P1Card requiere prop "patch" (no "onChange")
+ * - VillainCard requiere props "which" + "title" + "patch" (no "index" + "onChange")
+ *
+ * Nota: mantenemos la API pública de StrategyEditor (value + onChange) para no romper padres.
  */
 import { useMemo } from "react";
 import type { OrRanges, OrRangesPlan, PlayerPos, SubStrategyPayload } from "../types";
@@ -16,6 +22,7 @@ type Props = {
 
   showOrPanel?: boolean;
 
+  // compat (tests)
   orRanges?: OrRanges;
   onChangeOrRanges?: (next: OrRanges) => void;
 
@@ -91,9 +98,15 @@ export default function StrategyEditor({
       </div>
 
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-        <P1Card value={value} onChange={patch} />
-        <VillainCard index={2} value={value} onChange={patch} />
-        <VillainCard index={3} value={value} onChange={patch} />
+        {/* ✅ Nuevo contrato: patch */}
+        <P1Card value={value} patch={patch} />
+
+        {/* ✅ Nuevo contrato: which + title + patch */}
+        {/* Nota: si Which es un union de strings tipo "P2"/"P3" esto encaja.
+            Si fuese otro formato, seguimos compilando porque el valor ya coincide
+            con los labels usados por el componente. */}
+        <VillainCard which={"P2" as any} title="P2" value={value} patch={patch} />
+        <VillainCard which={"P3" as any} title="P3" value={value} patch={patch} />
       </div>
 
       {showOrPanel ? (

@@ -17,6 +17,8 @@ export function ensureOrRangesPlan(next: SubStrategyPayload): void {
   const base = defaultOrRangesPlan();
   next.orRangesPlan = { ...base, ...(next.orRangesPlan || {}) };
 
+  // Regla que mantenemos: OPEN_PUSH derivado de stack P1
+  // El resto: no se fuerzan bet_min/max por move, solo se normaliza min<=max y step.
   for (const k of Object.keys(base) as (keyof OrRangesPlan)[]) {
     const row = next.orRangesPlan[k];
 
@@ -24,22 +26,6 @@ export function ensureOrRangesPlan(next: SubStrategyPayload): void {
       row.move = "OPEN_PUSH";
       row.bet_min_bb = next.p1_stack_min;
       row.bet_max_bb = next.p1_stack_max;
-      continue;
-    }
-
-    if (row.move === "FOLD") {
-      row.bet_min_bb = 0;
-      row.bet_max_bb = 0;
-      continue;
-    }
-    if (row.move === "LIMP") {
-      row.bet_min_bb = 1;
-      row.bet_max_bb = 1;
-      continue;
-    }
-    if (row.move === "CALL") {
-      row.bet_min_bb = 0;
-      row.bet_max_bb = 0;
       continue;
     }
 
