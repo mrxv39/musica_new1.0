@@ -1,28 +1,62 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\strategy\components\orRangesPanel\OrRangeRow.tsx
  */
+import type React from "react";
 import type { OrMoveSelect } from "../../types";
-import { inputStyle, selectStyle, smallNumberStyle } from "./styles";
+import { inputStyle, selectStyle } from "./styles";
+
+const rowStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "180px 1fr",
+  gap: 12,
+  padding: "10px 0",
+  borderBottom: "1px solid #f1f1f1",
+};
+
+const labelCol: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+};
+
+const controlsCol: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const rangeStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid #e9e9e9",
+  outline: "none",
+  fontSize: "0.95em",
+};
+
+const errorStyle: React.CSSProperties = {
+  marginTop: 6,
+  color: "#b91c1c",
+  fontSize: 12,
+};
 
 type Props = {
   label: string;
 
-  // move
   move: OrMoveSelect;
   moves: OrMoveSelect[];
   locked: boolean;
-  onChangeMove: (next: OrMoveSelect) => void;
+  onChangeMove: (m: OrMoveSelect) => void;
 
-  // bet min/max
   betMin: number;
   betMax: number;
-  onChangeBetMin: (next: number) => void;
-  onChangeBetMax: (next: number) => void;
+  onChangeBetMin: (v: string) => void;
+  onChangeBetMax: (v: string) => void;
   onBlurNormalize: () => void;
 
-  // strict range (text)
   rangeText: string;
-  onChangeRangeText: (next: string) => void;
+  onChangeRangeText: (t: string) => void;
+
   placeholder?: string;
   error?: string;
 };
@@ -33,29 +67,30 @@ export default function OrRangeRow({
   moves,
   locked,
   onChangeMove,
-
   betMin,
   betMax,
   onChangeBetMin,
   onChangeBetMax,
   onBlurNormalize,
-
   rangeText,
   onChangeRangeText,
   placeholder,
   error,
 }: Props) {
   return (
-    <div style={{ marginBottom: 2 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <label style={{ fontWeight: 500, fontSize: "0.98em" }}>{label}</label>
+    <div style={rowStyle}>
+      <div style={labelCol}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+      </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={controlsCol}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <select
-            value={move}
-            onChange={(e) => onChangeMove(e.target.value as OrMoveSelect)}
             style={selectStyle}
-            aria-label={`${label} move`}
+            value={move}
+            disabled={locked}
+            onChange={(e) => onChangeMove(e.target.value as OrMoveSelect)}
+            onBlur={onBlurNormalize}
           >
             {moves.map((m) => (
               <option key={m} value={m}>
@@ -64,40 +99,34 @@ export default function OrRangeRow({
             ))}
           </select>
 
+          {/* ✅ bet min/max editables + bugfix evento->valor */}
           <input
+            style={inputStyle}
             type="number"
             step={0.5}
             value={betMin}
-            disabled={locked}
-            onChange={(e) => onChangeBetMin(Number(e.target.value))}
+            onChange={(e) => onChangeBetMin(e.target.value)}
             onBlur={onBlurNormalize}
-            style={{ ...smallNumberStyle, opacity: locked ? 0.6 : 1 }}
-            aria-label={`${label} bet min bb`}
           />
-
           <input
+            style={inputStyle}
             type="number"
             step={0.5}
             value={betMax}
-            disabled={locked}
-            onChange={(e) => onChangeBetMax(Number(e.target.value))}
+            onChange={(e) => onChangeBetMax(e.target.value)}
             onBlur={onBlurNormalize}
-            style={{ ...smallNumberStyle, opacity: locked ? 0.6 : 1 }}
-            aria-label={`${label} bet max bb`}
           />
         </div>
+
+        <input
+          style={rangeStyle}
+          value={rangeText}
+          onChange={(e) => onChangeRangeText(e.target.value)}
+          placeholder={placeholder}
+        />
+
+        {error ? <div style={errorStyle}>{error}</div> : null}
       </div>
-
-      <input
-        type="text"
-        value={rangeText}
-        onChange={(e) => onChangeRangeText(e.target.value)}
-        placeholder={placeholder}
-        style={{ ...inputStyle, borderColor: error ? "#e66" : inputStyle.borderColor, marginTop: 6 }}
-        aria-invalid={!!error}
-      />
-
-      {error ? <div style={{ color: "#c00", fontSize: "0.92em", marginTop: 2 }}>{error}</div> : null}
     </div>
   );
 }

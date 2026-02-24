@@ -3,37 +3,56 @@
  */
 import type React from "react";
 
+/**
+ * OrRangeRow.tsx importa:
+ * - inputStyle
+ * - selectStyle
+ *
+ * Otros componentes pueden importar:
+ * - cardStyle, headerRow, fieldLabel, labelTitle
+ */
+
 export const cardStyle: React.CSSProperties = {
-  border: "1px solid #e6e6e6",
-  borderRadius: 10,
-  padding: 14,
-  background: "#fff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
+  padding: 12,
+  background: "white",
+};
+
+export const headerRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  marginBottom: 10,
+};
+
+export const fieldLabel: React.CSSProperties = {
+  display: "grid",
+  gap: 6,
+};
+
+export const labelTitle: React.CSSProperties = {
+  fontSize: 12,
+  opacity: 0.8,
 };
 
 export const inputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "6px 8px",
-  borderRadius: 8,
-  border: "1px solid #e9e9e9",
+  padding: "10px 10px",
+  borderRadius: 10,
+  border: "1px solid #e5e7eb",
+  background: "white",
+  fontSize: 14,
   outline: "none",
-  fontSize: "1em",
-};
-
-export const smallNumberStyle: React.CSSProperties = {
-  width: 92,
-  padding: "6px 8px",
-  borderRadius: 8,
-  border: "1px solid #e9e9e9",
-  outline: "none",
-  fontSize: "0.95em",
 };
 
 export const selectStyle: React.CSSProperties = {
-  width: 98,
-  padding: "6px 8px",
-  borderRadius: 8,
-  border: "1px solid #e9e9e9",
-  outline: "none",
-  fontSize: "0.95em",
+  width: "100%",
+  padding: "10px 10px",
+  borderRadius: 10,
+  border: "1px solid #e5e7eb",
   background: "white",
+  fontSize: 14,
+  outline: "none",
 };
