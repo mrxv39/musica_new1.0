@@ -13,11 +13,23 @@ export function defaultOrRanges(): OrRanges {
 }
 
 export function ensureOrRanges(next: SubStrategyPayload): void {
-  // Migrate legacy or_ranges (array) if present
-  if ((next as any).or_ranges && Array.isArray((next as any).or_ranges)) {
-    // Not implemented: migration logic (if needed)
-    // For now, ignore and use default
-    delete (next as any).or_ranges;
+  // If orRanges is missing but or_ranges array exists, reconstruct orRanges from it
+  if (!next.orRanges && Array.isArray((next as any).or_ranges)) {
+    const arr = (next as any).or_ranges as any[];
+    const obj: OrRanges = {
+      OR_TO_CALL_ANY: "",
+      OPEN_PUSH: "",
+      OR_TO_CALL_SMALL: "",
+      OR_TO_FOLD: "",
+    };
+    for (const row of arr) {
+      if (row && typeof row.id === "string" && typeof row.range === "string") {
+        if (obj.hasOwnProperty(row.id)) {
+          obj[row.id as keyof OrRanges] = row.range;
+        }
+      }
+    }
+    next.orRanges = obj;
   }
 
   const base = defaultOrRanges();

@@ -61,21 +61,31 @@ export type SubStrategyPayload = {
   orRanges: OrRanges;
 
   orRangesPlan?: OrRangesPlan;
+
+  /**
+   * Persisted OR ranges (array of rows). Optional for backward compatibility.
+   */
+  or_ranges?: OrRangeRow[];
 };
 
 export type OrMove = "OR" | "PUSH" | "FOLD";
 
+// New OR Range row type for persistence
 export type OrRangeRow = {
-  id: string;
+  id: string; // stable key
+  label: string;
+  mode: "OR" | string; // e.g. "OR", ...
+  bet_min: number;
+  bet_max: number;
   range: string;
-  move: OrMove;
-  value_min: number;
-  value_max: number;
 };
 
 export type SubStrategyItem = {
   id: string;
   payload: SubStrategyPayload;
+  /**
+   * Persisted OR ranges (array of rows). Optional for backward compatibility.
+   */
   or_ranges?: OrRangeRow[];
 };
 

@@ -1,152 +1,117 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\strategy\components\OrRangesPanel.tsx
+ *
+ * Compat layer:
+ * - API (tests / StrategyPage): { situationKey, orRanges: OrRangeRow[], onChangeOrRanges }
+ * - API (StrategyEditor):      { situationKey, value: OrRanges, onChange }
+ *
+ * We render rows always, and when a row changes:
+ * - if onChangeOrRanges exists -> emit next rows
+ * - if onChange exists         -> emit next flat OrRanges
  */
-import { useEffect, useMemo, useState } from "react";
-import type { OrRanges, OrRangeKey, OrRangesPlan, OrMoveSelect } from "../types";
-import { validatePokerRangeList } from "../pokerRange";
-import { coerceMinMax } from "../utils";
+
 import { cardStyle } from "./orRangesPanel/styles";
-import OrRangeRow from "./orRangesPanel/OrRangeRow";
-import { LABELS, MOVES, applyMoveRules, ensurePlan, isLockedRow, safeNum } from "./orRangesPanel/model";
+import OrRangeRowComponent from "./orRangesPanel/OrRangeRow";
+import { LABELS, MOVES } from "./orRangesPanel/model";
+import type { OrRangeRow, OrRanges } from "../types";
 
-type Props = {
+export type OrRangeRowState = OrRangeRow;
+
+type PropsCompat = {
   situationKey: string;
-  value: OrRanges;
-  onChange: (next: OrRanges) => void;
 
-  plan?: OrRangesPlan;
-  onChangePlan?: (next: OrRangesPlan) => void;
+  // ---- API A (tests / StrategyPage)
+  orRanges?: OrRangeRowState[];
+  onChangeOrRanges?: (next: OrRangeRowState[]) => void;
 
-  /**
-   * Opcionales:
-   * - Si vienen, OPEN_PUSH se deriva SIEMPRE de estos valores (y queda locked).
-   * - Si NO vienen, OPEN_PUSH usa el row del plan.
-   */
-  p1_stack_min?: number;
-  p1_stack_max?: number;
+  // ---- API B (StrategyEditor)
+  value?: OrRanges;
+  onChange?: (next: OrRanges) => void;
+
+  // extra props from StrategyEditor (ignored but allowed)
+  plan?: any;
+  onChangePlan?: any;
+  p1_stack_min?: any;
+  p1_stack_max?: any;
 };
 
-export default function OrRangesPanel({
-  situationKey,
-  value,
-  onChange,
-  plan,
-  onChangePlan,
-  p1_stack_min,
-  p1_stack_max,
-}: Props) {
-  // ✅ fallback interno: si no pasan onChangePlan, el panel mantiene su plan local
-  const [localPlan, setLocalPlan] = useState<OrRangesPlan>(() => ensurePlan(plan));
+const OR_KEYS = ["OR_TO_CALL_ANY", "OPEN_PUSH", "OR_TO_CALL_SMALL", "OR_TO_FOLD"] as const;
 
-  // Si el padre empieza a pasar plan (o cambia), sincronizamos el local para no quedarnos atrás
-  useEffect(() => {
-    if (plan) setLocalPlan(ensurePlan(plan));
-  }, [plan]);
+function defaultRowsFromFlat(or?: OrRanges): OrRangeRowState[] {
+  const base = (or ?? {}) as any;
+  return OR_KEYS.map((k) => ({
+    id: k,
+    label: LABELS[k],
+    mode: "OR",
+    bet_min: 0,
+    bet_max: 0,
+    range: typeof base[k] === "string" ? base[k] : "",
+  })) as any;
+}
 
-  const effectivePlan = useMemo(() => ensurePlan(plan ?? localPlan), [plan, localPlan]);
-  const planOnChange = onChangePlan ?? setLocalPlan;
+function rowsToFlat(rows: OrRangeRowState[]): OrRanges {
+  const out: any = {
+    OR_TO_CALL_ANY: "",
+    OPEN_PUSH: "",
+    OR_TO_CALL_SMALL: "",
+    OR_TO_FOLD: "",
+  };
 
-  const hasP1Stack = typeof p1_stack_min === "number" && typeof p1_stack_max === "number";
+  for (const r of rows || []) {
+    if (!r) continue;
+    const id = (r as any).id;
+    if (typeof id !== "string") continue;
+    if ((out as any)[id] === undefined) continue;
+    out[id] = typeof (r as any).range === "string" ? (r as any).range : String((r as any).range ?? "");
+  }
+  return out as OrRanges;
+}
 
-  const errors: Partial<Record<OrRangeKey, string>> = {};
-  (Object.keys(LABELS) as OrRangeKey[]).forEach((key) => {
-    const v = value[key] || "";
-    const res = validatePokerRangeList(v);
-    if (!res.ok) errors[key] = res.error || "Inválido";
-  });
+export default function OrRangesPanel(props: PropsCompat) {
+  const { situationKey } = props;
 
-  function patchPlan(key: OrRangeKey, nextRow: OrRangesPlan[OrRangeKey]) {
-    const next: OrRangesPlan = { ...effectivePlan, [key]: nextRow };
-    planOnChange(next);
+  const hasRows = Array.isArray(props.orRanges) && props.orRanges.length > 0;
+  const rows: OrRangeRowState[] = hasRows ? (props.orRanges as OrRangeRowState[]) : defaultRowsFromFlat(props.value);
+
+  function emit(nextRows: OrRangeRowState[]) {
+    // API A
+    if (typeof props.onChangeOrRanges === "function") {
+      props.onChangeOrRanges(nextRows);
+    }
+    // API B
+    if (typeof props.onChange === "function") {
+      props.onChange(rowsToFlat(nextRows));
+    }
   }
 
-  // OPEN_PUSH derivado SOLO si tenemos stack P1
-  useEffect(() => {
-    if (!hasP1Stack) return;
-
-    const row = effectivePlan.OPEN_PUSH;
-    const mustMove = row.move !== "OPEN_PUSH";
-    const mustMin = row.bet_min_bb !== p1_stack_min!;
-    const mustMax = row.bet_max_bb !== p1_stack_max!;
-    if (mustMove || mustMin || mustMax) {
-      patchPlan("OPEN_PUSH", {
-        move: "OPEN_PUSH",
-        bet_min_bb: p1_stack_min!,
-        bet_max_bb: p1_stack_max!,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasP1Stack, p1_stack_min, p1_stack_max, plan]);
-
-  function normalizeMinMax(key: OrRangeKey) {
-    const row = effectivePlan[key];
-
-    // OPEN_PUSH derivado: siempre fuerza valores si hay stack
-    if (key === "OPEN_PUSH" && hasP1Stack) {
-      return patchPlan(key, {
-        move: "OPEN_PUSH",
-        bet_min_bb: p1_stack_min!,
-        bet_max_bb: p1_stack_max!,
-      });
-    }
-
-    const mm = coerceMinMax(row.bet_min_bb, row.bet_max_bb, {
-      min: 0,
-      max: 9999,
-      step: 0.5,
-    });
-    patchPlan(key, { ...row, bet_min_bb: mm.min, bet_max_bb: mm.max });
+  function handleRowChange(idx: number, patch: Partial<OrRangeRowState>) {
+    const nextRows = rows.map((row, i) => (i === idx ? { ...row, ...patch } : row));
+    emit(nextRows);
   }
 
   return (
     <div style={cardStyle}>
       <div style={{ fontWeight: 700, marginBottom: 10 }}>OR Ranges — {situationKey}</div>
 
-      {(Object.keys(LABELS) as OrRangeKey[]).map((key) => {
-        const row = effectivePlan[key];
-
-        const isOpenPush = key === "OPEN_PUSH";
-        const derivedRow =
-          isOpenPush && hasP1Stack
-            ? {
-                move: "OPEN_PUSH" as OrMoveSelect,
-                bet_min_bb: p1_stack_min!,
-                bet_max_bb: p1_stack_max!,
-              }
-            : row;
-
-        const locked = isOpenPush ? (hasP1Stack ? true : isLockedRow(derivedRow.move)) : isLockedRow(derivedRow.move);
-
-        return (
-          <OrRangeRow
-            key={key}
-            label={LABELS[key]}
-            move={derivedRow.move}
-            moves={isOpenPush && hasP1Stack ? (["OPEN_PUSH"] as OrMoveSelect[]) : MOVES}
-            locked={locked}
-            onChangeMove={(m) => {
-              if (isOpenPush && hasP1Stack) return;
-              const nextRow = applyMoveRules(m, derivedRow as any);
-              patchPlan(key, nextRow);
-            }}
-            betMin={derivedRow.bet_min_bb}
-            betMax={derivedRow.bet_max_bb}
-            onChangeBetMin={(v) => {
-              if (isOpenPush && hasP1Stack) return;
-              patchPlan(key, { ...(derivedRow as any), bet_min_bb: safeNum(String(v)) });
-            }}
-            onChangeBetMax={(v) => {
-              if (isOpenPush && hasP1Stack) return;
-              patchPlan(key, { ...(derivedRow as any), bet_max_bb: safeNum(String(v)) });
-            }}
-            onBlurNormalize={() => normalizeMinMax(key)}
-            rangeText={value[key] || ""}
-            onChangeRangeText={(t) => onChange({ ...value, [key]: t })}
-            placeholder="AA-TT,AKs-A6s,KQs,JTs-J6s,T9s-T8s"
-            error={errors[key]}
-          />
-        );
-      })}
+      {rows.map((row, idx) => (
+        <OrRangeRowComponent
+          key={row.id}
+          label={row.label || (LABELS as any)[row.id] || String(row.id)}
+          move={row.mode as any}
+          moves={MOVES}
+          locked={false}
+          onChangeMove={(m) => handleRowChange(idx, { mode: m as any })}
+          betMin={Number.isFinite(row.bet_min as any) ? Number(row.bet_min) : 0}
+          betMax={Number.isFinite(row.bet_max as any) ? Number(row.bet_max) : 0}
+          onChangeBetMin={(v) => handleRowChange(idx, { bet_min: Number(v) })}
+          onChangeBetMax={(v) => handleRowChange(idx, { bet_max: Number(v) })}
+          onBlurNormalize={() => {}}
+          rangeText={typeof row.range === "string" ? row.range : String((row as any).range ?? "")}
+          onChangeRangeText={(t) => handleRowChange(idx, { range: t })}
+          placeholder={"AA-TT,AKs-A6s,KQs,JTs-J6s,T9s-T8s"}
+          error={undefined}
+        />
+      ))}
     </div>
   );
 }

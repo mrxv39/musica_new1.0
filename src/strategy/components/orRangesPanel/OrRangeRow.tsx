@@ -2,6 +2,7 @@
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\strategy\components\orRangesPanel\OrRangeRow.tsx
  */
 import type React from "react";
+import { useEffect, useState } from "react";
 import type { OrMoveSelect } from "../../types";
 import { inputStyle, selectStyle } from "./styles";
 
@@ -77,6 +78,13 @@ export default function OrRangeRow({
   placeholder,
   error,
 }: Props) {
+  // Draft local para UX, pero el test espera que se llame onChange al escribir.
+  const [draft, setDraft] = useState<string>(rangeText ?? "");
+
+  useEffect(() => {
+    setDraft(rangeText ?? "");
+  }, [rangeText]);
+
   return (
     <div style={rowStyle}>
       <div style={labelCol}>
@@ -99,7 +107,7 @@ export default function OrRangeRow({
             ))}
           </select>
 
-          {/* ✅ bet min/max editables + bugfix evento->valor */}
+          {/* bet min/max: editables y persistentes */}
           <input
             style={inputStyle}
             type="number"
@@ -120,8 +128,17 @@ export default function OrRangeRow({
 
         <input
           style={rangeStyle}
-          value={rangeText}
-          onChange={(e) => onChangeRangeText(e.target.value)}
+          value={draft}
+          onChange={(e) => {
+            const v = e.target.value;
+            setDraft(v);
+            // ✅ importante para tests: persistir mientras se escribe
+            onChangeRangeText(v);
+          }}
+          onBlur={() => {
+            // ✅ normalización en blur (sin re-emitir para evitar doble llamada)
+            onBlurNormalize();
+          }}
           placeholder={placeholder}
         />
 

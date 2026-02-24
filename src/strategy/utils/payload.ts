@@ -58,5 +58,21 @@ export function normalizePayload(p: SubStrategyPayload): SubStrategyPayload {
   ensureOrRanges(next);
   ensureOrRangesPlan(next);
 
+  // --- Build or_ranges array for persistence ---
+  // If orRanges and orRangesPlan exist, build the array
+  if (next.orRanges && next.orRangesPlan) {
+    next.or_ranges = Object.entries(next.orRanges).map(([key, range]) => {
+      const plan = next.orRangesPlan && (next.orRangesPlan as any)[key];
+      return {
+        id: key,
+        label: key,
+        mode: plan?.move || "OR",
+        bet_min: plan?.bet_min_bb ?? 0,
+        bet_max: plan?.bet_max_bb ?? 0,
+        range: range ?? "",
+      };
+    });
+  }
+
   return next;
 }

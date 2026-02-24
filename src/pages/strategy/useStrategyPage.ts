@@ -11,44 +11,23 @@
  * - "error" queda para errores reales y para "Guardado en sqlite" SOLO en guardado manual
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { OrRanges, StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
+import type {
+  OrRanges,
+  OrRangeRow,
+  StrategyStore,
+  SubStrategyItem,
+  SubStrategyPayload,
+  OrRangesPlan,
+} from "../../strategy/types";
 import { dbInit, dbLoadSubs, dbSaveSub } from "./db";
-import { defaultPayload, emptyStore, ensureGlobal, getSubById, listSubs, upsertSub } from "./state";
-
-type Args = {
-  globalName: string;
-};
-
-type Ctrl = {
-  // state
-  store: StrategyStore;
-  subs: SubStrategyItem[];
-
-  selectedId: string | null;
-  selectedItem: SubStrategyItem | null;
-
-  editorValue: SubStrategyPayload;
-  setEditorValue: (v: SubStrategyPayload) => void;
-
-  orRanges: OrRanges;
-  setOrRanges: (next: OrRanges) => void;
-
-  isLoading: boolean;
-  error: string | null;
-
-  // actions
-  reload: () => Promise<StrategyStore>;
-  setSelectedId: (id: string | null) => void;
-
-  createNew: () => void;
-  duplicateSelected: () => void;
-
-  saveSelected: () => Promise<void>;
-
-  copyPayloadJson: () => Promise<void>;
-  exportGlobalJson: () => void;
-  importGlobalJsonText: (jsonText: string) => Promise<void>;
-};
+import {
+  defaultPayload,
+  emptyStore,
+  ensureGlobal,
+  getSubById,
+  listSubs,
+  upsertSub,
+} from "./state";
 
 const OR_KEYS = ["OR_TO_CALL_ANY", "OPEN_PUSH", "OR_TO_CALL_SMALL", "OR_TO_FOLD"] as const;
 
@@ -61,63 +40,36 @@ function emptyOrRanges(): OrRanges {
   };
 }
 
-/**
- * Coerce defensivo:
- * - Si viene un objeto con keys -> lo rellena con defaults
- * - Si viene un array legacy (OrRangeRow[]) -> intenta mapear por campos comunes; si no puede, lo ignora y deja "".
- * - Si viene null/undefined -> empty
- */
-function coerceToOrRanges(input: any): OrRanges {
+// Utility: Convert OrRangeRow[] to OrRanges (flat)
+function orRangeRowsToOrRanges(rows: OrRangeRow[] | undefined): OrRanges {
   const base = emptyOrRanges();
-
-  if (!input) return base;
-
-  const looksLikeObject =
-    typeof input === "object" &&
-    !Array.isArray(input) &&
-    (OR_KEYS.some((k) => Object.prototype.hasOwnProperty.call(input, k)) ||
-      OR_KEYS.some((k) => typeof (input as any)[k] === "string"));
-
-  if (looksLikeObject) {
-    const obj = input as any;
-    return {
-      OR_TO_CALL_ANY: typeof obj.OR_TO_CALL_ANY === "string" ? obj.OR_TO_CALL_ANY : "",
-      OPEN_PUSH: typeof obj.OPEN_PUSH === "string" ? obj.OPEN_PUSH : "",
-      OR_TO_CALL_SMALL: typeof obj.OR_TO_CALL_SMALL === "string" ? obj.OR_TO_CALL_SMALL : "",
-      OR_TO_FOLD: typeof obj.OR_TO_FOLD === "string" ? obj.OR_TO_FOLD : "",
-    };
-  }
-
-  if (Array.isArray(input)) {
-    const next = { ...base } as any;
-
-    for (const row of input) {
-      if (!row || typeof row !== "object") continue;
-
-      const key =
-        (row as any).key ??
-        (row as any).type ??
-        (row as any).name ??
-        (row as any).kind ??
-        (row as any).id;
-
-      if (typeof key !== "string") continue;
-      if (!OR_KEYS.includes(key as any)) continue;
-
-      const val =
-        (row as any).value ??
-        (row as any).range ??
-        (row as any).text ??
-        (row as any).hands ??
-        "";
-
-      next[key] = typeof val === "string" ? val : String(val ?? "");
+  if (!rows) return base;
+  for (const row of rows) {
+    if (
+      row &&
+      typeof row.id === "string" &&
+      typeof row.range === "string" &&
+      Object.prototype.hasOwnProperty.call(base, row.id)
+    ) {
+      base[row.id as keyof OrRanges] = row.range;
     }
-
-    return next as OrRanges;
   }
-
   return base;
+}
+
+// Convert OrRanges + OrRangesPlan to OrRangeRow[]
+function buildOrRangeRows(orRanges: OrRanges, plan?: OrRangesPlan): OrRangeRow[] {
+  return (Object.keys(orRanges) as (keyof OrRanges)[]).map((key) => {
+    const p = plan?.[key];
+    return {
+      id: key,
+      label: key,
+      mode: p?.move || "OR",
+      bet_min: p?.bet_min_bb ?? 0,
+      bet_max: p?.bet_max_bb ?? 0,
+      range: orRanges[key] ?? "",
+    };
+  });
 }
 
 function makeId() {
@@ -134,12 +86,15 @@ function upsertInArray(arr: SubStrategyItem[], item: SubStrategyItem): SubStrate
   return [...arr, item];
 }
 
-export function useStrategyPage({ globalName }: Args): Ctrl {
+export function useStrategyPage({ globalName }: { globalName: string }) {
   const [store, setStore] = useState<StrategyStore>(() => emptyStore());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorValue, setEditorValue] = useState<SubStrategyPayload>(() => defaultPayload());
 
   const [orRanges, setOrRanges] = useState<OrRanges>(() => emptyOrRanges());
+  const [orRangesRows, setOrRangesRows] = useState<OrRangeRow[]>(() =>
+    buildOrRangeRows(emptyOrRanges())
+  );
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,11 +118,25 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
   useEffect(() => {
     if (!selectedId) return;
     const it =
-      subsView.find((x: any) => (x as any)?.id === selectedId) ?? getSubById(store, globalName, selectedId);
+      subsView.find((x: any) => (x as any)?.id === selectedId) ??
+      getSubById(store, globalName, selectedId);
     if (!it) return;
 
     setEditorValue(((it as any).payload ?? defaultPayload()) as any);
-    setOrRanges(coerceToOrRanges((it as any).or_ranges));
+
+    // Hydrate orRanges and orRangesRows from sub.or_ranges if present, else fallback
+    const rows: OrRangeRow[] | undefined = (it as any).or_ranges;
+    if (Array.isArray(rows) && rows.length > 0) {
+      setOrRanges(orRangeRowsToOrRanges(rows));
+      setOrRangesRows(rows);
+    } else {
+      // fallback: build from payload.orRanges and plan
+      const p = ((it as any).payload ?? {}) as SubStrategyPayload;
+      const plan = p.orRangesPlan;
+      const orFlat = p.orRanges ?? emptyOrRanges();
+      setOrRanges(orFlat);
+      setOrRangesRows(buildOrRangeRows(orFlat, plan));
+    }
 
     dirtyRef.current = false;
   }, [selectedId, store, globalName, subsView]);
@@ -188,10 +157,22 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       if (!selectedId && nextSubs.length > 0) {
         setSelectedId(nextSubs[0].id);
         setEditorValue((nextSubs[0] as any).payload ?? defaultPayload());
-        setOrRanges(coerceToOrRanges((nextSubs[0] as any).or_ranges));
+
+        // keep existing persisted rows if present, else build from payload
+        const rows: OrRangeRow[] | undefined = (nextSubs[0] as any).or_ranges;
+        if (Array.isArray(rows) && rows.length > 0) {
+          setOrRanges(orRangeRowsToOrRanges(rows));
+          setOrRangesRows(rows);
+        } else {
+          const p = ((nextSubs[0] as any).payload ?? {}) as SubStrategyPayload;
+          const orFlat = p.orRanges ?? emptyOrRanges();
+          setOrRanges(orFlat);
+          setOrRangesRows(buildOrRangeRows(orFlat, p.orRangesPlan));
+        }
       } else if (!selectedId) {
         setEditorValue(defaultPayload());
         setOrRanges(emptyOrRanges());
+        setOrRangesRows(buildOrRangeRows(emptyOrRanges()));
       }
 
       return next;
@@ -203,6 +184,7 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       setSubsView(listSubs(fallback, globalName));
       setEditorValue(defaultPayload());
       setOrRanges(emptyOrRanges());
+      setOrRangesRows(buildOrRangeRows(emptyOrRanges()));
       return fallback;
     } finally {
       setIsLoading(false);
@@ -217,16 +199,14 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
   const createNew = () => {
     const id = makeId();
     const name = `Auto sub ${subsView.length + 1}`;
-
     const item: SubStrategyItem = {
       id,
       name,
       payload: editorValue,
-      or_ranges: orRanges,
+      or_ranges: orRangesRows,
     } as any;
 
     setSubsView((prev) => upsertInArray(prev, item));
-
     setStore((prev) => {
       const base = ensureGlobal(prev ?? emptyStore(), globalName);
       return upsertSub(base, globalName, item);
@@ -241,20 +221,17 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       createNew();
       return;
     }
-
     const id = makeId();
     const name = `${(selectedItem as any).name ?? "Sub"} (copy)`;
-
     const item: SubStrategyItem = {
       ...(selectedItem as any),
       id,
       name,
       payload: editorValue,
-      or_ranges: orRanges,
+      or_ranges: orRangesRows,
     } as any;
 
     setSubsView((prev) => upsertInArray(prev, item));
-
     setStore((prev) => {
       const base = ensureGlobal(prev ?? emptyStore(), globalName);
       return upsertSub(base, globalName, item);
@@ -274,18 +251,19 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
     try {
       const id = selectedId ?? makeId();
       const existing =
-        (id ? subsView.find((x: any) => (x as any)?.id === id) : null) ?? (id ? getSubById(store, globalName, id) : null);
+        (id ? subsView.find((x: any) => (x as any)?.id === id) : null) ??
+        (id ? getSubById(store, globalName, id) : null);
 
       const item: SubStrategyItem = {
         id,
         name: (existing as any)?.name ?? `Auto sub ${subsView.length + 1}`,
         payload: editorValue,
-        or_ranges: orRanges,
+        or_ranges: orRangesRows,
       } as any;
 
       await dbSaveSub({ ...(item as any), globalName });
 
-      // actualizar vistas en memoria (no debería “parpadear” si no tocamos status/loading)
+      // actualizar vistas en memoria
       setSubsView((prev) => upsertInArray(prev, item));
 
       setStore((prev) => {
@@ -337,7 +315,7 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorValue, orRanges, selectedId]);
+  }, [editorValue, orRanges, orRangesRows, selectedId]);
 
   const copyPayloadJson = async () => {
     try {
@@ -385,6 +363,8 @@ export function useStrategyPage({ globalName }: Args): Ctrl {
 
     orRanges,
     setOrRanges,
+    orRangesRows,
+    setOrRangesRows,
 
     isLoading,
     error,
