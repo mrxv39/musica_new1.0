@@ -197,6 +197,10 @@ function coerceOrCols(input: any): { a: string; p: string; s: string; f: string 
 const POS_SET = new Set(["BTN", "SB", "BB"]);
 const TIPO_SET = new Set(["fish", "reg", "unknown"]);
 
+// ✅ Spot real del juego (contexto), NO posición.
+// Si hoy solo trabajas preflop, esto te protege para no guardar basura.
+const SPOT_SET = new Set(["preflop", "flop", "turn", "river", "noboard"]);
+
 function asNonEmptyString(x: any): string | null {
   if (typeof x !== "string") return null;
   const t = x.trim();
@@ -218,6 +222,7 @@ function normalizeTipo(field: string, x: any): "fish" | "reg" | "unknown" {
   if (!TIPO_SET.has(v)) throw new Error(`sub_strategies: invalid "${field}"="${s}" (expected fish|reg|unknown)`);
   return v as any;
 }
+
 
 function toFiniteNumber(field: string, x: any): number {
   const n = typeof x === "number" ? x : Number(x);
@@ -263,13 +268,54 @@ function normalizeOrRanges(x: any): OrRangesLike & {
  * - Requiere TODOS los campos core y TODOS los min/max.
  * - Normaliza pos a BTN/SB/BB y tipo a fish/reg/unknown.
  * - Garantiza JSON final sin null/undefined (los filtra).
+ *
+ * Compat:
+ * - Si spot llega como BTN/SB/BB (bug viejo de UI), lo interpretamos como hero_pos
+ *   y forzamos spot="preflop".
+ * - Si spot falta, forzamos spot="preflop" (este módulo es de preflop).
  */
 function normalizeAndValidateSubStrategyPayload(raw: any): any {
   const src = raw ?? {};
 
-  const spot = normalizePos("spot", src.spot);
-  const hero_pos = normalizePos("hero_pos", src.hero_pos);
+  // -------- spot + hero_pos (compat) --------
+  // ✅ En este proyecto, spot = POS (BTN|SB|BB). NO street.
+  // Compat:
+  // - Si spot venía como POS y hero_pos falta, usamos spot como hero_pos.
+  // - Si spot venía como street (preflop/flop/turn/river/noboard), lo ignoramos para spot
+  //   y usamos hero_pos como fuente de verdad.
+  const spotRaw = asNonEmptyString(src.spot);
+  const heroRaw = asNonEmptyString(src.hero_pos);
 
+  let spotPosCandidate: any = spotRaw;
+  let heroPosCandidate: any = heroRaw;
+
+  if (spotRaw) {
+    const spotUp = spotRaw.trim().toUpperCase();
+    const spotLow = spotRaw.trim().toLowerCase();
+
+    if (POS_SET.has(spotUp)) {
+      // spot es POS
+      spotPosCandidate = spotUp;
+
+      // compat: bug viejo -> si hero_pos falta, usa spot como hero_pos
+      if (!heroRaw) heroPosCandidate = spotUp;
+    } else if (SPOT_SET.has(spotLow)) {
+      // spot venía como street -> NO lo usamos como spot-pos
+      spotPosCandidate = heroRaw; // puede ser null; validará abajo
+    } else {
+      throw new Error(
+        `sub_strategies: invalid "spot"="${spotRaw}" (expected BTN|SB|BB or ${Array.from(SPOT_SET).join("|")})`
+      );
+    }
+  }
+
+  // Fallbacks cruzados (si uno viene y el otro no)
+  if (!spotPosCandidate && heroPosCandidate) spotPosCandidate = heroPosCandidate;
+
+  const spot = normalizePos("spot", spotPosCandidate);
+  const hero_pos = normalizePos("hero_pos", heroPosCandidate ?? spot);
+
+  // -------- resto obligatorio --------
   const p2_pos = normalizePos("p2_pos", src.p2_pos);
   const p3_pos = normalizePos("p3_pos", src.p3_pos);
 
@@ -326,9 +372,7 @@ function normalizeAndValidateSubStrategyPayload(raw: any): any {
   }
 
   return out;
-}
-
-/**
+}/**
  * Upsert de 1 bucket/sub.
  * ✅ Además de payload_json, persiste OR en 4 columnas fijas.
  *
@@ -456,3 +500,4 @@ export async function deleteSubStrategyById(id: number): Promise<boolean> {
   const rowsAffected = Number((res as any)?.rowsAffected ?? 0);
   return rowsAffected > 0;
 }
+

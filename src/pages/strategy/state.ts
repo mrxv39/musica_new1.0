@@ -12,14 +12,54 @@ import { getUiTimeKey } from "./model";
 export type { SubStrategyItem };
 
 export function defaultPayload(): SubStrategyPayload {
-  return normalizePayload({
+  // ✅ IMPORTANTE:
+  // Debe ser un payload COMPLETO para que Guardar no pueda fallar por missing fields.
+  // (la validación dura de DB exige spot/hero_pos/pos/tipos + rangos finitos + situacion)
+  const base: any = {
+    // posiciones core
+    spot: "BTN",
+    hero_pos: "BTN",
+    p2_pos: "SB",
+    p3_pos: "BB",
+
+    // tipos core
+    p2_tipo: "unknown",
+    p3_tipo: "unknown",
+
+    // rangos mínimos finitos (0..0 por defecto)
+    p1_stack_min: 0,
+    p1_stack_max: 0,
+    p1_bet_min: 0,
+    p1_bet_max: 0,
+    p1_se_min: 0,
+    p1_se_max: 0,
+
+    p2_stack_min: 0,
+    p2_stack_max: 0,
+    p2_bet_min: 0,
+    p2_bet_max: 0,
+
+    p3_stack_min: 0,
+    p3_stack_max: 0,
+    p3_bet_min: 0,
+    p3_bet_max: 0,
+
+    // OR ranges siempre presentes
     orRanges: {
       OR_TO_CALL_ANY: "",
       OPEN_PUSH: "",
       OR_TO_CALL_SMALL: "",
       OR_TO_FOLD: "",
     },
-  } as SubStrategyPayload);
+
+    // Plan opcional (si tu coerce lo rellena, ok; si no, queda vacío)
+    // orRangesPlan: ...
+  };
+
+  // normalizePayload suele recalcular "situacion" y limpiar defaults.
+  // Si normalizePayload no la añade, el contrato seguirá fallando:
+  // en ese caso, el siguiente paso será endurecer normalizePayload.
+  return normalizePayload(base as SubStrategyPayload);
 }
 
 export function emptyStore(): StrategyStore {
