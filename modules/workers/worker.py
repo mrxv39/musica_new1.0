@@ -59,6 +59,7 @@ def run_preflop(image_path: str) -> dict:
         )
         if proc.returncode != 0 or not (proc.stdout or "").strip():
             return {"error": "preflop failed", "preflop_ok": False}
+
         try:
             data = json.loads(proc.stdout)
             if isinstance(data, dict):
@@ -146,6 +147,13 @@ def main():
     # OCR orchestrator
     from modules.ocr.ocr import run_ocr
 
+    # Strategy selector (sub_strategies -> move)
+    try:
+        from modules.strategy.substrategy_selector import MatchInput, select_move
+    except Exception:
+        MatchInput = None  # type: ignore
+        select_move = None  # type: ignore
+
     # replay_dir state
     dir_files = []
     dir_idx = 0
@@ -205,6 +213,7 @@ def main():
                     img_path = None
                 else:
                     image_or_region = f"{region[0]},{region[1]},{region[2]},{region[3]}"
+
                     img_path, err = safe_capture(region)
                     if err:
                         errors.append(f"capture failed: {err}")
@@ -274,6 +283,73 @@ def main():
             else:
                 dedupe_reason = "no_dedupe"
 
+            # --- Strategy selection (unique sub_strategy match + move/bet_min/bet_max) ---
+            strategy = {"ok": False}
+            try:
+                preflop_ok = bool(preflop.get("preflop_ok", False)) if isinstance(preflop, dict) else False
+                mano_ok = bool(mano_result.get("valid", False)) if isinstance(mano_result, dict) else False
+
+                # Sources from OCR orchestrator
+                pos = ocr.get("posiciones", {}) if isinstance(ocr, dict) else {}
+                pos_ok = bool(pos.get("ok", False)) if isinstance(pos, dict) else False
+
+                bets_ok = bool(bets_result.get("ok", False)) if isinstance(bets_result, dict) else False
+                stacks_ok = bool(ocr_stacks.get("ok", False)) if isinstance(ocr_stacks, dict) else False
+                se_ok = bool(stackefectivo_result.get("ok", False)) if isinstance(stackefectivo_result, dict) else False
+
+                if preflop_ok and mano_ok and pos_ok and bets_ok and stacks_ok and se_ok and (select_move is not None):
+                    hero_pos = str(pos.get("p1", "") or "")
+                    p2_pos = str(pos.get("p2", "") or "")
+                    p3_pos = str(pos.get("p3", "") or "")
+
+                    # Default situation key convention: "{HERO}_vs_{P2}_{P3}"
+                    situacion = f"{hero_pos}_vs_{p2_pos}_{p3_pos}"
+
+                    # Villain types
+                    p2_tipo = "unknown"
+                    p3_tipo = "unknown"
+                    if isinstance(villano_result, dict) and bool(villano_result.get("ok", False)):
+                        p2 = villano_result.get("p2", {}) if isinstance(villano_result.get("p2"), dict) else {}
+                        p3 = villano_result.get("p3", {}) if isinstance(villano_result.get("p3"), dict) else {}
+                        p2_tipo = str(p2.get("tipo", "unknown") or "unknown")
+                        p3_tipo = str(p3.get("tipo", "unknown") or "unknown")
+
+                    hand_class = str(mano_result.get("hand_class", "") or "")
+
+                    inp = MatchInput(
+                        situacion=situacion,
+                        spot=hero_pos,
+                        hero_pos=hero_pos,
+                        hand_class=hand_class,
+                        p1_bet_bb=float(bets_result.get("p1", 0) or 0),
+                        p1_stack_bb=float(ocr_stacks.get("p1", 0) or 0),
+                        p1_se_bb=float(stackefectivo_result.get("value", 0) or 0),
+                        p2_pos=p2_pos,
+                        p2_tipo=p2_tipo,
+                        p2_bet_bb=float(bets_result.get("p2", 0) or 0),
+                        p2_stack_bb=float(ocr_stacks.get("p2", 0) or 0),
+                        p3_pos=p3_pos,
+                        p3_tipo=p3_tipo,
+                        p3_bet_bb=float(bets_result.get("p3", 0) or 0),
+                        p3_stack_bb=float(ocr_stacks.get("p3", 0) or 0),
+                    )
+
+                    decision = select_move(inp)
+                    strategy = {"ok": True, **decision, "situacion": situacion}
+                else:
+                    strategy = {
+                        "ok": False,
+                        "reason": "missing_inputs_or_preflop_not_ok",
+                        "preflop_ok": preflop_ok,
+                        "mano_ok": mano_ok,
+                        "pos_ok": pos_ok,
+                        "bets_ok": bets_ok,
+                        "stacks_ok": stacks_ok,
+                        "stackefectivo_ok": se_ok,
+                    }
+            except Exception as e:
+                strategy = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
             out = {
                 "worker_id": worker_id,
                 "mode": mode,
@@ -281,6 +357,7 @@ def main():
                 "ts": ts,
                 "preflop": preflop,
                 "ocr": ocr,
+                "strategy": strategy,
                 "mano_result": mano_result,
                 "stacks_result": stacks_result,
                 "ocr_stacks": ocr_stacks,
