@@ -12,7 +12,6 @@ import {
   listAllSubStrategies,
   pickBucketName,
   upsertSituationKey,
-  ensureBucketsForSituation,
   upsertSubStrategy,
   deleteSubStrategyById,
 } from "../../db/sql";
@@ -146,8 +145,6 @@ export async function dbSaveSub(item: SubStrategyItem & { globalName?: string })
   const situationId = await upsertSituationKey(situationKey);
 
   // opcional: asegura buckets fijos
-  await ensureBucketsForSituation(situationId);
-
   await upsertSubStrategy(situationId, bucket, payloadForJson, stackMin, stackMax, orRanges);
 
   return { situationKey, bucket };
