@@ -1,4 +1,4 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\workers\worker.py
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\workers\worker.py
 import sys
 import os
 
@@ -104,6 +104,15 @@ def _list_images_in_dir(images_dir: str):
     return files
 
 
+def _nested_get(d, keys, default=None):
+    cur = d
+    for k in keys:
+        if not isinstance(cur, dict):
+            return default
+        cur = cur.get(k)
+    return cur if cur is not None else default
+
+
 def main():
     args = parse_args()
     worker_id = args.id
@@ -134,6 +143,9 @@ def main():
     # DB integration
     from modules.db import db as dbmod
 
+    # OCR orchestrator
+    from modules.ocr.ocr import run_ocr
+
     # replay_dir state
     dir_files = []
     dir_idx = 0
@@ -163,7 +175,6 @@ def main():
                     img_path = None
                     image_or_region = images_dir or "missing"
                 else:
-                    # Refresh file list if empty (or if folder changed externally)
                     if not dir_files:
                         dir_files = _list_images_in_dir(images_dir)
 
@@ -176,7 +187,6 @@ def main():
                             if loop:
                                 dir_idx = 0
                             else:
-                                # Finished folder
                                 break
 
                         img_path = dir_files[dir_idx]
@@ -202,13 +212,28 @@ def main():
 
             preflop = run_preflop(img_path) if img_path else {"error": "no image", "preflop_ok": False}
 
+            # --- OCR completo (stacks/bets/stackefectivo/names/villano) ---
+            ocr = {"ok": False, "errors": ["no_image"], "names": {}, "villano": {}, "stackefectivo": {}, "bets": {}, "stacks": {}}
+            if img_path:
+                try:
+                    ocr = run_ocr(img_path)
+                except Exception as e:
+                    ocr = {"ok": False, "errors": [f"run_ocr:{e}"], "names": {}, "villano": {}, "stackefectivo": {}, "bets": {}, "stacks": {}}
+
             mano_result = {"valid": False, "mano_raw": None}
-            stacks_result = {"p1": None}
+            stacks_result = {"p1": None}  # legacy (desde preflop)
             if isinstance(preflop, dict):
                 mods = preflop.get("modules")
                 if isinstance(mods, dict):
                     mano_result = mods.get("mano", mano_result)
                     stacks_result = mods.get("stacks", stacks_result)
+
+            # Preferimos stacks OCR si existe p1
+            ocr_stacks = ocr.get("stacks", {}) if isinstance(ocr, dict) else {}
+            bets_result = ocr.get("bets", {}) if isinstance(ocr, dict) else {}
+            stackefectivo_result = ocr.get("stackefectivo", {}) if isinstance(ocr, dict) else {}
+            names_result = ocr.get("names", {}) if isinstance(ocr, dict) else {}
+            villano_result = ocr.get("villano", {}) if isinstance(ocr, dict) else {}
 
             fingerprint = get_fingerprint(worker_id, mode, image_or_region)
 
@@ -216,8 +241,11 @@ def main():
             dedupe_reason = None
             sig = None
 
-            # Normalizamos p1
-            p1_raw = stacks_result.get("p1", None)
+            # Normalizamos p1 (fallback: OCR stacks)
+            p1_raw = stacks_result.get("p1", None) if isinstance(stacks_result, dict) else None
+            if p1_raw is None and isinstance(ocr_stacks, dict):
+                p1_raw = ocr_stacks.get("p1", None)
+
             p1 = 0
             if isinstance(p1_raw, (int, float)) and p1_raw is not None:
                 p1 = p1_raw
@@ -229,7 +257,7 @@ def main():
 
             # Dedupe:
             # - modo normal: sha1(mano_raw|p1)
-            # - persist_without_stack: sha1(mano_raw)  (lo pedido)
+            # - persist_without_stack: sha1(mano_raw)
             if can_persist:
                 mano_raw = mano_result.get("mano_raw") or ""
                 if persist_without_stack:
@@ -252,8 +280,14 @@ def main():
                 "tick": tick,
                 "ts": ts,
                 "preflop": preflop,
+                "ocr": ocr,
                 "mano_result": mano_result,
                 "stacks_result": stacks_result,
+                "ocr_stacks": ocr_stacks,
+                "bets_result": bets_result,
+                "stackefectivo_result": stackefectivo_result,
+                "names_result": names_result,
+                "villano_result": villano_result,
                 "errors": errors,
                 "fingerprint": fingerprint,
                 "dedupe_skipped": dedupe_skipped,
@@ -267,26 +301,39 @@ def main():
                 ocr_json = json.dumps(
                     {
                         "mano": mano_result,
-                        "stacks": stacks_result,
+                        "stacks_preflop": stacks_result,
+                        "ocr": ocr,
                         "preflop": preflop,
-                    }
+                    },
+                    ensure_ascii=False,
                 )
+
                 frame_ref = preflop.get("frame_ref", "") if isinstance(preflop, dict) else ""
+
+                # Flags correctos (noboard está anidado)
+                preflop_ok = bool(preflop.get("preflop_ok", False)) if isinstance(preflop, dict) else False
+                noboard_ok = bool(_nested_get(preflop, ["modules", "noboard", "noboard_ok"], False))
+
+                # hand_class suele estar en mano_result
+                hand_class = ""
+                if isinstance(mano_result, dict):
+                    hand_class = mano_result.get("hand_class", "") or ""
+
                 dbmod.insert_obs(
                     fingerprint=sig,
                     table_id="",
                     detected_at_ms=int(ts * 1000),
                     mano_raw=mano_result.get("mano_raw", "") or "",
-                    hand_class=preflop.get("hand_class", "") if isinstance(preflop, dict) else "",
+                    hand_class=hand_class,
                     time_str=time.strftime("%H:%M:%S", time.localtime(ts)),
-                    preflop_ok=preflop.get("preflop_ok", False) if isinstance(preflop, dict) else False,
-                    noboard_ok=preflop.get("noboard_ok", False) if isinstance(preflop, dict) else False,
+                    preflop_ok=preflop_ok,
+                    noboard_ok=noboard_ok,
                     ocr_json=ocr_json,
                     frame_ref=frame_ref,
                 )
 
             if print_every_tick:
-                print(json.dumps(out))
+                print(json.dumps(out, ensure_ascii=False))
 
             if dedupe_skipped:
                 if max_ticks is not None and tick >= max_ticks:
@@ -306,7 +353,7 @@ def main():
             time.sleep(interval_ms / 1000.0)
 
     except KeyboardInterrupt:
-        print(json.dumps({"worker_id": worker_id, "event": "shutdown", "ts": time.time()}))
+        print(json.dumps({"worker_id": worker_id, "event": "shutdown", "ts": time.time()}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

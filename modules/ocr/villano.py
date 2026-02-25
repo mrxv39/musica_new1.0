@@ -1,12 +1,14 @@
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\ocr\villano.py
 # OCR-based villano classification using player names and SQLite DB
 # Follows the style of other OCR modules and uses repo DB helpers
 
 from __future__ import annotations
-import os
 import json
 from typing import Dict, Any
+
 from modules.ocr import names as ocr_names
 from modules.db import db as dbmod
+
 
 def ensure_players_table(conn):
     # Defensive: ensure table exists (idempotent)
@@ -22,19 +24,36 @@ def ensure_players_table(conn):
     )
 
 
-def classify_villano(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
-    out = {
+def classify_villano(
+    image_path: str,
+    x1: int = 0,
+    y1: int = 0,
+    p2_name: str = "",
+    p3_name: str = "",
+) -> Dict[str, Any]:
+    """
+    If p2_name/p3_name are provided (from orchestrator), use them.
+    Otherwise, fallback to OCR names module.
+    """
+    out: Dict[str, Any] = {
         "ok": False,
         "p2": {"name": "", "tipo": ""},
         "p3": {"name": "", "tipo": ""},
         "created": [],
         "errors": [],
     }
-    names = ocr_names.read_names(image_path, x1=x1, y1=y1)
-    p2_name = names.get("p2_name", "") or ""
-    p3_name = names.get("p3_name", "") or ""
+
+    p2_name = (p2_name or "").strip()
+    p3_name = (p3_name or "").strip()
+
+    if not p2_name and not p3_name:
+        names = ocr_names.read_names(image_path, x1=x1, y1=y1)
+        p2_name = (names.get("p2_name", "") or "").strip()
+        p3_name = (names.get("p3_name", "") or "").strip()
+
     conn = dbmod.get_conn()
     ensure_players_table(conn)
+
     for seat, name in (("p2", p2_name), ("p3", p3_name)):
         if name:
             row = conn.execute("SELECT tipo FROM players WHERE name=?", (name,)).fetchone()
@@ -44,25 +63,34 @@ def classify_villano(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any
                 conn.execute("INSERT INTO players (name, tipo) VALUES (?, 'fish')", (name,))
                 out[seat] = {"name": name, "tipo": "fish"}
                 out["created"].append(seat)
+
     conn.commit()
     out["ok"] = bool(p2_name or p3_name)
     if not out["ok"]:
         out["errors"].append("no_valid_names")
     return out
 
+
 if __name__ == "__main__":
     import sys
+
     image_path = None
     if "--image" in sys.argv:
         try:
             image_path = sys.argv[sys.argv.index("--image") + 1]
         except Exception:
             image_path = None
+
     res = classify_villano(image_path) if image_path else {"ok": False, "errors": ["no_image"]}
-    print(json.dumps({
-        "ok": res.get("ok", False),
-        "p2": res.get("p2", {}),
-        "p3": res.get("p3", {}),
-        "created": res.get("created", []),
-        "errors": res.get("errors", []),
-    }, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "ok": res.get("ok", False),
+                "p2": res.get("p2", {}),
+                "p3": res.get("p3", {}),
+                "created": res.get("created", []),
+                "errors": res.get("errors", []),
+            },
+            ensure_ascii=False,
+        )
+    )

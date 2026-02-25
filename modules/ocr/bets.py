@@ -1,4 +1,4 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\ocr\bets.py
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\ocr\bets.py
 # OCR bets (numeros) en 3 ROIs relativos (p1/p2/p3), con robustez tipo stackefectivo.
 
 from __future__ import annotations
@@ -158,6 +158,7 @@ def _ocr_one_roi(
     config = "--psm 7 -c tessedit_char_whitelist=0123456789."
 
     best: Optional[BetOCRResult] = None
+    best_score = -1
 
     variants = _preprocess_variants(crop)
     for method, bin_img in variants.items():
@@ -181,13 +182,9 @@ def _ocr_one_roi(
             error="" if val is not None else "parse_failed",
         )
 
-        if best is None:
+        if best is None or score > best_score:
             best = candidate
             best_score = score
-        else:
-            if score > best_score:
-                best = candidate
-                best_score = score
 
     if best is None:
         return BetOCRResult(
@@ -199,8 +196,19 @@ def _ocr_one_roi(
             error="ocr_failed",
         )
 
-    # Si no parseó, lo marcamos como fail
+    # REGLA: raw vacío => bet 0.0 y NO error (ok=True)
     if not best.ok:
+        if (best.raw_text or "").strip() == "":
+            return BetOCRResult(
+                ok=True,
+                value=0.0,
+                raw_text="",
+                roi=best.roi,
+                method=best.method,
+                error="",
+            )
+
+        # raw no vacío y no parsea => error real
         return BetOCRResult(
             ok=False,
             value=0.0,
