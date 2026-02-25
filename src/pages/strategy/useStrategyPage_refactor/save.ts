@@ -1,3 +1,4 @@
+// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\strategy\useStrategyPage_refactor\save.ts
 import type { OrRangeRow, StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../../strategy/types";
 import { emptyStore, ensureGlobal, getSubById, upsertSub } from "../state";
 import { rowsToOrRanges, rowsToOrRangesPlan } from "../orRangesAdapter";
@@ -25,7 +26,40 @@ export type SaveDeps = {
 
   dirtyRef: React.MutableRefObject<boolean>;
   lastManualSaveAtRef: React.MutableRefObject<number>;
+
+  // ✅ anti-spam autosave errors
+  lastAutoSaveErrorAtRef: React.MutableRefObject<number>;
+  lastAutoSaveErrorMsgRef: React.MutableRefObject<string>;
 };
+
+function errToMsg(e: any): string {
+  const msg = e?.message ? String(e.message) : String(e);
+  return msg;
+}
+
+function isStrictSubStrategiesError(msg: string): boolean {
+  return /^sub_strategies:/i.test(msg.trim());
+}
+
+/**
+ * Autosave: evita spam.
+ * - si el mensaje cambió => mostrar
+ * - si es el mismo, solo mostrar si pasaron >= 3s
+ */
+function shouldShowAutosaveError(deps: SaveDeps, msg: string): boolean {
+  const now = Date.now();
+  const lastMsg = deps.lastAutoSaveErrorMsgRef.current || "";
+  const lastAt = deps.lastAutoSaveErrorAtRef.current || 0;
+
+  if (msg !== lastMsg) return true;
+  if (now - lastAt >= 3000) return true;
+  return false;
+}
+
+function markAutosaveErrorShown(deps: SaveDeps, msg: string) {
+  deps.lastAutoSaveErrorAtRef.current = Date.now();
+  deps.lastAutoSaveErrorMsgRef.current = msg;
+}
 
 export async function saveSelectedInternal(deps: SaveDeps, mode: "manual" | "auto") {
   if (!deps.selectedId) {
@@ -72,8 +106,24 @@ export async function saveSelectedInternal(deps: SaveDeps, mode: "manual" | "aut
       deps.setError("Guardado en sqlite");
     }
   } catch (e: any) {
-    const msg = e?.message ? String(e.message) : String(e);
-    deps.setError(`DB Save ERROR: ${msg}`);
+    const msg = errToMsg(e);
+
+    // ✅ Mensaje “bonito” si viene de la validación estricta
+    if (mode === "manual") {
+      if (isStrictSubStrategiesError(msg)) {
+        deps.setError(msg);
+      } else {
+        deps.setError(`DB Save ERROR: ${msg}`);
+      }
+      return;
+    }
+
+    // ✅ AUTO: no spamear, pero tampoco quedarse mudo
+    if (shouldShowAutosaveError(deps, msg)) {
+      markAutosaveErrorShown(deps, msg);
+      if (isStrictSubStrategiesError(msg)) deps.setError(`Autosave: ${msg}`);
+      else deps.setError(`Autosave: DB Save ERROR: ${msg}`);
+    }
   } finally {
     if (mode === "manual") deps.setIsLoading(false);
   }

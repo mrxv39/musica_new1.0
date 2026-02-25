@@ -190,6 +190,144 @@ function coerceOrCols(input: any): { a: string; p: string; s: string; f: string 
   return { a, p, s, f };
 }
 
+// ===============================
+// HARD VALIDATION for SubStrategy payload persistence
+// ===============================
+
+const POS_SET = new Set(["BTN", "SB", "BB"]);
+const TIPO_SET = new Set(["fish", "reg", "unknown"]);
+
+function asNonEmptyString(x: any): string | null {
+  if (typeof x !== "string") return null;
+  const t = x.trim();
+  return t.length ? t : null;
+}
+
+function normalizePos(field: string, x: any): "BTN" | "SB" | "BB" {
+  const s = asNonEmptyString(x);
+  if (!s) throw new Error(`sub_strategies: missing field "${field}"`);
+  const v = s.toUpperCase();
+  if (!POS_SET.has(v)) throw new Error(`sub_strategies: invalid "${field}"="${s}" (expected BTN|SB|BB)`);
+  return v as any;
+}
+
+function normalizeTipo(field: string, x: any): "fish" | "reg" | "unknown" {
+  const s = asNonEmptyString(x);
+  if (!s) throw new Error(`sub_strategies: missing field "${field}"`);
+  const v = s.toLowerCase();
+  if (!TIPO_SET.has(v)) throw new Error(`sub_strategies: invalid "${field}"="${s}" (expected fish|reg|unknown)`);
+  return v as any;
+}
+
+function toFiniteNumber(field: string, x: any): number {
+  const n = typeof x === "number" ? x : Number(x);
+  if (!Number.isFinite(n)) throw new Error(`sub_strategies: "${field}" must be a finite number`);
+  return n;
+}
+
+function ensureMinMax(minField: string, maxField: string, obj: any): { min: number; max: number } {
+  const min = toFiniteNumber(minField, obj?.[minField]);
+  const max = toFiniteNumber(maxField, obj?.[maxField]);
+  if (min > max) throw new Error(`sub_strategies: invalid range "${minField}">${maxField}" (${min} > ${max})`);
+  return { min, max };
+}
+
+function normalizeSituacion(x: any): string {
+  const s = asNonEmptyString(x);
+  if (!s) throw new Error(`sub_strategies: missing field "situacion"`);
+  return s;
+}
+
+function normalizeOrRanges(x: any): OrRangesLike & {
+  OR_TO_CALL_ANY: string;
+  OPEN_PUSH: string;
+  OR_TO_CALL_SMALL: string;
+  OR_TO_FOLD: string;
+} {
+  if (!x || typeof x !== "object") throw new Error(`sub_strategies: missing field "orRanges"`);
+  const getStr = (k: keyof OrRangesLike) => {
+    const v = (x as any)[k];
+    if (typeof v !== "string") throw new Error(`sub_strategies: orRanges.${String(k)} must be string`);
+    return v;
+  };
+  return {
+    OR_TO_CALL_ANY: getStr("OR_TO_CALL_ANY"),
+    OPEN_PUSH: getStr("OPEN_PUSH"),
+    OR_TO_CALL_SMALL: getStr("OR_TO_CALL_SMALL"),
+    OR_TO_FOLD: getStr("OR_TO_FOLD"),
+  };
+}
+
+/**
+ * ✅ Normaliza y valida el payload que se persistirá en payload_json.
+ * - Requiere TODOS los campos core y TODOS los min/max.
+ * - Normaliza pos a BTN/SB/BB y tipo a fish/reg/unknown.
+ * - Garantiza JSON final sin null/undefined (los filtra).
+ */
+function normalizeAndValidateSubStrategyPayload(raw: any): any {
+  const src = raw ?? {};
+
+  const spot = normalizePos("spot", src.spot);
+  const hero_pos = normalizePos("hero_pos", src.hero_pos);
+
+  const p2_pos = normalizePos("p2_pos", src.p2_pos);
+  const p3_pos = normalizePos("p3_pos", src.p3_pos);
+
+  const p2_tipo = normalizeTipo("p2_tipo", src.p2_tipo);
+  const p3_tipo = normalizeTipo("p3_tipo", src.p3_tipo);
+
+  const p1_bet = ensureMinMax("p1_bet_min", "p1_bet_max", src);
+  const p1_stack = ensureMinMax("p1_stack_min", "p1_stack_max", src);
+  const p1_se = ensureMinMax("p1_se_min", "p1_se_max", src);
+
+  const p2_bet = ensureMinMax("p2_bet_min", "p2_bet_max", src);
+  const p2_stack = ensureMinMax("p2_stack_min", "p2_stack_max", src);
+
+  const p3_bet = ensureMinMax("p3_bet_min", "p3_bet_max", src);
+  const p3_stack = ensureMinMax("p3_stack_min", "p3_stack_max", src);
+
+  const situacion = normalizeSituacion(src.situacion);
+  const orRanges = normalizeOrRanges(src.orRanges);
+
+  const out: any = {
+    spot,
+    hero_pos,
+
+    p1_bet_min: p1_bet.min,
+    p1_bet_max: p1_bet.max,
+    p1_stack_min: p1_stack.min,
+    p1_stack_max: p1_stack.max,
+    p1_se_min: p1_se.min,
+    p1_se_max: p1_se.max,
+
+    p2_pos,
+    p2_tipo,
+    p2_bet_min: p2_bet.min,
+    p2_bet_max: p2_bet.max,
+    p2_stack_min: p2_stack.min,
+    p2_stack_max: p2_stack.max,
+
+    p3_pos,
+    p3_tipo,
+    p3_bet_min: p3_bet.min,
+    p3_bet_max: p3_bet.max,
+    p3_stack_min: p3_stack.min,
+    p3_stack_max: p3_stack.max,
+
+    situacion,
+    orRanges,
+  };
+
+  // Copia extras opcionales limpiando null/undefined (compat/backward)
+  for (const [k, v] of Object.entries(src)) {
+    if (k in out) continue;
+    if (v === null || v === undefined) continue;
+    out[k] = v;
+  }
+
+  return out;
+}
+
 /**
  * Upsert de 1 bucket/sub.
  * ✅ Además de payload_json, persiste OR en 4 columnas fijas.
@@ -206,8 +344,15 @@ export async function upsertSubStrategy(
 ): Promise<void> {
   const db = await getDB();
 
-  const payload_json = JSON.stringify(payload ?? {});
-  const fromPayload = payload?.orRanges;
+  const sMin = toFiniteNumber("stackMin", stackMin);
+  const sMax = toFiniteNumber("stackMax", stackMax);
+  if (sMin > sMax) throw new Error(`sub_strategies: invalid bucket stackMin>stackMax (${sMin} > ${sMax})`);
+
+  // 🔒 HARD VALIDATION: si falta cualquier campo requerido -> THROW (NO guarda)
+  const normalized = normalizeAndValidateSubStrategyPayload(payload);
+  const payload_json = JSON.stringify(normalized);
+
+  const fromPayload = normalized?.orRanges;
   const cols = coerceOrCols(orRangesOverride ?? fromPayload ?? null);
 
   await db.execute(
@@ -235,7 +380,7 @@ export async function upsertSubStrategy(
 
       updated_at = datetime('now');
   `,
-    [situationId, name, stackMin, stackMax, payload_json, cols.a, cols.p, cols.s, cols.f]
+    [situationId, name, sMin, sMax, payload_json, cols.a, cols.p, cols.s, cols.f]
   );
 }
 

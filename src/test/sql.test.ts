@@ -55,6 +55,45 @@ import {
   pickBucketName,
 } from "../db/sql";
 
+function makeValidPayload(overrides: Partial<any> = {}) {
+  return {
+    spot: "BTN",
+    hero_pos: "BTN",
+
+    p1_bet_min: 0,
+    p1_bet_max: 75,
+    p1_stack_min: 10,
+    p1_stack_max: 50,
+    p1_se_min: 5,
+    p1_se_max: 20,
+
+    p2_pos: "SB",
+    p2_tipo: "fish",
+    p2_bet_min: 0,
+    p2_bet_max: 75,
+    p2_stack_min: 10,
+    p2_stack_max: 50,
+
+    p3_pos: "BB",
+    p3_tipo: "fish",
+    p3_bet_min: 0,
+    p3_bet_max: 75,
+    p3_stack_min: 10,
+    p3_stack_max: 50,
+
+    situacion: "BTN_vs_SB_BB",
+
+    orRanges: {
+      OR_TO_CALL_ANY: "",
+      OPEN_PUSH: "",
+      OR_TO_CALL_SMALL: "",
+      OR_TO_FOLD: "",
+    },
+
+    ...overrides,
+  };
+}
+
 describe("db/sql.ts - SQLite persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,9 +117,7 @@ describe("db/sql.ts - SQLite persistence", () => {
   });
 
   it("upsertSituationKey() hace upsert y devuelve situation_id", async () => {
-    fakeDb.__setSelectQueue([
-      [{ id: 42, key: "BTN_SB_BB_FISH_FISH", created_at: "", updated_at: "" }],
-    ]);
+    fakeDb.__setSelectQueue([[{ id: 42, key: "BTN_SB_BB_FISH_FISH", created_at: "", updated_at: "" }]]);
 
     const id = await upsertSituationKey("BTN_SB_BB_FISH_FISH");
     expect(id).toBe(42);
@@ -119,8 +156,23 @@ describe("db/sql.ts - SQLite persistence", () => {
     }
   });
 
-  it("upsertSubStrategy() hace upsert UPDATE payload_json + stack_min/max", async () => {
-    const payload = { hello: "world", n: 1 };
+  it("upsertSubStrategy() rechaza payload inválido (no guarda)", async () => {
+    const badPayload = { hello: "world" };
+    await expect(upsertSubStrategy(9, "18_20_BB", badPayload, 18, 20)).rejects.toThrow(/sub_strategies/i);
+
+    const calls = fakeDb.__getExecuteCalls();
+    // ✅ no debe ejecutar INSERT si falla validación
+    expect(calls.length).toBe(0);
+  });
+
+  it("upsertSubStrategy() hace upsert UPDATE con payload NORMALIZADO + stack_min/max", async () => {
+    const payload = makeValidPayload({
+      spot: "btn", // prueba normalización a BTN
+      hero_pos: "btn",
+      p2_tipo: "fish",
+      p3_tipo: "reg",
+    });
+
     await upsertSubStrategy(9, "18_20_BB", payload, 18, 20);
 
     const calls = fakeDb.__getExecuteCalls();
@@ -133,7 +185,12 @@ describe("db/sql.ts - SQLite persistence", () => {
     expect(c.params?.[1]).toBe("18_20_BB");
     expect(c.params?.[2]).toBe(18);
     expect(c.params?.[3]).toBe(20);
-    expect(c.params?.[4]).toBe(JSON.stringify(payload));
+
+    // payload_json: debe contener spot/hero_pos normalizados a BTN
+    const payloadJson = String(c.params?.[4] ?? "");
+    expect(payloadJson).toContain('"spot":"BTN"');
+    expect(payloadJson).toContain('"hero_pos":"BTN"');
+    expect(payloadJson).toContain('"p3_tipo":"reg"');
   });
 
   it("listSubStrategiesBySituationKey() hace JOIN y devuelve rows", async () => {
