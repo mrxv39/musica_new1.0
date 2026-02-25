@@ -105,8 +105,8 @@ export default function StrategyEditor({
         {/* Nota: si Which es un union de strings tipo "P2"/"P3" esto encaja.
             Si fuese otro formato, seguimos compilando porque el valor ya coincide
             con los labels usados por el componente. */}
-        <VillainCard which={"P2" as any} title="P2" value={value} patch={patch} />
-        <VillainCard which={"P3" as any} title="P3" value={value} patch={patch} />
+        <VillainCard which="p2" title="P2" value={value} patch={patch} />
+        <VillainCard which="p3" title="P3" value={value} patch={patch} />
       </div>
 
       {showOrPanel ? (
@@ -125,3 +125,4 @@ export default function StrategyEditor({
     </div>
   );
 }
+
