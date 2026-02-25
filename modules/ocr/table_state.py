@@ -15,15 +15,16 @@ def compute_table_state(
       - 3H True when 3 active players
       - HU True when 2 active players
 
-    Important for orchestrator correctness:
-      - ok=True ONLY when players is 2 or 3.
-      - If players is 0/1 -> ok=False (insufficient/unknown state).
+    Safety:
+      - ok=True ONLY when players in {2,3}
+      - otherwise ok=False (prevents false positives when OCR fails)
     """
     names_result = names_result or {}
     stacks_result = stacks_result or {}
 
+    # names module currently yields p2_name/p3_name; p1_name may be absent
     seat_name = {
-        "p1": (names_result.get("p1_name") or "").strip(),  # usually absent
+        "p1": (names_result.get("p1_name") or "").strip(),  # usually not present
         "p2": (names_result.get("p2_name") or "").strip(),
         "p3": (names_result.get("p3_name") or "").strip(),
     }
@@ -48,21 +49,20 @@ def compute_table_state(
             active_seats.append(seat)
 
     players = len(active_seats)
-    is_3h = players == 3
-    is_hu = players == 2
+    ok = players in (2, 3)
 
-    ok = is_3h or is_hu
-    errors = []
-    if not ok:
-        errors.append("players_unknown")
-
-    return {
+    out = {
         "ok": ok,
         "players": players,
-        "is_3h": is_3h,
-        "is_hu": is_hu,
+        "is_3h": players == 3,
+        "is_hu": players == 2,
         "active_seats": active_seats,
         "eliminated_seats": eliminated_seats,
         "method": "names_empty_and_stack_null",
-        "errors": errors,
+        "errors": [],
     }
+
+    if not ok:
+        out["errors"].append("unknown_players_count")
+
+    return out
