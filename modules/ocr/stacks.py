@@ -1,3 +1,4 @@
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\ocr\stacks.py
 # OCR stacks (player stacks) in 3 ROIs, robust, deterministic, testable.
 # Based on encontrar_stacks.py legacy logic, refactored for robustness and testability.
 
@@ -14,6 +15,8 @@ try:
     import pytesseract
 except Exception:  # pragma: no cover
     pytesseract = None  # type: ignore
+
+from modules.ocr import tess_counter
 
 # ROIs relative to x1, y1
 ROI_P2STACK = (70, 198, 60, 18)
@@ -114,6 +117,7 @@ def _ocr_one_stack(img_gray: np.ndarray, x: int, y: int, w: int, h: int, label: 
     # Try Otsu normal, then Otsu inv
     for method, bin_img in _preprocess_variants(crop).items():
         try:
+            tess_counter.inc(f"stacks:{label}:{method}")
             txt = pytesseract.image_to_string(bin_img, config=config)
         except Exception:
             continue
@@ -131,6 +135,7 @@ def _ocr_one_stack(img_gray: np.ndarray, x: int, y: int, w: int, h: int, label: 
     # Fallback: legacy threshold (normal, then inv)
     for method, bin_img in _preprocess_legacy(crop, thr).items():
         try:
+            tess_counter.inc(f"stacks:{label}:legacy_{method}")
             txt = pytesseract.image_to_string(bin_img, config=config)
         except Exception:
             continue

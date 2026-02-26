@@ -84,6 +84,10 @@ def _get_image_for_tick(
     return img_path, image_or_region, errors, cleanup_path
 
 
+def _ms(dt_s: float) -> float:
+    return round(dt_s * 1000.0, 2)
+
+
 def run_loop(args: Any) -> None:
     worker_id = args.id
     interval_ms = args.interval_ms
@@ -123,8 +127,10 @@ def run_loop(args: Any) -> None:
             tick += 1
             ts = time.time()
 
-            t0 = time.perf_counter()  # <-- inicio tempo
+            t_tick0 = time.perf_counter()
 
+            # --- get image
+            t0 = time.perf_counter()
             img_path, image_or_region, errors, cleanup_path = _get_image_for_tick(
                 mode,
                 image_path=image_path,
@@ -135,15 +141,22 @@ def run_loop(args: Any) -> None:
             )
             if cleanup_path == "DONE":
                 break
+            t_get_image = time.perf_counter()
 
+            # --- preflop
+            t1 = time.perf_counter()
             preflop = run_preflop(img_path) if img_path else {"error": "no image", "preflop_ok": False}
+            t_preflop = time.perf_counter()
 
+            # --- ocr
+            t2 = time.perf_counter()
             ocr: Dict[str, Any] = {"ok": False, "errors": ["no_image"], "names": {}, "villano": {}, "stackefectivo": {}, "bets": {}, "stacks": {}}
             if img_path:
                 try:
                     ocr = run_ocr(img_path)
                 except Exception as e:
                     ocr = {"ok": False, "errors": [f"run_ocr:{e}"], "names": {}, "villano": {}, "stackefectivo": {}, "bets": {}, "stacks": {}}
+            t_ocr = time.perf_counter()
 
             mano_result: Dict[str, Any] = {"valid": False, "mano_raw": None}
             stacks_result: Dict[str, Any] = {"p1": None}  # legacy
@@ -170,6 +183,8 @@ def run_loop(args: Any) -> None:
 
             dedupe_skipped, dedupe_reason, last_hand_sig = apply_dedupe(can_persist, sig, last_hand_sig)
 
+            # --- strategy
+            t3 = time.perf_counter()
             strategy = compute_strategy(
                 preflop=preflop,
                 mano_result=mano_result,
@@ -181,9 +196,41 @@ def run_loop(args: Any) -> None:
                 MatchInput=MatchInput,
                 select_move=select_move,
             )
+            t_strategy = time.perf_counter()
 
-            # Guardar en segundos (float)
-            tempo_s = round((time.perf_counter() - t0), 3)  # <-- fin tempo (segundos)
+            # --- persist
+            t4 = time.perf_counter()
+            persisted = False
+            if (not dedupe_skipped) and can_persist and sig:
+                ocr_json = build_ocr_json(
+                    mano_result=mano_result,
+                    stacks_result=stacks_result,
+                    ocr=ocr,
+                    preflop=preflop,
+                    strategy=strategy,
+                    tempo_s=round((time.perf_counter() - t0), 3),
+                )
+                persist_obs(
+                    dbmod,
+                    sig=sig,
+                    ts=ts,
+                    mano_result=mano_result,
+                    preflop=preflop,
+                    ocr_json=ocr_json,
+                )
+                persisted = True
+            t_persist = time.perf_counter()
+
+            tempo_s = round((time.perf_counter() - t0), 3)
+
+            timing_ms = {
+                "get_image": _ms(t_get_image - t0),
+                "preflop": _ms(t_preflop - t1),
+                "ocr": _ms(t_ocr - t2),
+                "strategy": _ms(t_strategy - t3),
+                "persist": _ms(t_persist - t4),
+                "tick_total": _ms(time.perf_counter() - t_tick0),
+            }
 
             out = {
                 "worker_id": worker_id,
@@ -191,6 +238,8 @@ def run_loop(args: Any) -> None:
                 "tick": tick,
                 "ts": ts,
                 "tempo_s": tempo_s,
+                "timing_ms": timing_ms,
+                "persisted": persisted,
                 "preflop": preflop,
                 "ocr": ocr,
                 "strategy": strategy,
@@ -209,29 +258,9 @@ def run_loop(args: Any) -> None:
                 "persist_without_stack": persist_without_stack,
             }
 
-            # persist
-            if (not dedupe_skipped) and can_persist and sig:
-                ocr_json = build_ocr_json(
-                    mano_result=mano_result,
-                    stacks_result=stacks_result,
-                    ocr=ocr,
-                    preflop=preflop,
-                    strategy=strategy,
-                    tempo_s=tempo_s,
-                )
-                persist_obs(
-                    dbmod,
-                    sig=sig,
-                    ts=ts,
-                    mano_result=mano_result,
-                    preflop=preflop,
-                    ocr_json=ocr_json,
-                )
-
             if print_every_tick:
                 print(json.dumps(out, ensure_ascii=False))
 
-            # cleanup temp capture file
             if mode == "screen" and cleanup_path:
                 try:
                     os.remove(cleanup_path)

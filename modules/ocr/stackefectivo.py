@@ -1,12 +1,12 @@
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\ocr\stackefectivo.py
 
 from __future__ import annotations
-
 
 # Alias for orchestrator/test compatibility (must be at module level for patching)
 # Place at end of file to ensure patching works
 def read_stackefectivo(*args, **kwargs):
     return read_stack_efectivo(*args, **kwargs)
-# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\ocr\stackefectivo.py
+
 # OCR stack efectivo (numeros) en ROI relativo.
 # Basado en encontrar_stackefectivo.py (legacy) pero con mejoras de robustez.
 
@@ -23,9 +23,9 @@ try:
 except Exception:  # pragma: no cover
     pytesseract = None  # type: ignore
 
+from modules.ocr import tess_counter
 
 ROI_REL_DEFAULT: Tuple[int, int, int, int] = (265, 472, 72, 42)  # dx,dy,w,h
-
 
 @dataclass(frozen=True)
 class StackOCRResult:
@@ -35,7 +35,6 @@ class StackOCRResult:
     roi: Tuple[int, int, int, int]
     method: str
     error: str = ""
-
 
 def _safe_crop(img: np.ndarray, x: int, y: int, w: int, h: int) -> Optional[np.ndarray]:
     if img is None:
@@ -48,7 +47,6 @@ def _safe_crop(img: np.ndarray, x: int, y: int, w: int, h: int) -> Optional[np.n
     if x + w > iw or y + h > ih:
         return None
     return img[y : y + h, x : x + w]
-
 
 def _preprocess_variants(gray: np.ndarray) -> Dict[str, np.ndarray]:
     """
@@ -81,9 +79,7 @@ def _preprocess_variants(gray: np.ndarray) -> Dict[str, np.ndarray]:
 
     return variants
 
-
 _FLOAT_RE = re.compile(r"(\d+(?:[.,]\d+)?)")
-
 
 def _parse_float(text: str) -> Optional[float]:
     if not text:
@@ -99,7 +95,6 @@ def _parse_float(text: str) -> Optional[float]:
     except Exception:
         return None
 
-
 def read_stack_efectivo(
     image_path: str,
     x1: int = 0,
@@ -110,23 +105,6 @@ def read_stack_efectivo(
 ) -> Dict[str, Any]:
     """
     Lee el stack efectivo (número) en una región ROI relativa dentro de una captura.
-
-    Args:
-        image_path: ruta a imagen.
-        x1,y1: offset absoluto (si la imagen viene de un recorte mayor).
-        roi_rel: (dx,dy,w,h) relativo.
-        tesseract_psm: psm de tesseract (default 7 = línea única).
-
-    Returns:
-        dict:
-        {
-          "ok": bool,
-          "value": float,
-          "raw_text": str,
-          "roi": [x,y,w,h],
-          "method": str,
-          "error": str
-        }
     """
     dx, dy, w, h = roi_rel
     x = int(x1 + dx)
@@ -176,19 +154,18 @@ def read_stack_efectivo(
 
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
 
-    # Debug crop (como el legacy)
     if os.environ.get("OCR_DEBUG_STACK", "0") == "1":
         try:
             cv2.imwrite("stackefectivo_roi.png", crop)
         except Exception:
             pass
 
-    # Probar varias variantes y quedarse con la primera que parsea float
     config = f"--psm {int(tesseract_psm)} -c tessedit_char_whitelist=0123456789."
 
     variants = _preprocess_variants(gray)
     for method, bin_img in variants.items():
         try:
+            tess_counter.inc(f"stackefectivo:{method}")
             txt = pytesseract.image_to_string(bin_img, config=config).strip()
         except Exception:
             continue
@@ -205,6 +182,7 @@ def read_stack_efectivo(
 
     # Último intento: OCR en gris (sin binarizar)
     try:
+        tess_counter.inc("stackefectivo:gray")
         txt_gray = pytesseract.image_to_string(gray, config=config).strip()
     except Exception:
         txt_gray = ""
