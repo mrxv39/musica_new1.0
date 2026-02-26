@@ -1,6 +1,5 @@
 # =========================
 # Node / Vite
-# =========================
 node_modules/
 dist/
 dist-ssr/
@@ -13,9 +12,7 @@ lerna-debug.log*
 *.log
 logs/
 
-# =========================
 # Editor / OS
-# =========================
 .vscode/*
 !.vscode/extensions.json
 .idea/
@@ -26,10 +23,7 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
-
-# =========================
 # Python
-# =========================
 __pycache__/
 *.py[cod]
 *.pyd
@@ -37,63 +31,40 @@ __pycache__/
 .mypy_cache/
 .venv/
 venv/
-
-# =========================
 # Rust / Tauri
-# =========================
 src-tauri/target/
 **/target/
-
-# =========================
 # Local data / runtime artifacts
-# =========================
 data/
 *.db
 *.sqlite
 *.sqlite3
-
-# =========================
 # Backups / tmp
-# =========================
 _backup_*/
 *.bak_*
-
-# =========================
 # Cache folders inside modules/tests
-# =========================
 modules/**/__pycache__/
 tests/**/__pycache__/
-
-# =========================
 # Media: NO ignorar assets del proyecto
-# =========================
 # Permitimos assets reales:
 !public/**
 !src-tauri/icons/**
-
 # Ignorar solo screenshots/temporales típicos (root)
 screenshot_*.bmp
 screenshot_*.png
 screenshot_*.jpg
 screenshot_*.jpeg
-
 # Si tienes carpetas concretas de capturas, ignóralas aquí (ejemplos):
 # captures/
 # screenshots/
-
 # Mantener fixtures bmp de templates
 !modules/preflop/templates/*.bmp
 coverage/
-
 proyect_promp.txt
-
-
-
-
-
-
 .gate/vitest-coverage.txt
-
 # backups
 *.bak
-
+# profiling artifacts
+*.pstats
+_profile_*.pstats
+tools/*.pstats
