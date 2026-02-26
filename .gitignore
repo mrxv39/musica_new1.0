@@ -68,3 +68,7 @@ proyect_promp.txt
 *.pstats
 _profile_*.pstats
 tools/*.pstats
+
+# local timing logs
+_timing_run*.jsonl
+
