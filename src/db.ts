@@ -32,18 +32,81 @@ export async function fetchLatestHandsObs(dbPath: string, limit = 50): Promise<H
   return rows;
 }
 
-export function extractP1Stack(ocrJson?: string): number | null {
+function safeJson(ocrJson?: string): any | null {
   if (!ocrJson) return null;
   try {
-    const obj = JSON.parse(ocrJson);
-    const p1 = obj?.stacks?.p1;
-    if (typeof p1 === "number") return p1;
-    if (typeof p1 === "string") {
-      const n = Number(p1);
-      return Number.isFinite(n) ? n : null;
-    }
-    return null;
+    return JSON.parse(ocrJson);
   } catch {
     return null;
   }
+}
+
+function asNumber(v: any): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+export function extractP1Stack(ocrJson?: string): number | null {
+  const obj = safeJson(ocrJson);
+  const v = obj?.ocr?.stacks?.p1 ?? obj?.stacks?.p1 ?? obj?.stacks_preflop?.stacks?.p1 ?? obj?.stacks_preflop?.p1;
+  return asNumber(v);
+}
+
+export function extractP1Bet(ocrJson?: string): number | null {
+  const obj = safeJson(ocrJson);
+  const v = obj?.ocr?.bets?.p1 ?? obj?.bets?.p1;
+  return asNumber(v);
+}
+
+export function extractMove(ocrJson?: string): string {
+  const obj = safeJson(ocrJson);
+  const v = obj?.strategy?.move;
+  return typeof v === "string" ? v : "";
+}
+
+export function extractBetMin(ocrJson?: string): number | null {
+  const obj = safeJson(ocrJson);
+  const v = obj?.strategy?.bet_min_bb ?? obj?.strategy?.betmin ?? obj?.strategy?.bet_min;
+  return asNumber(v);
+}
+
+export function extractBetMax(ocrJson?: string): number | null {
+  const obj = safeJson(ocrJson);
+  const v = obj?.strategy?.bet_max_bb ?? obj?.strategy?.betmax ?? obj?.strategy?.bet_max;
+  return asNumber(v);
+}
+
+export function extractSituacion(ocrJson?: string): string {
+  const obj = safeJson(ocrJson);
+  const v = obj?.strategy?.situacion ?? obj?.strategy?.situation ?? obj?.strategy?.spot;
+  return typeof v === "string" ? v : "";
+}
+
+// ✅ stackefectivo (ocr_json.ocr.stackefectivo.value)
+export function extractStackEfectivo(ocrJson?: string): number | null {
+  const obj = safeJson(ocrJson);
+  const v =
+    obj?.ocr?.stackefectivo?.value ??
+    obj?.ocr?.stackefectivo ??
+    obj?.stackefectivo?.value ??
+    obj?.stackefectivo;
+  return asNumber(v);
+}
+
+// ✅ tempo en SEGUNDOS
+// - nuevo: ocr_json.tempo_s
+// - compat: ocr_json.tempo_ms -> se convierte a segundos
+export function extractTempoS(ocrJson?: string): number | null {
+  const obj = safeJson(ocrJson);
+  const s = asNumber(obj?.tempo_s ?? obj?.tempoS);
+  if (s !== null) return s;
+
+  const ms = asNumber(obj?.tempo_ms ?? obj?.tempoMs ?? obj?.tempo);
+  if (ms !== null) return ms / 1000;
+
+  return null;
 }

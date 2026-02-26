@@ -76,7 +76,9 @@ class TestWorkerDedupeAndPersist(unittest.TestCase):
 
         outputs = []
         with patch.object(sys, "argv", argv):
-            with patch("modules.workers.worker.run_preflop", side_effect=fake_run_preflop):
+            # IMPORTANT: worker.main() calls worker_loop.run_loop(),
+            # and worker_loop imports run_preflop at module level.
+            with patch("modules.workers.worker_loop.run_preflop", side_effect=fake_run_preflop):
                 from io import StringIO
                 old_stdout = sys.stdout
                 sys.stdout = mystdout = StringIO()

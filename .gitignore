@@ -93,3 +93,7 @@ proyect_promp.txt
 
 
 .gate/vitest-coverage.txt
+
+# backups
+*.bak
+

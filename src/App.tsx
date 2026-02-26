@@ -2,18 +2,35 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { initDB } from "./db/sql";
-import { DEFAULT_DB_PATH, extractP1Stack, fetchLatestHandsObs, HandsObsRow } from "./db";
+import {
+  DEFAULT_DB_PATH,
+  extractBetMax,
+  extractBetMin,
+  extractMove,
+  extractP1Bet,
+  extractSituacion,
+  extractStackEfectivo,
+  extractTempoS,
+  fetchLatestHandsObs,
+  HandsObsRow,
+} from "./db";
 import StrategyPage from "./pages/StrategyPage";
 
 type Tab = "hands" | "strategy" | "account" | "import";
 
-function formatTs(ms?: number) {
+function formatDateOnly(ms?: number) {
   if (!ms) return "";
   try {
-    return new Date(ms).toLocaleString();
+    return new Date(ms).toLocaleDateString();
   } catch {
     return String(ms);
   }
+}
+
+function formatTempoS(v: number | null): string {
+  if (v === null) return "";
+  // 3 decimales como en tu output: 6.684
+  return v.toFixed(3);
 }
 
 function TopNav({
@@ -89,11 +106,10 @@ export default function App() {
     localStorage.setItem("autoRefresh", String(auto));
   }, [auto]);
 
-  // ✅ IMPORTANTE: polling SOLO en la pestaña Hands (evita parpadeo en Strategy)
+  // ✅ polling SOLO en la pestaña Hands
   useEffect(() => {
     if (activeTab !== "hands") return;
 
-    // first load al entrar en Hands
     loadOnce();
 
     if (!auto) return;
@@ -140,27 +156,36 @@ export default function App() {
                 <tr style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
                   <th style={{ padding: "8px 6px" }}>time</th>
                   <th style={{ padding: "8px 6px" }}>mano_raw</th>
-                  <th style={{ padding: "8px 6px" }}>p1_stack</th>
-                  <th style={{ padding: "8px 6px" }}>preflop_ok</th>
-                  <th style={{ padding: "8px 6px" }}>noboard_ok</th>
-                  <th style={{ padding: "8px 6px" }}>hand_class</th>
-                  <th style={{ padding: "8px 6px" }}>fingerprint</th>
+                  <th style={{ padding: "8px 6px" }}>stackefectivo</th>
+                  <th style={{ padding: "8px 6px" }}>p1bet</th>
+                  <th style={{ padding: "8px 6px" }}>move</th>
+                  <th style={{ padding: "8px 6px" }}>betmin</th>
+                  <th style={{ padding: "8px 6px" }}>betmax</th>
+                  <th style={{ padding: "8px 6px" }}>situacion</th>
+                  <th style={{ padding: "8px 6px" }}>TEMPO (s)</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const p1 = extractP1Stack(r.ocr_json);
+                  const stackefectivo = extractStackEfectivo(r.ocr_json);
+                  const p1bet = extractP1Bet(r.ocr_json);
+                  const move = extractMove(r.ocr_json);
+                  const betmin = extractBetMin(r.ocr_json);
+                  const betmax = extractBetMax(r.ocr_json);
+                  const situacion = extractSituacion(r.ocr_json);
+                  const tempoS = extractTempoS(r.ocr_json);
+
                   return (
                     <tr key={r.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                      <td style={{ padding: "6px" }}>{formatTs(r.detected_at_ms)}</td>
+                      <td style={{ padding: "6px" }}>{formatDateOnly(r.detected_at_ms)}</td>
                       <td style={{ padding: "6px" }}>{r.mano_raw}</td>
-                      <td style={{ padding: "6px" }}>{p1 ?? ""}</td>
-                      <td style={{ padding: "6px" }}>{r.preflop_ok ? 1 : 0}</td>
-                      <td style={{ padding: "6px" }}>{r.noboard_ok ? 1 : 0}</td>
-                      <td style={{ padding: "6px" }}>{r.hand_class}</td>
-                      <td style={{ padding: "6px", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                        {r.fingerprint}
-                      </td>
+                      <td style={{ padding: "6px" }}>{stackefectivo ?? ""}</td>
+                      <td style={{ padding: "6px" }}>{p1bet ?? ""}</td>
+                      <td style={{ padding: "6px" }}>{move}</td>
+                      <td style={{ padding: "6px" }}>{betmin ?? ""}</td>
+                      <td style={{ padding: "6px" }}>{betmax ?? ""}</td>
+                      <td style={{ padding: "6px" }}>{situacion}</td>
+                      <td style={{ padding: "6px" }}>{formatTempoS(tempoS)}</td>
                     </tr>
                   );
                 })}
