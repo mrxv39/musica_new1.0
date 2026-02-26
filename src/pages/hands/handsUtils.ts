@@ -27,12 +27,17 @@ export function extractLocalImagePath(row: HandsObsRow): string | null {
   return null;
 }
 
+// 🔥 NUEVO FORMATO: 26/2/26
 export function formatDateTime(ms?: number) {
   if (!ms) return "";
   try {
-    return new Date(ms).toLocaleString();
+    const d = new Date(ms);
+    const day = d.getDate();            // sin cero delante
+    const month = d.getMonth() + 1;     // sin cero delante
+    const year = d.getFullYear() % 100; // solo 2 dígitos
+    return `${day}/${month}/${year}`;
   } catch {
-    return String(ms);
+    return "";
   }
 }
 

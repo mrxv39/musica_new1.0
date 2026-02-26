@@ -1,4 +1,4 @@
-/// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\hands\handsColumns.ts
+/// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\hands\handsColumns.tsx
 import {
   extractBetMax,
   extractBetMin,
@@ -9,36 +9,55 @@ import {
   extractTempoS,
   HandsObsRow,
 } from "../../db";
-import { formatDateTime, formatTempoS } from "./handsUtils";
-import { extractLocalImagePath } from "./handsUtils";
+import { extractLocalImagePath, formatDateTime, formatTempoS, safeJson } from "./handsUtils";
 import { openLocalImage } from "./openLocalImage";
+import type { HandsSortKey } from "./sortHands";
 
 export type ColumnId =
   | "time"
   | "hand"
-  | "stackefectivo"
+  | "stackef"
   | "p1bet"
+  | "p2bet"
+  | "p3bet"
   | "move"
   | "betmin"
   | "betmax"
   | "situacion"
-  | "tempo";
+  | "tempo"
+  | "img";
 
 export type ColumnDef = {
   id: ColumnId;
   label: string;
-  sortableKey:
-    | "detected_at_ms"
-    | "hand"
-    | "stackefectivo"
-    | "p1bet"
-    | "move"
-    | "betmin"
-    | "betmax"
-    | "situacion"
-    | "tempo";
+  sortableKey?: HandsSortKey; // si no existe, header no ordena
   render: (row: HandsObsRow) => React.ReactNode;
 };
+
+function pickBet(obj: any, player: "P2" | "P3"): number | null {
+  const v =
+    obj?.bets?.[player] ??
+    obj?.ocr?.bets?.[player] ??
+    obj?.ocr?.[player]?.bet ??
+    obj?.[player]?.bet ??
+    null;
+
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function extractP2BetLocal(ocr_json?: string): number | null {
+  const obj = safeJson(ocr_json);
+  if (!obj) return null;
+  return pickBet(obj, "P2");
+}
+
+function extractP3BetLocal(ocr_json?: string): number | null {
+  const obj = safeJson(ocr_json);
+  if (!obj) return null;
+  return pickBet(obj, "P3");
+}
 
 export const HANDS_COLUMNS: ColumnDef[] = [
   {
@@ -54,8 +73,8 @@ export const HANDS_COLUMNS: ColumnDef[] = [
     render: (r) => r.hand_class || r.mano_raw,
   },
   {
-    id: "stackefectivo",
-    label: "stackefectivo",
+    id: "stackef",
+    label: "stackef",
     sortableKey: "stackefectivo",
     render: (r) => {
       const v = extractStackEfectivo(r.ocr_json);
@@ -83,6 +102,18 @@ export const HANDS_COLUMNS: ColumnDef[] = [
     label: "p1bet",
     sortableKey: "p1bet",
     render: (r) => extractP1Bet(r.ocr_json) ?? "",
+  },
+  {
+    id: "p2bet",
+    label: "p2bet",
+    sortableKey: "p2bet",
+    render: (r) => extractP2BetLocal(r.ocr_json) ?? "",
+  },
+  {
+    id: "p3bet",
+    label: "p3bet",
+    sortableKey: "p3bet",
+    render: (r) => extractP3BetLocal(r.ocr_json) ?? "",
   },
   {
     id: "move",
@@ -113,5 +144,25 @@ export const HANDS_COLUMNS: ColumnDef[] = [
     label: "TEMPO (s)",
     sortableKey: "tempo",
     render: (r) => formatTempoS(extractTempoS(r.ocr_json)),
+  },
+  {
+    id: "img",
+    label: "IMG",
+    render: (r) => {
+      const p = extractLocalImagePath(r);
+      if (!p) return "";
+      return (
+        <span
+          style={{ cursor: "pointer", textDecoration: "underline" }}
+          title={p}
+          onClick={(e) => {
+            e.stopPropagation();
+            openLocalImage(p);
+          }}
+        >
+          open
+        </span>
+      );
+    },
   },
 ];

@@ -24,14 +24,22 @@ export default function HandsTable({
           style={{
             textAlign: "left",
             borderBottom: "1px solid #ddd",
-            cursor: "pointer",
           }}
         >
-          {HANDS_COLUMNS.map((c) => (
-            <th key={c.id} onClick={() => onSort(c.sortableKey as HandsSortKey)}>
-              {c.label}
-            </th>
-          ))}
+          {HANDS_COLUMNS.map((c) => {
+            const clickable = Boolean(c.sortableKey);
+            return (
+              <th
+                key={c.id}
+                style={{ cursor: clickable ? "pointer" : "default" }}
+                onClick={() => {
+                  if (c.sortableKey) onSort(c.sortableKey);
+                }}
+              >
+                {c.label}
+              </th>
+            );
+          })}
         </tr>
       </thead>
 
