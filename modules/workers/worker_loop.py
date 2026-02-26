@@ -28,9 +28,6 @@ def _get_image_for_tick(
     region: Optional[List[int]],
     dir_state: Dict[str, Any],
 ) -> Tuple[Optional[str], str, List[str], Optional[str]]:
-    """
-    Returns: img_path, image_or_region, errors, cleanup_path (if screen capture temp)
-    """
     errors: List[str] = []
     cleanup_path: Optional[str] = None
 
@@ -104,13 +101,9 @@ def run_loop(args: Any) -> None:
     last_hand_sig: Optional[str] = None
     tick = 0
 
-    # DB integration
     from modules.db import db as dbmod
-
-    # OCR orchestrator
     from modules.ocr.ocr import run_ocr
 
-    # Strategy selector
     try:
         from modules.strategy.substrategy_selector import MatchInput, select_move
     except Exception:
@@ -210,6 +203,12 @@ def run_loop(args: Any) -> None:
                     strategy=strategy,
                     tempo_s=round((time.perf_counter() - t0), 3),
                 )
+
+                # ✅ Guardar ruta real SOLO en replay/replay_dir (en screen se borra el temp)
+                frame_ref = ""
+                if img_path and mode != "screen":
+                    frame_ref = os.path.abspath(img_path)
+
                 persist_obs(
                     dbmod,
                     sig=sig,
@@ -217,6 +216,8 @@ def run_loop(args: Any) -> None:
                     mano_result=mano_result,
                     preflop=preflop,
                     ocr_json=ocr_json,
+                    bets_result=bets_result,
+                    frame_ref=frame_ref,
                 )
                 persisted = True
             t_persist = time.perf_counter()

@@ -13,6 +13,8 @@ export type HandsObsRow = {
   preflop_ok?: number | boolean;
   noboard_ok?: number | boolean;
   ocr_json?: string;
+  p2bet?: number | null;
+  p3bet?: number | null;
   frame_ref?: string;
 };
 

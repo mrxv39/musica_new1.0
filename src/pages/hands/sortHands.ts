@@ -59,9 +59,9 @@ export function sortHands(rows: HandsObsRow[], key: HandsSortKey, asc: boolean) 
       case "p1bet":
         return extractP1Bet(row.ocr_json);
       case "p2bet":
-        return extractP2BetLocal(row.ocr_json);
+        return (row as any).p2bet ?? extractP2BetLocal(row.ocr_json);
       case "p3bet":
-        return extractP3BetLocal(row.ocr_json);
+        return (row as any).p3bet ?? extractP3BetLocal(row.ocr_json);
       case "move":
         return extractMove(row.ocr_json);
       case "betmin":

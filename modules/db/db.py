@@ -16,15 +16,10 @@ def _now_ms() -> int:
 
 
 def _project_root() -> str:
-    # .../modules/db/db.py -> .../ (repo root)
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
 def get_db_path() -> str:
-    """
-    Default: <repo_root>/data/musica_new.db
-    Override with env: MUSICA_DB_PATH
-    """
     env = os.environ.get("MUSICA_DB_PATH", "").strip()
     if env:
         return env
@@ -44,7 +39,7 @@ def get_conn() -> sqlite3.Connection:
 def _table_columns(conn: sqlite3.Connection, table: str) -> Sequence[str]:
     cur = conn.cursor()
     cur.execute(f"PRAGMA table_info({table})")
-    return [r[1] for r in cur.fetchall()]  # name is index 1
+    return [r[1] for r in cur.fetchall()]
 
 
 def _add_column_if_missing(conn: sqlite3.Connection, table: str, col_name: str, col_def: str) -> None:
@@ -56,50 +51,37 @@ def _add_column_if_missing(conn: sqlite3.Connection, table: str, col_name: str, 
 
 def _create_indexes(conn: sqlite3.Connection) -> None:
     cur = conn.cursor()
-
-    # legacy
     cur.execute("CREATE INDEX IF NOT EXISTS idx_hands_created_at ON hands(created_at_ms DESC)")
-
-    # new
     cur.execute("CREATE INDEX IF NOT EXISTS idx_hands_obs_table_time ON hands_obs(table_id, detected_at_ms DESC)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_hands_xml_session_startdate ON hands_xml(sessioncode, startdate)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_hand_links_gamecode ON hand_links(gamecode)")
 
 
 def init_db() -> None:
-    """
-    - Crea tablas si no existen
-    - Migra tablas antiguas añadiendo columnas que falten
-    - Crea índices al final (cuando las columnas ya existen)
-    """
     with _LOCK:
         conn = get_conn()
         try:
-            # 1) crear tablas base
             conn.executescript(SCHEMA_TABLES_SQL)
 
-            # 2) migraciones (por si la tabla hands existía sin created_at_ms)
+            # legacy migrations
             _add_column_if_missing(conn, "hands", "created_at_ms", "INTEGER DEFAULT 0")
-            # por compatibilidad: si alguna instalación antigua no tenía data_json
             _add_column_if_missing(conn, "hands", "data_json", "TEXT DEFAULT ''")
 
-            # 3) índices (después de migrar)
-            _create_indexes(conn)
+            # hands_obs migrations (new cols)
+            _add_column_if_missing(conn, "hands_obs", "p2bet", "REAL DEFAULT NULL")
+            _add_column_if_missing(conn, "hands_obs", "p3bet", "REAL DEFAULT NULL")
+            _add_column_if_missing(conn, "hands_obs", "frame_ref", "TEXT DEFAULT ''")
 
+            _create_indexes(conn)
             conn.commit()
         finally:
             conn.close()
 
 
 # =========================
-# Legacy API (para tests antiguos)
+# Legacy API
 # =========================
-
 def insert_hand(fingerprint: str, data_json: str) -> Optional[int]:
-    """
-    Inserta en tabla legacy `hands` idempotente por fingerprint.
-    Devuelve el id existente o el nuevo.
-    """
     init_db()
     conn = get_conn()
     try:
@@ -112,7 +94,6 @@ def insert_hand(fingerprint: str, data_json: str) -> Optional[int]:
             (fingerprint, data_json or "", _now_ms()),
         )
         conn.commit()
-
         cur.execute("SELECT id FROM hands WHERE fingerprint = ?", (fingerprint,))
         row = cur.fetchone()
         return int(row["id"]) if row else None
@@ -133,9 +114,8 @@ def get_hand_by_fingerprint(fingerprint: str) -> Optional[Dict[str, Any]]:
 
 
 # =========================
-# New API (OCR obs / XML truth / links)
+# New API
 # =========================
-
 def insert_obs(
     *,
     fingerprint: str,
@@ -147,6 +127,8 @@ def insert_obs(
     preflop_ok: bool = False,
     noboard_ok: bool = False,
     ocr_json: str = "",
+    p2bet: Optional[float] = None,
+    p3bet: Optional[float] = None,
     frame_ref: str = "",
 ) -> Optional[int]:
     init_db()
@@ -157,8 +139,8 @@ def insert_obs(
             """
             INSERT OR IGNORE INTO hands_obs
             (fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
-             preflop_ok, noboard_ok, ocr_json, frame_ref, created_at_ms)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             preflop_ok, noboard_ok, ocr_json, p2bet, p3bet, frame_ref, created_at_ms)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 fingerprint,
@@ -170,12 +152,13 @@ def insert_obs(
                 1 if preflop_ok else 0,
                 1 if noboard_ok else 0,
                 ocr_json or "",
+                p2bet,
+                p3bet,
                 frame_ref or "",
                 _now_ms(),
             ),
         )
         conn.commit()
-
         cur.execute("SELECT obs_id FROM hands_obs WHERE fingerprint = ?", (fingerprint,))
         row = cur.fetchone()
         return int(row["obs_id"]) if row else None
@@ -301,7 +284,6 @@ def link_obs_to_game(
             (int(obs_id), gamecode, float(match_score), match_method or "", _now_ms()),
         )
         conn.commit()
-
         cur.execute("SELECT link_id FROM hand_links WHERE obs_id = ?", (int(obs_id),))
         row = cur.fetchone()
         return int(row["link_id"]) if row else None
