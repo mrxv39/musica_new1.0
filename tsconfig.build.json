@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "src/test",
+    "src/test/**",
+    "src/pages/strategy/useStrategyPage_refactor",
+    "src/pages/strategy/useStrategyPage_refactor/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}
