@@ -155,7 +155,10 @@ def expand_range(range_text: str) -> List[str]:
 
         if tok.end:
             b = normalize_hand_class(tok.end)
-            if len(a) == 2 and len(b) == 2 and a[0] == a[1] == b[0] == b[1]:
+
+            # FIX: rango de pares (AA-99, 99-AA, etc.) debe comprobar "es par" en ambos,
+            # no que tengan el MISMO rank entre sí.
+            if len(a) == 2 and len(b) == 2 and (a[0] == a[1]) and (b[0] == b[1]):
                 ia, ib = RANK_TO_I[a[0]], RANK_TO_I[b[0]]
                 step = 1 if ib >= ia else -1
                 for j in range(ia, ib + step, step):
