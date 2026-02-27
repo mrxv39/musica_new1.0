@@ -1,46 +1,69 @@
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\scripts\gate-coverage-strategy.ps1
 $ErrorActionPreference = "Stop"
 
-# Umbrales (incremental)
-# Hoy: desbloqueo mínimo para no frenar (63).
-# Siguiente objetivo: subir a 65 y luego 70 cuando cubramos useStrategyPage.ts.
-$minPagesStrategyLines = 63.0
-$minStrategyLines = 55.0
-
-New-Item -ItemType Directory -Force ".gate" | Out-Null
-$logPath = ".gate\vitest-coverage.txt"
-
-if (Test-Path $logPath) {
-  Remove-Item -Force $logPath -ErrorAction SilentlyContinue
-}
-
 Write-Host "=== Running coverage (Vitest) ==="
-& cmd /c "npm run test:coverage 1> `"$logPath`" 2>&1"
 
-Get-Content $logPath -Raw | Write-Host
+$gateDir = Join-Path $PSScriptRoot "..\.gate"
+$gateDir = (Resolve-Path $gateDir).Path
+New-Item -ItemType Directory -Force $gateDir | Out-Null
 
-function Get-LinesPct($groupName) {
-  $lines = Get-Content $logPath
-  $pattern = "^\s*$([regex]::Escape($groupName))\s+\|\s+[\d\.]+\s+\|\s+[\d\.]+\s+\|\s+[\d\.]+\s+\|\s+([\d\.]+)\s+\|"
-  $match = $lines | Where-Object { $_ -match $pattern } | Select-Object -First 1
-  if (-not $match) {
-    throw "No se encontró el grupo '$groupName' en el reporte de coverage. Revisa $logPath"
+$reportPath = Join-Path $gateDir "vitest-coverage.txt"
+
+$cmd = "npm run test:coverage"
+Write-Host ""
+Write-Host "> $cmd"
+Write-Host ""
+
+cmd /c "$cmd 1> `"$reportPath`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+  throw "FAIL: coverage run failed (exit code $LASTEXITCODE). Revisa $reportPath"
+}
+
+$lines = Get-Content -LiteralPath $reportPath -ErrorAction Stop
+
+# Parse de tabla: "File | % Stmts | % Branch | % Funcs | % Lines |"
+$rows = @{}
+foreach ($ln in $lines) {
+  if ($ln -match '^\s*(?<file>[^|]+?)\s*\|\s*(?<stmts>[\d.]+)\s*\|\s*(?<branch>[\d.]+)\s*\|\s*(?<funcs>[\d.]+)\s*\|\s*(?<lines>[\d.]+)\s*\|') {
+    $f = $matches["file"].Trim()
+    $pctLines = [double]$matches["lines"]
+    $rows[$f] = $pctLines
   }
-  $m = [regex]::Match($match, $pattern)
-  return [double]$m.Groups[1].Value
 }
 
-$pagesStrategyLines = Get-LinesPct "pages/strategy"
-$strategyLines = Get-LinesPct "strategy"
+function Find-RowKeyBySuffix([string]$suffix) {
+  $s = $suffix.Trim()
+  foreach ($k in $rows.Keys) {
+    if ($k -eq $s) { return $k }
+    if ($k -like "*$s") { return $k }   # soporta "...pages/strategy"
+  }
+  return $null
+}
 
+function Require-Group([string]$label, [string[]]$candidates, [double]$minPct) {
+  $key = $null
+  foreach ($c in $candidates) {
+    $k = Find-RowKeyBySuffix $c
+    if ($null -ne $k) { $key = $k; break }
+  }
+
+  if ($null -eq $key) {
+    $avail = ($rows.Keys | Sort-Object) -join ", "
+    throw "No se encontró el grupo '$label' en el reporte de coverage. Candidatos: $($candidates -join ' OR '). Disponibles: $avail. Revisa $reportPath"
+  }
+
+  $v = $rows[$key]
+  if ($v -lt $minPct) {
+    throw "FAIL: $label lines: $v (min $minPct). Key='$key'. Revisa $reportPath"
+  }
+
+  Write-Host ("OK: {0} lines: {1} (min {2}) [{3}]" -f $label, $v, $minPct, $key)
+}
+
+Write-Host ""
 Write-Host "=== Strategy coverage check ==="
-Write-Host ("pages/strategy lines: {0} (min {1})" -f $pagesStrategyLines, $minPagesStrategyLines)
-Write-Host ("strategy lines:       {0} (min {1})" -f $strategyLines, $minStrategyLines)
 
-if ($pagesStrategyLines -lt $minPagesStrategyLines) {
-  throw "FAIL: pages/strategy lines coverage ($pagesStrategyLines) < $minPagesStrategyLines"
-}
-if ($strategyLines -lt $minStrategyLines) {
-  throw "FAIL: strategy lines coverage ($strategyLines) < $minStrategyLines"
-}
+Require-Group "pages/strategy" @("pages/strategy", "src/pages/strategy") 63
+Require-Group "strategy"       @("strategy", "src/strategy")             55
 
 Write-Host "OK: Strategy coverage thresholds met."

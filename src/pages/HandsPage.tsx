@@ -6,6 +6,7 @@ import HandsTable from "./hands/HandsTable";
 import { useHandsObs } from "./hands/useHandsObs";
 import { sortHands } from "./hands/sortHands";
 import { useHandsSort } from "./hands/useHandsSort";
+import { filterHandsByAllFilters, parseNumericRange } from "./hands/handsFilters";
 
 const ONE_IMAGE_PATH =
   "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\modules\\preflop\\test_images\\screenshot_20260126071702980.bmp";
@@ -27,7 +28,28 @@ export default function HandsPage() {
   const [actionStatus, setActionStatus] = useState<string>("");
   const [lastLog, setLastLog] = useState<string>("");
 
-  const sortedRows = useMemo(() => sortHands(rows, sortKey, sortAsc), [rows, sortKey, sortAsc]);
+  const [stackEfRangeText, setStackEfRangeText] = useState<string>(
+    () => localStorage.getItem("hands.stackEfRangeText") || ""
+  );
+  const [betRangeText, setBetRangeText] = useState<string>(
+    () => localStorage.getItem("hands.betRangeText") || ""
+  );
+  const [rangeListText, setRangeListText] = useState<string>(
+    () => localStorage.getItem("hands.rangeListText") || ""
+  );
+
+  const stackEfRange = useMemo(() => parseNumericRange(stackEfRangeText), [stackEfRangeText]);
+  const betRange = useMemo(() => parseNumericRange(betRangeText), [betRangeText]);
+
+  const filtered = useMemo(
+    () => filterHandsByAllFilters(rows, stackEfRange, betRange, rangeListText),
+    [rows, stackEfRange, betRange, rangeListText]
+  );
+
+  const sortedRows = useMemo(
+    () => sortHands(filtered.rows, sortKey, sortAsc),
+    [filtered.rows, sortKey, sortAsc]
+  );
 
   const onReset = async () => {
     const p = dbPath.trim();
@@ -102,6 +124,27 @@ export default function HandsPage() {
   const uiStatus =
     actionStatus && actionStatus.trim().length > 0 ? `${status} | ${actionStatus}` : status;
 
+  const onChangeStackEfRangeText = (v: string) => {
+    setStackEfRangeText(v);
+    localStorage.setItem("hands.stackEfRangeText", v);
+  };
+
+  const onChangeBetRangeText = (v: string) => {
+    setBetRangeText(v);
+    localStorage.setItem("hands.betRangeText", v);
+  };
+
+  const onChangeRangeListText = (v: string) => {
+    setRangeListText(v);
+    localStorage.setItem("hands.rangeListText", v);
+  };
+
+  const onClearFilters = () => {
+    onChangeStackEfRangeText("");
+    onChangeBetRangeText("");
+    onChangeRangeListText("");
+  };
+
   return (
     <>
       <HandsToolbar
@@ -116,13 +159,26 @@ export default function HandsPage() {
         onReset={onReset}
         onRunOne={onRunOne}
         onRunBatch={onRunBatch}
+        stackEfRangeText={stackEfRangeText}
+        onChangeStackEfRangeText={onChangeStackEfRangeText}
+        betRangeText={betRangeText}
+        onChangeBetRangeText={onChangeBetRangeText}
+        rangeListText={rangeListText}
+        onChangeRangeListText={onChangeRangeListText}
+        onClearFilters={onClearFilters}
       />
 
       <HandsTable rows={sortedRows} onSort={onSort} />
 
       <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-        DB actual: {dbPath.trim()}
+        Rows: {sortedRows.length} / {rows.length} | DB actual: {dbPath.trim()}
       </div>
+
+      {filtered.rangeError ? (
+        <div style={{ marginTop: 6, fontSize: 12, color: "#b00020" }}>
+          Rango inválido: {filtered.rangeError}
+        </div>
+      ) : null}
 
       <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>
         Img 1-hand: {ONE_IMAGE_PATH}
