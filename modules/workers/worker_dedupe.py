@@ -1,6 +1,6 @@
 # C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\workers\worker_dedupe.py
 import hashlib
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 
 def normalize_p1(stacks_result: Any, ocr_stacks: Any) -> float:
@@ -13,9 +13,15 @@ def normalize_p1(stacks_result: Any, ocr_stacks: Any) -> float:
     return 0.0
 
 
-def compute_can_persist(mano_result: Any, p1: float, persist_without_stack: bool) -> bool:
+def compute_can_persist(
+    mano_result: Any,
+    p1: float,
+    persist_without_stack: bool,
+    preflop_ok: bool,
+) -> bool:
     mano_valid = bool(mano_result.get("valid")) if isinstance(mano_result, dict) else False
-    return mano_valid and (p1 > 0 or persist_without_stack)
+    # Regla: si preflop_ok == False => NO persistir
+    return bool(preflop_ok) and mano_valid and (p1 > 0 or persist_without_stack)
 
 
 def compute_sig(mano_result: Any, p1: float, persist_without_stack: bool) -> str:

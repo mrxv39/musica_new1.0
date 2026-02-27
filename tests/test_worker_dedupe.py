@@ -169,6 +169,16 @@ class TestWorkerDedupeAndPersist(unittest.TestCase):
         self._run_worker_and_capture([preflop1], ticks=1)
         self.assertEqual(self._obs_count(), 0)
 
+    def test_no_insert_on_preflop_false(self):
+        mano = {"valid": True, "mano_raw": "AcKd"}
+        stacks = {"p1": 100.0}
+        preflop1 = {"modules": {"mano": mano, "stacks": stacks}, "preflop_ok": False}
+
+        outs = self._run_worker_and_capture([preflop1], ticks=1)
+        self.assertEqual(len(outs), 1)
+        self.assertFalse(outs[0].get("persisted", True))
+        self.assertEqual(self._obs_count(), 0)
+
     def test_no_insert_on_stack_zero(self):
         mano = {"valid": True, "mano_raw": "AcKd"}
         stacks = {"p1": 0}

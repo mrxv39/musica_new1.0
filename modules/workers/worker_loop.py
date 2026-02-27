@@ -83,6 +83,8 @@ def run_loop(args: Any) -> None:
             preflop = run_preflop(img.img_path) if img.img_path else {"error": "no image", "preflop_ok": False}
             timing.t_preflop1 = time.perf_counter()
 
+            preflop_ok = bool(preflop.get("preflop_ok", False)) if isinstance(preflop, dict) else False
+
             # ocr
             timing.t_ocr0 = time.perf_counter()
             ocr: Dict[str, Any] = ensure_ocr_shape()
@@ -105,7 +107,7 @@ def run_loop(args: Any) -> None:
 
             # dedupe
             p1 = normalize_p1(stacks_result, ocr_stacks)
-            can_persist = compute_can_persist(mano_result, p1, cfg.persist_without_stack)
+            can_persist = compute_can_persist(mano_result, p1, cfg.persist_without_stack, preflop_ok)
 
             sig: Optional[str] = None
             if can_persist:
