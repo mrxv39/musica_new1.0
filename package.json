@@ -9,7 +9,7 @@
     "dev": "vite",
     "tauri": "tauri",
     "test:fast": "cross-env VITEST_MODE=fast vitest run",
-    "build": "tsc && vite build",
+    "build": "tsc -p tsconfig.build.json && vite build",
     "test:slow": "cross-env VITEST_MODE=slow vitest run",
     "test:coverage": "cross-env VITEST_MODE=fast vitest run --coverage",
     "gate:coverage": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/gate-coverage-strategy.ps1",
