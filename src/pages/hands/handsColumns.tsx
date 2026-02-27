@@ -10,8 +10,9 @@ import {
   extractTempoS,
   HandsObsRow,
 } from "../../db";
-import { extractLocalImagePath, formatDateTime, formatTempoS, safeJson } from "./handsUtils";
+import { extractLocalImagePath, formatDateTime, formatTempoS } from "./handsUtils";
 import type { HandsSortKey } from "./sortHands";
+function safeJson<T = any>(s?: string): T | null { try { return JSON.parse(s ?? "") as T; } catch { return null; } }
 
 export type ColumnId =
   | "time"
@@ -26,7 +27,6 @@ export type ColumnId =
   | "situacion"
   | "tempo"
   | "img";
-
 export type ColumnDef = {
   id: ColumnId;
   label: string;
@@ -48,13 +48,13 @@ function pickBet(obj: any, player: "P2" | "P3"): number | null {
 }
 
 function extractP2BetLocal(ocr_json?: string): number | null {
-  const obj = safeJson(ocr_json);
+  const obj = safeJson(ocr_json ?? "");
   if (!obj) return null;
   return pickBet(obj, "P2");
 }
 
 function extractP3BetLocal(ocr_json?: string): number | null {
-  const obj = safeJson(ocr_json);
+  const obj = safeJson(ocr_json ?? "");
   if (!obj) return null;
   return pickBet(obj, "P3");
 }
@@ -169,3 +169,6 @@ export function makeHandsColumns(onOpenImage: (path: string) => void): ColumnDef
     },
   ];
 }
+
+
+
