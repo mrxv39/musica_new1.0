@@ -10,7 +10,6 @@ import type { StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../s
 import {
   initDB,
   listAllSubStrategies,
-  pickBucketName,
   upsertSituationKey,
   upsertSubStrategy,
   deleteSubStrategyById,
@@ -20,7 +19,7 @@ import { emptyOrRangesPlan, coerceOrRangesPlan } from "./orRangesAdapter";
 
 export type DbSaveSubResult = {
   situationKey: string;
-  bucket: string;
+  bucket: string; // compat: nombre/clave de la subestrategia
 };
 
 function emptyOrRanges() {
@@ -121,12 +120,26 @@ export async function dbLoadSubs(globalName: string): Promise<StrategyStore> {
   return store;
 }
 
-// Guardar 1 subestrategia en DB (1 bucket dentro de 1 situación)
+function fmtRangeNum(n: number): string {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "0";
+  // evita 9.5000000001, conserva 9.5, máximo 2 decimales
+  const r = Math.round(x * 100) / 100;
+  return String(r);
+}
+
+function buildSubNameFromStackRange(stackMin: number, stackMax: number): string {
+  return `${fmtRangeNum(stackMin)}_${fmtRangeNum(stackMax)}`;
+}
+
+// Guardar 1 subestrategia en DB (1 sub dentro de 1 situación)
 export async function dbSaveSub(item: SubStrategyItem & { globalName?: string }): Promise<DbSaveSubResult> {
   await initDB();
 
   const payload = (item as any)?.payload ?? {};
-  const situationKey = String(payload?.situacion ?? "unknown");
+
+  // ✅ compat: a veces viene "situation" en vez de "situacion"
+  const situationKey = String(payload?.situacion ?? payload?.situation ?? "unknown");
 
   // OR ranges viene del hook/panel (puede ser rows[] o obj)
   const orRanges = coerceOrRanges((item as any)?.or_ranges ?? (payload as any)?.orRanges);
@@ -135,16 +148,15 @@ export async function dbSaveSub(item: SubStrategyItem & { globalName?: string })
   const orRangesPlan = coerceOrRangesPlan((payload as any)?.orRangesPlan);
 
   // payload_json: guardamos también plan + orRanges por debug/compat
-  const payloadForJson = { ...(payload as any), orRanges, orRangesPlan };
+  const payloadForJson = { ...(payload as any), situacion: situationKey, orRanges, orRangesPlan };
 
-  // bucket por stack efectivo (p1_stack_min/max)
+  // ✅ name basado en rango real (NO buckets fijos)
   const stackMin = Number(payload?.p1_stack_min ?? 0);
   const stackMax = Number(payload?.p1_stack_max ?? 0);
-  const bucket = pickBucketName(stackMin, stackMax);
+  const bucket = buildSubNameFromStackRange(stackMin, stackMax);
 
   const situationId = await upsertSituationKey(situationKey);
 
-  // opcional: asegura buckets fijos
   await upsertSubStrategy(situationId, bucket, payloadForJson, stackMin, stackMax, orRanges);
 
   return { situationKey, bucket };
