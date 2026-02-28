@@ -21,17 +21,9 @@ let _db: Database | null = null;
 export const DB_URL = "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/musica_new.db";
 
 // Buckets fijos (BB)
-export const DEFAULT_BUCKETS = [
-  "20_75_BB",
-  "18_20_BB",
-  "14_18_BB",
-  "11_14_BB",
-  "8_11_BB",
-  "6_8_BB",
-  "0_6_BB",
-] as const;
 
-export type BucketName = (typeof DEFAULT_BUCKETS)[number];
+
+
 
 export type SituationRow = {
   id: number;
@@ -93,7 +85,6 @@ export async function initDB(): Promise<void> {
   `);
 
   // ✅ AUTO-SEED: asegurar que exista la situación principal
-  await upsertSituationKey("BTN_vs_SB_BB_FISH_FISH");
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS sub_strategies (
@@ -153,29 +144,7 @@ export async function upsertSituationKey(key: string): Promise<number> {
   return rows[0].id;
 }
 
-function parseBucketToMinMax(name: string): { min: number; max: number } {
-  // "20_75_BB" -> 20, 75
-  const m = name.match(/^(\d+(?:\.\d+)?)_(\d+(?:\.\d+)?)_BB$/);
-  if (!m) return { min: 0, max: 0 };
-  return { min: Number(m[1]), max: Number(m[2]) };
-}
 
-export async function ensureBucketsForSituation(situationId: number): Promise<void> {
-  const db = await getDB();
-
-  for (const b of DEFAULT_BUCKETS) {
-    const mm = parseBucketToMinMax(b);
-
-    await db.execute(
-      `
-      INSERT INTO sub_strategies (situation_id, name, stack_min, stack_max, unit, payload_json, created_at, updated_at)
-      VALUES (?1, ?2, ?3, ?4, 'BB', '{}', datetime('now'), datetime('now'))
-      ON CONFLICT(situation_id, name) DO NOTHING;
-    `,
-      [situationId, b, mm.min, mm.max]
-    );
-  }
-}
 
 type OrRangesLike = {
   OR_TO_CALL_ANY?: string;
@@ -438,24 +407,6 @@ export function computeSituationKey_BTN_SB_BB_FISH_FISH(): string {
   return "BTN_SB_BB_FISH_FISH";
 }
 
-export function pickBucketName(stackMin: number, stackMax: number): BucketName {
-  const exact = `${stackMin}_${stackMax}_BB` as BucketName;
-  if ((DEFAULT_BUCKETS as readonly string[]).includes(exact)) return exact;
-
-  let best: BucketName = "20_75_BB";
-  let bestScore = Number.POSITIVE_INFINITY;
-
-  for (const b of DEFAULT_BUCKETS) {
-    const mm = parseBucketToMinMax(b);
-    const contains = stackMin >= mm.min && stackMin < mm.max;
-    const score = contains ? 0 : Math.abs(stackMin - mm.min);
-    if (score < bestScore) {
-      bestScore = score;
-      best = b;
-    }
-  }
-  return best;
-}
 
 export async function deleteSubStrategyById(id: number): Promise<boolean> {
   const db = await getDB();
@@ -477,3 +428,14 @@ export async function listSituations(): Promise<SituationRow[]> {
 
   return rows || [];
 }
+
+
+
+
+
+
+
+
+
+
+
