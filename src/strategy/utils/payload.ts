@@ -49,9 +49,13 @@ export function normalizePayload(p: SubStrategyPayload): SubStrategyPayload {
   next.p3_stack_max = p3st.max;
 
   // situacion siempre derivada de posiciones
+  // situacion: respetar selección manual; derivar solo si está vacía (compat)
+const _curSitu = String((next as any).situacion ?? "").trim();
+if (_curSitu.length > 0) {
+  next.situacion = _curSitu;
+} else {
   next.situacion = computeSituacionFromPositions(next.hero_pos, next.p2_pos, next.p3_pos);
-
-  // fallback defensivo (mantengo tus checks originales)
+}// fallback defensivo (mantengo tus checks originales)
   if (!isFiniteNum(next.p1_bet_min)) next.p1_bet_min = 0;
   if (!isFiniteNum(next.p1_bet_max)) next.p1_bet_max = 0;
 

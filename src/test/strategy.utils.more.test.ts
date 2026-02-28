@@ -45,6 +45,7 @@ function basePayload(
     p3_stack_min: 10,
     p3_stack_max: 50,
 
+    // por defecto viene algo (simula selección manual)
     situacion: "x",
 
     // ✅ requerido
@@ -81,20 +82,33 @@ describe("strategy/utils.ts extra coverage", () => {
     expect(r2).toEqual({ min: 1, max: 6 });
   });
 
-  it("normalizePayload: fuerza situacion derivada y hace fallback defensivo", () => {
+  it("normalizePayload: respeta situacion manual (no machaca)", () => {
     const p = basePayload({
       hero_pos: "SB",
       p2_pos: "BB",
       p3_pos: "BTN",
+      situacion: "MI_SPOT_MANUAL",
       // fuerza valores raros para tocar fallback
       p1_bet_min: Number.NaN as any,
       p1_bet_max: Number.NaN as any,
     });
 
     const n = normalizePayload(p);
-    expect(n.situacion).toBe("SB_vs_BB_BTN");
+    expect(n.situacion).toBe("MI_SPOT_MANUAL");
     expect(n.p1_bet_min).toBe(0);
     expect(n.p1_bet_max).toBe(0);
+  });
+
+  it("normalizePayload: deriva situacion SOLO si está vacía (compat antiguos)", () => {
+    const p = basePayload({
+      hero_pos: "SB",
+      p2_pos: "BB",
+      p3_pos: "BTN",
+      situacion: "",
+    });
+
+    const n = normalizePayload(p);
+    expect(n.situacion).toBe("SB_vs_BB_BTN");
   });
 
   it("makeSubId: es determinista y se basa en payload NORMALIZADO", () => {
