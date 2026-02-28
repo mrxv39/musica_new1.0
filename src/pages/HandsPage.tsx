@@ -8,9 +8,6 @@ import { sortHands } from "./hands/sortHands";
 import { useHandsSort } from "./hands/useHandsSort";
 import { filterHandsByAllFilters, parseNumericRange } from "./hands/handsFilters";
 
-const ONE_IMAGE_PATH =
-  "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\modules\\preflop\\test_images\\screenshot_20260126071702980.bmp";
-
 const BATCH_FOLDER_PATH =
   "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\modules\\preflop\\test_images";
 
@@ -73,25 +70,22 @@ export default function HandsPage() {
     }
   };
 
-  const onRunOne = async () => {
+  // ✅ esto es lo que usa el modal (dinámico, por imagen abierta)
+  const onRunOneForImage = async (imagePath: string) => {
     const p = dbPath.trim();
-    if (!p) return;
+    const img = (imagePath || "").trim();
 
-    setBusy(true);
-    setActionStatus("1 hand: running...");
-    setLastLog("");
+    if (!p) return "ERROR: dbPath vacío";
+    if (!img) return "ERROR: imagePath vacío";
+
     try {
-      const msg = await invoke<string>("run_worker_one", { imagePath: ONE_IMAGE_PATH, dbPath: p });
+      // IMPORTANTE: la key tiene que llamarse imagePath (mismo nombre que te pide el error)
+      const msg = await invoke<string>("run_worker_one", { imagePath: img, dbPath: p });
       const m = String(msg || "");
-      setLastLog(m);
-      setActionStatus("1 hand: " + (summarize(m) || "ok"));
       await loadOnce();
+      return m.trim();
     } catch (e: any) {
-      const m = "ERROR: " + (e?.message || String(e));
-      setLastLog(m);
-      setActionStatus("1 hand: " + summarize(m));
-    } finally {
-      setBusy(false);
+      return "ERROR: " + (e?.message || String(e));
     }
   };
 
@@ -157,7 +151,6 @@ export default function HandsPage() {
         status={uiStatus}
         busy={busy}
         onReset={onReset}
-        onRunOne={onRunOne}
         onRunBatch={onRunBatch}
         stackEfRangeText={stackEfRangeText}
         onChangeStackEfRangeText={onChangeStackEfRangeText}
@@ -168,7 +161,12 @@ export default function HandsPage() {
         onClearFilters={onClearFilters}
       />
 
-      <HandsTable rows={sortedRows} onSort={onSort} />
+      <HandsTable
+        rows={sortedRows}
+        onSort={onSort}
+        canRunOne={Boolean(canLoad && dbPath.trim().length > 0)}
+        onRunOneForImage={onRunOneForImage}
+      />
 
       <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
         Rows: {sortedRows.length} / {rows.length} | DB actual: {dbPath.trim()}
@@ -180,9 +178,6 @@ export default function HandsPage() {
         </div>
       ) : null}
 
-      <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>
-        Img 1-hand: {ONE_IMAGE_PATH}
-      </div>
       <div style={{ marginTop: 2, fontSize: 12, opacity: 0.7 }}>
         Folder 50-hands: {BATCH_FOLDER_PATH}
       </div>

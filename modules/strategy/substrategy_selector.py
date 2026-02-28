@@ -1,154 +1,38 @@
 # C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\strategy\substrategy_selector.py
-
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
-from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple
 
 from modules.db.db import get_conn, init_db
 from .range_parser import hand_in_range, normalize_hand_class
 
+from .selector_models import MatchInput, SubStrategySpec
+from .selector_utils import as_text, env_truthy, load_payload
+from .selector_matching import match_row_strict
+from .selector_diagnostics import build_failure_error_message
+from .selector_fallback import fallback_nearest_se
+
 OR_KEYS = ["OR_TO_CALL_ANY", "OPEN_PUSH", "OR_TO_CALL_SMALL", "OR_TO_FOLD"]
 
 
-@dataclass(frozen=True)
-class MatchInput:
-    spot: str
-    hero_pos: str
-
-    p1_bet_bb: float
-    p1_stack_bb: float
-    p1_se_bb: float
-
-    p2_pos: str
-    p2_tipo: str
-    p2_bet_bb: float
-    p2_stack_bb: float
-
-    p3_pos: str
-    p3_tipo: str
-    p3_bet_bb: float
-    p3_stack_bb: float
-
-    hand_class: str
-    situacion: str  # NOT used for filtering in strict mode (only for debug/context)
-
-
-def _as_text(v: Any) -> str:
-    if v is None:
-        return ""
-    return str(v)
-
-
-def _req_str(payload: Dict[str, Any], key: str) -> str:
-    """Required string field: must exist and be non-empty after strip."""
-    v = payload.get(key, None)
-    s = _as_text(v).strip()
-    if not s:
-        raise ValueError(f"payload missing/empty required field '{key}'")
-    return s
-
-
-def _req_float(payload: Dict[str, Any], key: str) -> float:
-    """Required numeric field: must exist and parse to float."""
-    v = payload.get(key, None)
-    if v is None or (isinstance(v, str) and not v.strip()):
-        raise ValueError(f"payload missing required numeric field '{key}'")
-    try:
-        return float(v)
-    except Exception:
-        raise ValueError(f"payload invalid numeric field '{key}': {v!r}")
-
-
-def _between(x: float, lo: float, hi: float) -> bool:
-    return float(lo) <= float(x) <= float(hi)
-
-
-def _load_payload(row: sqlite3.Row) -> Dict[str, Any]:
-    try:
-        return json.loads(row["payload_json"] or "{}")
-    except Exception:
-        return {}
-
-
-def _row_matches_strict(inp: MatchInput, row: sqlite3.Row) -> Tuple[bool, str]:
-    """
-    STRICT MATCHING:
-    - No wildcards.
-    - Any missing/None/empty required field => row does NOT match.
-    - Numeric min/max MUST exist (no None). If you want open ranges, define them explicitly.
-    """
-    payload = _load_payload(row)
-    try:
-        # Required fields (strings)
-        spot = _req_str(payload, "spot").upper()
-        hero_pos = _req_str(payload, "hero_pos").upper()
-        p2_pos = _req_str(payload, "p2_pos").upper()
-        p3_pos = _req_str(payload, "p3_pos").upper()
-        p2_tipo = _req_str(payload, "p2_tipo").lower()
-        p3_tipo = _req_str(payload, "p3_tipo").lower()
-
-        if spot != (inp.spot or "").strip().upper():
-            return False, "spot"
-        if hero_pos != (inp.hero_pos or "").strip().upper():
-            return False, "hero_pos"
-        if p2_pos != (inp.p2_pos or "").strip().upper():
-            return False, "p2_pos"
-        if p3_pos != (inp.p3_pos or "").strip().upper():
-            return False, "p3_pos"
-        if p2_tipo != (inp.p2_tipo or "").strip().lower():
-            return False, "p2_tipo"
-        if p3_tipo != (inp.p3_tipo or "").strip().lower():
-            return False, "p3_tipo"
-
-        # Required numeric bounds (min/max)
-        p1_bet_min = _req_float(payload, "p1_bet_min")
-        p1_bet_max = _req_float(payload, "p1_bet_max")
-        p1_stack_min = _req_float(payload, "p1_stack_min")
-        p1_stack_max = _req_float(payload, "p1_stack_max")
-        p1_se_min = _req_float(payload, "p1_se_min")
-        p1_se_max = _req_float(payload, "p1_se_max")
-
-        p2_bet_min = _req_float(payload, "p2_bet_min")
-        p2_bet_max = _req_float(payload, "p2_bet_max")
-        p2_stack_min = _req_float(payload, "p2_stack_min")
-        p2_stack_max = _req_float(payload, "p2_stack_max")
-
-        p3_bet_min = _req_float(payload, "p3_bet_min")
-        p3_bet_max = _req_float(payload, "p3_bet_max")
-        p3_stack_min = _req_float(payload, "p3_stack_min")
-        p3_stack_max = _req_float(payload, "p3_stack_max")
-
-        # Apply numeric filters
-        if not _between(inp.p1_bet_bb, p1_bet_min, p1_bet_max):
-            return False, "p1_bet"
-        if not _between(inp.p1_stack_bb, p1_stack_min, p1_stack_max):
-            return False, "p1_stack"
-        if not _between(inp.p1_se_bb, p1_se_min, p1_se_max):
-            return False, "p1_se"
-
-        if not _between(inp.p2_bet_bb, p2_bet_min, p2_bet_max):
-            return False, "p2_bet"
-        if not _between(inp.p2_stack_bb, p2_stack_min, p2_stack_max):
-            return False, "p2_stack"
-
-        if not _between(inp.p3_bet_bb, p3_bet_min, p3_bet_max):
-            return False, "p3_bet"
-        if not _between(inp.p3_stack_bb, p3_stack_min, p3_stack_max):
-            return False, "p3_stack"
-
-        return True, "ok"
-
-    except ValueError as e:
-        # Treat malformed payload as non-match with explicit reason
-        return False, f"invalid_payload:{e}"
-
+# -----------------------------
+# Decision logic (OR ranges)
+# -----------------------------
 
 def _decide_move(payload: Dict[str, Any], hand_class: str) -> Dict[str, Any]:
+    """
+    Decide qué plan usar basado en OR ranges.
+
+    CAMBIO IMPORTANTE:
+    - Ya NO hay rango default.
+    - Si la mano NO está en ningún rango => no asigna move ni bet_min/max (None).
+    """
     hc = normalize_hand_class(hand_class)
+
     or_ranges = payload.get("orRanges") or payload.get("or_ranges") or {}
     plan = payload.get("orRangesPlan") or {}
 
@@ -156,24 +40,37 @@ def _decide_move(payload: Dict[str, Any], hand_class: str) -> Dict[str, Any]:
     for k in OR_KEYS:
         rng = ""
         if isinstance(or_ranges, dict):
-            rng = _as_text(or_ranges.get(k, "") or "")
+            rng = as_text(or_ranges.get(k, "") or "")
         if rng and hand_in_range(hc, rng):
             matched_keys.append(k)
 
     if len(matched_keys) > 1:
         raise ValueError(f"Hand {hc} matches multiple OR ranges: {matched_keys}")
 
-    key = matched_keys[0] if matched_keys else "OR_TO_FOLD"
+    # ✅ NO DEFAULT:
+    if not matched_keys:
+        return {"range_key": None, "move": None, "bet_min_bb": None, "bet_max_bb": None}
+
+    key = matched_keys[0]
     p = plan.get(key) if isinstance(plan, dict) else None
     if not isinstance(p, dict):
         p = {}
 
-    move = str(p.get("move", "OR"))
-    bet_min = float(p.get("bet_min_bb", 0) or 0)
-    bet_max = float(p.get("bet_max_bb", 0) or 0)
+    move = p.get("move", None)
+    bet_min = p.get("bet_min_bb", None)
+    bet_max = p.get("bet_max_bb", None)
+
+    # Normalizamos tipos si vienen (pero si faltan, quedan None)
+    move = str(move) if move is not None else None
+    bet_min = float(bet_min) if bet_min is not None else None
+    bet_max = float(bet_max) if bet_max is not None else None
 
     return {"range_key": key, "move": move, "bet_min_bb": bet_min, "bet_max_bb": bet_max}
 
+
+# -----------------------------
+# DB access
+# -----------------------------
 
 def _fetch_rows(conn: sqlite3.Connection) -> List[sqlite3.Row]:
     cur = conn.cursor()
@@ -188,6 +85,15 @@ def _fetch_rows(conn: sqlite3.Connection) -> List[sqlite3.Row]:
 
 
 def find_unique_substrategy(conn: sqlite3.Connection, inp: MatchInput) -> Tuple[sqlite3.Row, Dict[str, Any]]:
+    """
+    Default behavior:
+      - STRICT only
+      - expects exactly 1 match
+      - on failure, raises ValueError with helpful diagnostics
+
+    Optional fallback (OFF by default):
+      - enable with env var POKER_BOSS_FALLBACK_SE=1
+    """
     rows = _fetch_rows(conn)
     if not rows:
         raise ValueError("No sub_strategies rows in database")
@@ -195,25 +101,42 @@ def find_unique_substrategy(conn: sqlite3.Connection, inp: MatchInput) -> Tuple[
     matches: List[Tuple[sqlite3.Row, Dict[str, Any]]] = []
     reasons: Dict[str, int] = {}
 
+    rows_with_specs: List[Tuple[sqlite3.Row, SubStrategySpec]] = []
+
     for r in rows:
-        ok, reason = _row_matches_strict(inp, r)
+        ok, reason, spec = match_row_strict(inp, r)
         if ok:
-            matches.append((r, _load_payload(r)))
+            matches.append((r, load_payload(r)))
         else:
             reasons[reason] = reasons.get(reason, 0) + 1
 
-    if len(matches) != 1:
-        ids = [int(m[0]["id"]) for m in matches]
-        keys = [str(m[0]["situation_key"]) for m in matches]
-        # include top reasons for debugging without spamming
-        top_reasons = sorted(reasons.items(), key=lambda kv: kv[1], reverse=True)[:10]
-        raise ValueError(
-            f"Expected exactly 1 match, got {len(matches)}. matched_ids={ids}. matched_situations={keys}. "
-            f"top_nonmatch_reasons={top_reasons}. requested_situacion={inp.situacion!r}"
-        )
+        if spec is not None:
+            rows_with_specs.append((r, spec))
 
-    row, payload = matches[0]
-    return row, payload
+    # Strict success
+    if len(matches) == 1:
+        row, payload = matches[0]
+        return row, payload
+
+    # Optional fallback if zero strict matches
+    fallback_enabled = env_truthy("POKER_BOSS_FALLBACK_SE", default="0")
+    if len(matches) == 0 and fallback_enabled:
+        fb = fallback_nearest_se(inp, rows_with_specs)
+        if fb is not None:
+            row, payload, note = fb
+            payload = dict(payload)
+            payload["_match_note"] = note
+            return row, payload
+
+    # Failure (diagnostic)
+    msg = build_failure_error_message(
+        inp=inp,
+        matches=matches,
+        reasons=reasons,
+        rows_with_specs=rows_with_specs,
+        fallback_se_enabled=fallback_enabled,
+    )
+    raise ValueError(msg)
 
 
 def select_move(inp: MatchInput) -> Dict[str, Any]:
@@ -222,16 +145,27 @@ def select_move(inp: MatchInput) -> Dict[str, Any]:
     try:
         row, payload = find_unique_substrategy(conn, inp)
         decision = _decide_move(payload, inp.hand_class)
-        return {
+
+        out = {
             "sub_strategy_id": int(row["id"]),
             "sub_strategy_name": str(row["name"]),
             "situation_key": str(row["situation_key"]),
             "requested_situacion": (inp.situacion or ""),
             **decision,
         }
+
+        note = payload.get("_match_note") if isinstance(payload, dict) else None
+        if note:
+            out["match_note"] = str(note)
+
+        return out
     finally:
         conn.close()
 
+
+# -----------------------------
+# CLI
+# -----------------------------
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Select move from sub_strategies (STRICT)")
@@ -255,11 +189,17 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--p3_tipo", default="")
     p.add_argument("--p3_bet", type=float, default=0)
     p.add_argument("--p3_stack", type=float, default=0)
+
+    p.add_argument("--fallback_se", action="store_true", help="Enable fallback nearest SE for this run.")
     return p.parse_args()
 
 
 def main() -> int:
     ns = _parse_args()
+
+    if ns.fallback_se:
+        os.environ["POKER_BOSS_FALLBACK_SE"] = "1"
+
     if ns.json:
         with open(ns.json, "r", encoding="utf-8") as f:
             data = json.load(f)

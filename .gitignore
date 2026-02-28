@@ -1,74 +1,34 @@
-# =========================
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pstats
+.coverage
+htmlcov/
+coverage/
+
+# Local DB
+data/
+
+# Profiling / timing
+_profile_*.pstats
+_timing_*.jsonl
+
+# Backups
+*.bak
+*.bak_*
+
 # Node / Vite
 node_modules/
 dist/
-dist-ssr/
-*.local
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-*.log
-logs/
 
-# Editor / OS
-.vscode/*
-!.vscode/extensions.json
-.idea/
+# Editor
+.vscode/
+.gate/
+
+# OS
 .DS_Store
 Thumbs.db
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-# Python
-__pycache__/
-*.py[cod]
-*.pyd
-.pytest_cache/
-.mypy_cache/
-.venv/
-venv/
-# Rust / Tauri
-src-tauri/target/
-**/target/
-# Local data / runtime artifacts
-data/
-*.db
-*.sqlite
-*.sqlite3
-# Backups / tmp
-_backup_*/
-*.bak_*
-# Cache folders inside modules/tests
-modules/**/__pycache__/
-tests/**/__pycache__/
-# Media: NO ignorar assets del proyecto
-# Permitimos assets reales:
-!public/**
-!src-tauri/icons/**
-# Ignorar solo screenshots/temporales típicos (root)
-screenshot_*.bmp
-screenshot_*.png
-screenshot_*.jpg
-screenshot_*.jpeg
-# Si tienes carpetas concretas de capturas, ignóralas aquí (ejemplos):
-# captures/
-# screenshots/
-# Mantener fixtures bmp de templates
-!modules/preflop/templates/*.bmp
-coverage/
-proyect_promp.txt
-.gate/vitest-coverage.txt
-# backups
-*.bak
-# profiling artifacts
-*.pstats
-_profile_*.pstats
-tools/*.pstats
-
-# local timing logs
-_timing_run*.jsonl
+# Local test screenshots
+modules/preflop/test_images/
 

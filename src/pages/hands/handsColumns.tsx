@@ -92,7 +92,10 @@ function makeRawColumn(key: string): ColumnDef {
 }
 
 // ✅ factory: columns base + columns dinámicas (todas las keys del row)
-export function makeHandsColumns(onOpenImage: (path: string) => void, sampleRow?: HandsObsRow | null): ColumnDef[] {
+export function makeHandsColumns(
+  onOpenImage: (path: string, row: HandsObsRow) => void,
+  sampleRow?: HandsObsRow | null
+): ColumnDef[] {
   const base: ColumnDef[] = [
     {
       id: "time",
@@ -123,7 +126,7 @@ export function makeHandsColumns(onOpenImage: (path: string) => void, sampleRow?
             title={canOpen ? p || "" : ""}
             onClick={(e) => {
               e.stopPropagation();
-              if (p) onOpenImage(p);
+              if (p) onOpenImage(p, r);
             }}
           >
             {v ?? ""}
@@ -191,7 +194,7 @@ export function makeHandsColumns(onOpenImage: (path: string) => void, sampleRow?
             title={p}
             onClick={(e) => {
               e.stopPropagation();
-              onOpenImage(p);
+              onOpenImage(p, r);
             }}
           >
             view
@@ -207,8 +210,6 @@ export function makeHandsColumns(onOpenImage: (path: string) => void, sampleRow?
   const baseIds = new Set(base.map((c) => c.id));
   const keys = Object.keys(sample as any);
 
-  // Añadimos todas las columnas que existan en el row y que no estén cubiertas por las base.
-  // Orden: al final, alfabético (estable)
   const extra = keys
     .filter((k) => !baseIds.has(k))
     .sort((a, b) => a.localeCompare(b))

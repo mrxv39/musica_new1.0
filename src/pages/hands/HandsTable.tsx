@@ -11,6 +11,9 @@ type Props = {
   sortKey?: HandsSortKey;
   sortAsc?: boolean;
   onSort?: (key: HandsSortKey) => void;
+
+  canRunOne: boolean;
+  onRunOneForImage: (imagePath: string) => Promise<string>;
 };
 
 const VISIBLE_COLS_STORAGE_KEY = "hands.visibleColumns";
@@ -36,14 +39,23 @@ function uniqStable(xs: string[]) {
   return out;
 }
 
-export function HandsTable({ rows, sortKey, sortAsc, onSort }: Props) {
+export function HandsTable({ rows, sortKey, sortAsc, onSort, canRunOne, onRunOneForImage }: Props) {
   const [previewPath, setPreviewPath] = React.useState<string>("");
+  const [previewRow, setPreviewRow] = React.useState<HandsObsRow | null>(null);
   const [configOpen, setConfigOpen] = React.useState<boolean>(false);
 
-  // Genera columnas: base + extras dinámicas según keys reales del row
-  const columns = React.useMemo(() => makeHandsColumns((p) => setPreviewPath(p), rows?.[0] ?? null), [rows]);
+  const columns = React.useMemo(
+    () =>
+      makeHandsColumns(
+        (p, r) => {
+          setPreviewPath(p);
+          setPreviewRow(r);
+        },
+        rows?.[0] ?? null
+      ),
+    [rows]
+  );
 
-  // Visible ids (persistido). Si aparecen nuevas columnas en DB, se auto-incluyen.
   const [visibleIds, setVisibleIds] = React.useState<string[]>(() => {
     const saved = safeParseJson<string[]>(localStorage.getItem(VISIBLE_COLS_STORAGE_KEY));
     return Array.isArray(saved) ? saved : [];
@@ -52,21 +64,18 @@ export function HandsTable({ rows, sortKey, sortAsc, onSort }: Props) {
   React.useEffect(() => {
     const allIds = columns.map((c) => c.id);
     const saved = safeParseJson<string[]>(localStorage.getItem(VISIBLE_COLS_STORAGE_KEY));
-    const current = Array.isArray(saved) && saved.length > 0 ? saved : (visibleIds.length > 0 ? visibleIds : allIds);
+    const current = Array.isArray(saved) && saved.length > 0 ? saved : visibleIds.length > 0 ? visibleIds : allIds;
 
-    // merge: mantener orden de columns y añadir nuevas por defecto
     const curSet = new Set(current);
     const merged = allIds.filter((id) => curSet.has(id) || !Array.isArray(saved) || saved.length === 0);
     const final = uniqStable(merged.length > 0 ? merged : allIds);
 
-    // si no hay nada guardado y visibleIds estaba vacío, inicializamos a "todas"
     if (visibleIds.length === 0 && (!Array.isArray(saved) || saved.length === 0)) {
       setVisibleIds(final);
       localStorage.setItem(VISIBLE_COLS_STORAGE_KEY, JSON.stringify(final));
       return;
     }
 
-    // si han aparecido columnas nuevas, actualizamos el storage manteniendo selección
     if (final.length !== uniqStable(current).length) {
       setVisibleIds(final);
       localStorage.setItem(VISIBLE_COLS_STORAGE_KEY, JSON.stringify(final));
@@ -92,9 +101,22 @@ export function HandsTable({ rows, sortKey, sortAsc, onSort }: Props) {
     return <span>{sortAsc ? "↑" : "↓"}</span>;
   };
 
+  const closePreview = () => {
+    setPreviewPath("");
+    setPreviewRow(null);
+  };
+
   return (
     <>
-      {previewPath ? <ImagePreviewModal path={previewPath} onClose={() => setPreviewPath("")} /> : null}
+      {previewPath ? (
+        <ImagePreviewModal
+          path={previewPath}
+          row={previewRow}
+          canRunOne={canRunOne}
+          onRunOneForImage={onRunOneForImage}
+          onClose={closePreview}
+        />
+      ) : null}
 
       <HandsColumnsConfigModal
         open={configOpen}

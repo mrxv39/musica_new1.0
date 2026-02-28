@@ -9,7 +9,6 @@ export default function HandsToolbar({
   status,
   busy,
   onReset,
-  onRunOne,
   onRunBatch,
 
   stackEfRangeText,
@@ -32,7 +31,6 @@ export default function HandsToolbar({
 
   busy: boolean;
   onReset: () => void;
-  onRunOne: () => void;
   onRunBatch: () => void;
 
   stackEfRangeText: string;
@@ -62,10 +60,6 @@ export default function HandsToolbar({
 
       <button disabled={!canLoad || busy} onClick={onReset} title="DELETE FROM hands_obs">
         Reset
-      </button>
-
-      <button disabled={!canLoad || busy} onClick={onRunOne} title="Analiza 1 imagen (worker --max_ticks 1)">
-        1 hand
       </button>
 
       <button disabled={!canLoad || busy} onClick={onRunBatch} title="Analiza 50 imágenes de la carpeta test_images">

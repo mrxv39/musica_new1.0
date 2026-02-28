@@ -1,0 +1,128 @@
+# POKER_BOSS — PROJECT PROMPT OFICIAL
+
+## 📍 Proyecto
+Ruta:  
+C:\Users\Usuario\Desktop\proyectos\poker_boss
+
+Stack:
+- Frontend: React + TypeScript + Vitest
+- Backend: Python + pytest
+- Gates: PowerShell
+- Git hooks: .githooks (pre-commit activo)
+
+---
+
+# 🔒 REGLAS ESTRICTAS
+
+## Frontend (React + Vitest)
+
+Tests obligatorios:
+- npm run test:run
+- npm run test:coverage
+
+Un commit tipo `feat:` SOLO se permite si:
+1) npm run test:run pasa
+2) npm run test:coverage pasa y cumple umbral
+
+Los commits sin tests SOLO pueden ser:
+- wip:
+- checkpoint:
+
+Y deben incluir un TODO inmediato explícito.
+
+---
+
+# 📊 COVERAGE POLICY (INCREMENTAL)
+
+Umbral actual:
+- pages/strategy lines >= 63.0
+- strategy lines >= 55.0
+
+Reglas:
+- No bajar umbrales permanentemente.
+- Solo se permite UNA bajada temporal.
+- Cada bajada debe tener TODO explícito para subirlos.
+- Objetivo siguiente: 65 → luego 70.
+
+Nunca dejar el gate roto.
+
+---
+
+# 🚪 GATE FAST
+
+`npm run gate:fast` ejecuta:
+
+1) Vitest FAST
+2) Coverage Strategy Gate (PowerShell)
+3) pytest -m "not slow"
+
+Si gate:fast falla → NO se puede commitear.
+
+---
+
+# 🐍 BACKEND
+
+pytest.ini define:
+
+marker:
+    slow: slow tests (io-heavy, integration, long running)
+
+Tests rápidos:
+python -m pytest -q -m "not slow"
+
+---
+
+# 🧪 PRINCIPIOS DE TESTING
+
+- Testear comportamiento observable.
+- No testear implementación interna.
+- Cubrir:
+  - Flujos principales
+  - Manejo de errores
+  - Ramas condicionales
+  - Estado
+
+Evitar tests frágiles con timers salvo que sea imprescindible.
+
+---
+
+# 📈 ESTRATEGIA DE SUBIDA DE COVERAGE
+
+Orden recomendado:
+
+1) Lógica pura (model.ts, utils.ts)
+2) state.ts
+3) useStrategyPage.ts
+4) Componentes críticos
+5) Subir umbral progresivamente
+
+---
+
+# 🧱 REGLA DE CALIDAD
+
+Nunca:
+- Hacer `feat:` con coverage por debajo del umbral.
+- Bajar umbrales sin justificación.
+- Dejar un gate roto.
+
+Siempre:
+- Entregar scripts completos si se modifica un archivo.
+- Indicar ruta exacta del archivo.
+- No entregar fragmentos ambiguos.
+
+
+Me tienes que dar siempre comandos de power Shell para crear, cumplimentar archivos omodiciarlos. No asumasn que se ha modificado sin verificarlo.
+Intenta agrupar los comandos para copiar una sola vez.
+
+nO ASUMANS NADA, NO ME DIGAS DE MODIFICAR UN ARCHIVO SI NO ESTAS SEGURO DE LA SOULICON. PIDEME TODAS LAS CONFIRMACIONES QUE NECESITES PARA ACTUAR CON SEGURIDAD ALTA.
+caundo necesites el contenido de algún archivo dame comando de power Shell para sacar el contenido.
+
+solo dame explicaciones de que vas a hacer si te lo pido expresamente.
+
+Si necesitas el contenido de 5 archivos dame los 5 comandos de power Shell unificados para que se ejecuten todos a la vez.
+Si tenemos que modificar 5 archivos dame los comandos de powershell unificads para que se ejecuten todos a la vez
+Archivos de mas de 200 líneas refactor real. Split lógico en archivos pequeños
+
+---
+
+FIN.
