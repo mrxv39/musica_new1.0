@@ -3,7 +3,7 @@
  */
 import type { StrategyGlobal } from "./constants";
 
-export type Spot = "BTN" | "SB" | "BB";
+export type Spot = "BTN_vs_SB_BB_FISH_FISH";
 export type PlayerPos = "BTN" | "SB" | "BB";
 export type PlayerTipo = "fish" | "reg" | "unknown";
 

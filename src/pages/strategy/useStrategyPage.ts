@@ -8,13 +8,14 @@
  * - rows UI se derivan y se sincronizan -> editorValue (fuente de verdad)
  * - autosave debounce (sin parpadeo)
  *
- * Importante:
- * - Persistencia real: dbSaveSub usa payload.orRangesPlan y or_ranges (ranges) para columnas
+ * + situations:
+ *   - load list from DB
+ *   - create/rename/delete (con warning si tiene subs)
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { OrRangeRow, StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../strategy/types";
 
-import { dbDeleteSub, dbSaveSub } from "./db";
+import { dbDeleteSub, dbSaveSub, dbListSituations, dbUpsertSituation, dbRenameSituationKey, dbDeleteSituationKey, dbCountSubsForSituationKey } from "./db";
 import { defaultPayload, emptyStore, ensureGlobal, getSubById, listSubs, upsertSub } from "./state";
 
 import { buildRows, rowsToOrRanges, rowsToOrRangesPlan } from "./orRangesAdapter";
@@ -43,6 +44,9 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
   const [error, setError] = useState<string | null>(null);
   const [subsView, setSubsView] = useState<SubStrategyItem[]>(() => []);
 
+  // ✅ situations list from DB
+  const [situations, setSituations] = useState<string[]>(() => []);
+
   // autosave refs
   const lastManualSaveAtRef = useRef<number>(Number.NEGATIVE_INFINITY);
   const autosaveTimerRef = useRef<number | null>(null);
@@ -57,7 +61,7 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
 
   // -------- load/reload ----------
   const reload = async (): Promise<StrategyStore> => {
-    return reloadFromDb({
+    const st = await reloadFromDb({
       globalName,
       selectedId,
       setIsLoading,
@@ -69,6 +73,27 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
       setOrRangesRows,
       dirtyRef,
     });
+
+    // load situations
+    try {
+      const rows = await dbListSituations();
+      const keys = (rows ?? []).map((r: any) => String(r?.key ?? "")).filter((k) => k.length > 0);
+      setSituations(keys);
+
+      // si la seleccion actual no existe, no forzamos nada, pero si el payload no tiene situacion válida,
+      // dejamos la primera si existe
+      setEditorValue((prev) => {
+        const cur = String((prev as any)?.situacion ?? "");
+        if (cur && keys.includes(cur)) return prev;
+        if (!cur && keys.length) return { ...(prev as any), situacion: keys[0] } as any;
+        return prev;
+      });
+    } catch (e: any) {
+      // no bloqueamos el resto
+      void e;
+    }
+
+    return st;
   };
 
   useEffect(() => {
@@ -95,7 +120,124 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
     setOrRangesRows,
   });
 
-  // -------- CRUD ----------
+  // -------- situations CRUD ----------
+  const refreshSituations = async () => {
+    const rows = await dbListSituations();
+    const keys = (rows ?? []).map((r: any) => String(r?.key ?? "")).filter((k) => k.length > 0);
+    setSituations(keys);
+    return keys;
+  };
+
+  const createSituation = async (key: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await dbUpsertSituation(key);
+      const keys = await refreshSituations();
+      setEditorValue((prev) => ({ ...(prev as any), situacion: String(key).trim() }) as any);
+      setError(keys.includes(String(key).trim()) ? "Situation creada" : "Situation creada");
+    } catch (e: any) {
+      const msg = e?.message ? String(e.message) : String(e);
+      setError(`Situation CREATE ERROR: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renameSituation = async (from: string, to: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await dbRenameSituationKey(from, to);
+      await refreshSituations();
+
+      // si editorValue apuntaba a la antigua, actualiza
+      setEditorValue((prev) => {
+        const cur = String((prev as any)?.situacion ?? "");
+        if (cur === from) return { ...(prev as any), situacion: to } as any;
+        return prev;
+      });
+
+      // renombra también los nombres de subsView visibles (solo display)
+      setSubsView((prev) =>
+        prev.map((it: any) => {
+          const name = String(it?.name ?? "");
+          if (name.startsWith(from + " • ")) return { ...it, name: name.replace(from + " • ", to + " • ") };
+          return it;
+        })
+      );
+
+      setError("Situation renombrada");
+    } catch (e: any) {
+      const msg = e?.message ? String(e.message) : String(e);
+      setError(`Situation RENAME ERROR: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteSituation = async (key: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // 1) preguntar count primero
+      const n = await dbCountSubsForSituationKey(key);
+
+      // 2) UI: si tiene subs, el componente hará confirm y llamará force
+      // aquí solo intentamos sin force, para disparar el warning
+      await dbDeleteSituationKey(key, { force: false });
+
+      await refreshSituations();
+
+      setEditorValue((prev) => {
+        const cur = String((prev as any)?.situacion ?? "");
+        if (cur === key) return { ...(prev as any), situacion: "" } as any;
+        return prev;
+      });
+
+      setError(n > 0 ? "Situation borrada (y subs en cascada)" : "Situation borrada");
+    } catch (e: any) {
+      const msg = e?.message ? String(e.message) : String(e);
+
+      // Este error está diseñado: SITUATION_HAS_SUBS:<n>
+      if (msg.startsWith("SITUATION_HAS_SUBS:")) {
+        throw e; // el UI lo gestionará (confirm)
+      }
+
+      setError(`Situation DELETE ERROR: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteSituationForce = async (key: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const n = await dbCountSubsForSituationKey(key);
+      await dbDeleteSituationKey(key, { force: true });
+      await refreshSituations();
+
+      // tras borrar, recarga subs también (porque CASCADE)
+      await reload();
+
+      // si estabas en esa situation, limpia
+      setEditorValue((prev) => {
+        const cur = String((prev as any)?.situacion ?? "");
+        if (cur === key) return { ...(prev as any), situacion: "" } as any;
+        return prev;
+      });
+
+      setError(n > 0 ? "Situation borrada (subs eliminadas)" : "Situation borrada");
+    } catch (e: any) {
+      const msg = e?.message ? String(e.message) : String(e);
+      setError(`Situation DELETE ERROR: ${msg}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // -------- CRUD subs ----------
   const createNew = () => {
     const id = makeId();
     const name = `Auto sub ${subsView.length + 1}`;
@@ -299,6 +441,13 @@ export function useStrategyPage({ globalName }: { globalName: string }) {
     // ✅ rows controlados (UI)
     orRangesRows,
     setOrRangesRows: setOrRangesRowsAndSync,
+
+    // ✅ situations
+    situations,
+    createSituation,
+    renameSituation,
+    deleteSituation,
+    deleteSituationForce,
 
     isLoading,
     error,

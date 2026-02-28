@@ -21,7 +21,7 @@ function defaultOrRanges() {
 
 export function defaultPayload(): SubStrategyPayload {
   return {
-    spot: "BTN",
+    spot: "BTN_vs_SB_BB_FISH_FISH",
 
     hero_pos: "BTN",
     p1_bet_min: 0,

@@ -30,7 +30,7 @@ export default function StrategyPage() {
 
   const editorKey = useMemo(() => `${String(globalName)}:${ctrl.selectedId ?? "none"}`, [globalName, ctrl.selectedId]);
 
-  const situationKey = ctrl.editorValue?.situacion ?? "unknown";
+  const situationKey = (ctrl.editorValue as any)?.situacion ?? "unknown";
 
   return (
     <div className="strategy-page">
@@ -75,7 +75,17 @@ export default function StrategyPage() {
         />
 
         <div className="strategy-editorCol">
-          <StrategyEditor key={editorKey} value={ctrl.editorValue} onChange={ctrl.setEditorValue} showOrPanel={false} />
+          <StrategyEditor
+            key={editorKey}
+            value={ctrl.editorValue}
+            onChange={ctrl.setEditorValue}
+            showOrPanel={false}
+            situationOptions={ctrl.situations}
+            onCreateSituation={ctrl.createSituation}
+            onRenameSituation={ctrl.renameSituation}
+            onDeleteSituation={ctrl.deleteSituation}
+            onDeleteSituationForce={ctrl.deleteSituationForce}
+          />
         </div>
 
         <div className="strategy-orCol">

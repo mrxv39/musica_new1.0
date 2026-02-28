@@ -92,6 +92,9 @@ export async function initDB(): Promise<void> {
     );
   `);
 
+  // ✅ AUTO-SEED: asegurar que exista la situación principal
+  await upsertSituationKey("BTN_vs_SB_BB_FISH_FISH");
+
   await db.execute(`
     CREATE TABLE IF NOT EXISTS sub_strategies (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -198,7 +201,6 @@ const POS_SET = new Set(["BTN", "SB", "BB"]);
 const TIPO_SET = new Set(["fish", "reg", "unknown"]);
 
 // ✅ Spot real del juego (contexto), NO posición.
-// Si hoy solo trabajas preflop, esto te protege para no guardar basura.
 const SPOT_SET = new Set(["preflop", "flop", "turn", "river", "noboard"]);
 
 function asNonEmptyString(x: any): string | null {
@@ -222,7 +224,6 @@ function normalizeTipo(field: string, x: any): "fish" | "reg" | "unknown" {
   if (!TIPO_SET.has(v)) throw new Error(`sub_strategies: invalid "${field}"="${s}" (expected fish|reg|unknown)`);
   return v as any;
 }
-
 
 function toFiniteNumber(field: string, x: any): number {
   const n = typeof x === "number" ? x : Number(x);
@@ -263,26 +264,9 @@ function normalizeOrRanges(x: any): OrRangesLike & {
   };
 }
 
-/**
- * ✅ Normaliza y valida el payload que se persistirá en payload_json.
- * - Requiere TODOS los campos core y TODOS los min/max.
- * - Normaliza pos a BTN/SB/BB y tipo a fish/reg/unknown.
- * - Garantiza JSON final sin null/undefined (los filtra).
- *
- * Compat:
- * - Si spot llega como BTN/SB/BB (bug viejo de UI), lo interpretamos como hero_pos
- *   y forzamos spot="preflop".
- * - Si spot falta, forzamos spot="preflop" (este módulo es de preflop).
- */
 function normalizeAndValidateSubStrategyPayload(raw: any): any {
   const src = raw ?? {};
 
-  // -------- spot + hero_pos (compat) --------
-  // ✅ En este proyecto, spot = POS (BTN|SB|BB). NO street.
-  // Compat:
-  // - Si spot venía como POS y hero_pos falta, usamos spot como hero_pos.
-  // - Si spot venía como street (preflop/flop/turn/river/noboard), lo ignoramos para spot
-  //   y usamos hero_pos como fuente de verdad.
   const spotRaw = asNonEmptyString(src.spot);
   const heroRaw = asNonEmptyString(src.hero_pos);
 
@@ -294,14 +278,10 @@ function normalizeAndValidateSubStrategyPayload(raw: any): any {
     const spotLow = spotRaw.trim().toLowerCase();
 
     if (POS_SET.has(spotUp)) {
-      // spot es POS
       spotPosCandidate = spotUp;
-
-      // compat: bug viejo -> si hero_pos falta, usa spot como hero_pos
       if (!heroRaw) heroPosCandidate = spotUp;
     } else if (SPOT_SET.has(spotLow)) {
-      // spot venía como street -> NO lo usamos como spot-pos
-      spotPosCandidate = heroRaw; // puede ser null; validará abajo
+      spotPosCandidate = heroRaw;
     } else {
       throw new Error(
         `sub_strategies: invalid "spot"="${spotRaw}" (expected BTN|SB|BB or ${Array.from(SPOT_SET).join("|")})`
@@ -309,13 +289,11 @@ function normalizeAndValidateSubStrategyPayload(raw: any): any {
     }
   }
 
-  // Fallbacks cruzados (si uno viene y el otro no)
   if (!spotPosCandidate && heroPosCandidate) spotPosCandidate = heroPosCandidate;
 
   const spot = normalizePos("spot", spotPosCandidate);
   const hero_pos = normalizePos("hero_pos", heroPosCandidate ?? spot);
 
-  // -------- resto obligatorio --------
   const p2_pos = normalizePos("p2_pos", src.p2_pos);
   const p3_pos = normalizePos("p3_pos", src.p3_pos);
 
@@ -364,7 +342,6 @@ function normalizeAndValidateSubStrategyPayload(raw: any): any {
     orRanges,
   };
 
-  // Copia extras opcionales limpiando null/undefined (compat/backward)
   for (const [k, v] of Object.entries(src)) {
     if (k in out) continue;
     if (v === null || v === undefined) continue;
@@ -372,12 +349,8 @@ function normalizeAndValidateSubStrategyPayload(raw: any): any {
   }
 
   return out;
-}/**
- * Upsert de 1 bucket/sub.
- * ✅ Además de payload_json, persiste OR en 4 columnas fijas.
- *
- * Nota: para compatibilidad, si payload.orRanges no existe pero pasas orRangesOverride, usa override.
- */
+}
+
 export async function upsertSubStrategy(
   situationId: number,
   name: string,
@@ -392,7 +365,6 @@ export async function upsertSubStrategy(
   const sMax = toFiniteNumber("stackMax", stackMax);
   if (sMin > sMax) throw new Error(`sub_strategies: invalid bucket stackMin>stackMax (${sMin} > ${sMax})`);
 
-  // 🔒 HARD VALIDATION: si falta cualquier campo requerido -> THROW (NO guarda)
   const normalized = normalizeAndValidateSubStrategyPayload(payload);
   const payload_json = JSON.stringify(normalized);
 
@@ -466,15 +438,10 @@ export function computeSituationKey_BTN_SB_BB_FISH_FISH(): string {
   return "BTN_SB_BB_FISH_FISH";
 }
 
-/**
- * Decide bucket por stack efectivo (usa p1_stack_min/p1_stack_max).
- * Si coincide con uno de los buckets fijos, lo usa; si no, cae al más cercano por min.
- */
 export function pickBucketName(stackMin: number, stackMax: number): BucketName {
   const exact = `${stackMin}_${stackMax}_BB` as BucketName;
   if ((DEFAULT_BUCKETS as readonly string[]).includes(exact)) return exact;
 
-  // fallback: elige el bucket cuyo rango contenga stackMin, o el más cercano por distancia a min.
   let best: BucketName = "20_75_BB";
   let bestScore = Number.POSITIVE_INFINITY;
 
@@ -490,10 +457,6 @@ export function pickBucketName(stackMin: number, stackMax: number): BucketName {
   return best;
 }
 
-/**
- * Borrado por PK de sub_strategies.
- * Devuelve true si borró algo.
- */
 export async function deleteSubStrategyById(id: number): Promise<boolean> {
   const db = await getDB();
   const res: any = await db.execute(`DELETE FROM sub_strategies WHERE id = ?1;`, [id]);
@@ -501,3 +464,16 @@ export async function deleteSubStrategyById(id: number): Promise<boolean> {
   return rowsAffected > 0;
 }
 
+export async function listSituations(): Promise<SituationRow[]> {
+  const db = await getDB();
+
+  const rows = await db.select<SituationRow[]>(
+    `
+    SELECT id, key, created_at, updated_at
+    FROM situations
+    ORDER BY key ASC;
+  `
+  );
+
+  return rows || [];
+}

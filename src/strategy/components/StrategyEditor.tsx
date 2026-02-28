@@ -1,11 +1,9 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\strategy\components\StrategyEditor.tsx
  *
- * Fix TS:
- * - P1Card requiere prop "patch" (no "onChange")
- * - VillainCard requiere props "which" + "title" + "patch" (no "index" + "onChange")
- *
- * Nota: mantenemos la API pública de StrategyEditor (value + onChange) para no romper padres.
+ * Spot UI = situations (DB)
+ * - select muestra todas las situation keys
+ * - botones: Nuevo / Renombrar / Borrar (con warning si hay subs)
  */
 import { useMemo } from "react";
 import type { OrRanges, OrRangesPlan, PlayerPos, SubStrategyPayload } from "../types";
@@ -28,9 +26,15 @@ type Props = {
 
   orRangesPlan?: OrRangesPlan;
   onChangeOrRangesPlan?: (next: OrRangesPlan) => void;
+
+  // ✅ situations (DB)
+  situationOptions?: string[];
+  onCreateSituation?: (key: string) => Promise<void> | void;
+  onRenameSituation?: (from: string, to: string) => Promise<void> | void;
+  onDeleteSituation?: (key: string) => Promise<void> | void;
+  onDeleteSituationForce?: (key: string) => Promise<void> | void;
 };
 
-const SPOTS = ["BTN", "SB", "BB"] as const;
 const POS: PlayerPos[] = ["BTN", "SB", "BB"];
 
 const EMPTY_OR: OrRanges = {
@@ -48,6 +52,12 @@ export default function StrategyEditor({
   onChangeOrRanges,
   orRangesPlan,
   onChangeOrRangesPlan,
+
+  situationOptions,
+  onCreateSituation,
+  onRenameSituation,
+  onDeleteSituation,
+  onDeleteSituationForce,
 }: Props) {
   const computedSituacion = useMemo(() => {
     return computeSituacionFromPositions(value.hero_pos, value.p2_pos, value.p3_pos);
@@ -55,7 +65,7 @@ export default function StrategyEditor({
 
   function patch(p: Partial<SubStrategyPayload>) {
     const next: SubStrategyPayload = { ...value, ...p };
-    next.situacion = computeSituacionFromPositions(next.hero_pos, next.p2_pos, next.p3_pos);
+    next.situacion = String((next as any).situacion ?? "");
     onChange(next);
   }
 
@@ -75,20 +85,92 @@ export default function StrategyEditor({
       patch({ orRangesPlan: next });
     });
 
+  // options fallback: para no romper tests ni render si aún no cargó DB
+  const SITUATIONS = (situationOptions && situationOptions.length ? situationOptions : [String((value as any)?.situacion ?? "unknown")]).filter(
+    (x) => String(x).trim().length > 0
+  ) as unknown as string[];
+
+  const currentSituation = String((value as any)?.situacion ?? (SITUATIONS[0] ?? "unknown"));
+
+  const canManage = !!onCreateSituation && !!onRenameSituation && !!onDeleteSituation && !!onDeleteSituationForce;
+
+  const onNew = async () => {
+    if (!onCreateSituation) return;
+    const k = window.prompt("Nueva situation key:", "BTN_vs_SB_BB_FISH_FISH");
+    if (!k) return;
+    await onCreateSituation(String(k));
+    patch({ situacion: String(k).trim() } as any);
+  };
+
+  const onRename = async () => {
+    if (!onRenameSituation) return;
+    const from = currentSituation;
+    const to = window.prompt(`Renombrar situation:\n${from}\n\nNuevo key:`, from);
+    if (!to) return;
+    await onRenameSituation(from, String(to).trim());
+    patch({ situacion: String(to).trim() } as any);
+  };
+
+  const onDelete = async () => {
+    if (!onDeleteSituation || !onDeleteSituationForce) return;
+    const key = currentSituation;
+
+    try {
+      await onDeleteSituation(key);
+      // si se borra, limpia selección local (el hook ya refresca)
+      patch({ situacion: "" } as any);
+    } catch (e: any) {
+      const msg = e?.message ? String(e.message) : String(e);
+
+      // Nuestro contrato: SITUATION_HAS_SUBS:<n>
+      if (msg.startsWith("SITUATION_HAS_SUBS:")) {
+        const n = msg.split(":")[1] ?? "?";
+        const ok = window.confirm(
+          `La situation "${key}" tiene ${n} subestrategias vinculadas.\n\nSi borras, se borrarán TAMBIÉN (cascada).\n\n¿Quieres continuar?`
+        );
+        if (!ok) return;
+
+        await onDeleteSituationForce(key);
+        patch({ situacion: "" } as any);
+        return;
+      }
+
+      // otro error
+      window.alert(`No se pudo borrar:\n${msg}`);
+    }
+  };
+
   return (
     <div style={cardStyle}>
       <div style={headerRow}>
         <div style={{ fontWeight: 700 }}>Editor</div>
-        <div style={{ opacity: 0.7 }}>situacion: {computedSituacion}</div>
+        <div style={{ opacity: 0.7 }}>posicion: {computedSituacion}</div>
       </div>
 
       <div style={{ display: "grid", gap: 10 }}>
-        <SelectField
-          label="Spot"
-          value={value.spot}
-          options={SPOTS as unknown as string[]}
-          onChange={(v) => patch({ spot: v as any })}
-        />
+        <div>
+          <SelectField
+            label="Spot"
+            value={currentSituation as any}
+            options={SITUATIONS as any}
+            onChange={(v) => patch({ situacion: String(v) } as any)}
+          />
+
+          {canManage ? (
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button type="button" onClick={() => void onNew()} style={{ padding: "6px 10px", borderRadius: 8 }}>
+                + Nueva
+              </button>
+              <button type="button" onClick={() => void onRename()} style={{ padding: "6px 10px", borderRadius: 8 }}>
+                Renombrar
+              </button>
+              <button type="button" onClick={() => void onDelete()} style={{ padding: "6px 10px", borderRadius: 8 }}>
+                Borrar
+              </button>
+            </div>
+          ) : null}
+        </div>
+
         <SelectField
           label="Hero Pos"
           value={value.hero_pos}
@@ -98,13 +180,7 @@ export default function StrategyEditor({
       </div>
 
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-        {/* ✅ Nuevo contrato: patch */}
         <P1Card value={value} patch={patch} />
-
-        {/* ✅ Nuevo contrato: which + title + patch */}
-        {/* Nota: si Which es un union de strings tipo "P2"/"P3" esto encaja.
-            Si fuese otro formato, seguimos compilando porque el valor ya coincide
-            con los labels usados por el componente. */}
         <VillainCard which="p2" title="P2" value={value} patch={patch} />
         <VillainCard which="p3" title="P3" value={value} patch={patch} />
       </div>
@@ -112,7 +188,7 @@ export default function StrategyEditor({
       {showOrPanel ? (
         <div style={{ marginTop: 12 }}>
           <OrRangesPanel
-            situationKey={value.situacion}
+            situationKey={currentSituation}
             value={effectiveOrRanges}
             onChange={handleOrRangesChange}
             plan={effectivePlan}
@@ -125,4 +201,3 @@ export default function StrategyEditor({
     </div>
   );
 }
-
