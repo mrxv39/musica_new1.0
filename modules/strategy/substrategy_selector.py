@@ -28,8 +28,8 @@ def _decide_move(payload: Dict[str, Any], hand_class: str) -> Dict[str, Any]:
     Decide qué plan usar basado en OR ranges.
 
     CAMBIO IMPORTANTE:
-    - Ya NO hay rango default.
-    - Si la mano NO está en ningún rango => no asigna move ni bet_min/max (None).
+    - Ya NO hay rango default explícito.
+    - Si la mano NO está en ningún rango => por omisión: move=FOLD y bet_min/max=0.
     """
     hc = normalize_hand_class(hand_class)
 
@@ -47,9 +47,9 @@ def _decide_move(payload: Dict[str, Any], hand_class: str) -> Dict[str, Any]:
     if len(matched_keys) > 1:
         raise ValueError(f"Hand {hc} matches multiple OR ranges: {matched_keys}")
 
-    # ✅ NO DEFAULT:
+    # ✅ DEFAULT (OMISIÓN): si no está en ningún rango => FOLD 0
     if not matched_keys:
-        return {"range_key": None, "move": None, "bet_min_bb": None, "bet_max_bb": None}
+        return {"range_key": "FOLD", "move": "FOLD", "bet_min_bb": 0.0, "bet_max_bb": 0.0}
 
     key = matched_keys[0]
     p = plan.get(key) if isinstance(plan, dict) else None
