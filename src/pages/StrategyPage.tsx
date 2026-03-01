@@ -12,11 +12,13 @@ import { useStrategyPage } from "./strategy/useStrategyPage";
 import StrategySidebar from "./strategy/components/StrategySidebar";
 import StrategyPreview from "./strategy/components/StrategyPreview";
 
-const DEFAULT_GLOBALS = ["default"];
+const FALLBACK_GLOBAL = "main";
 
 export default function StrategyPage() {
-  const globals = DEFAULT_GLOBALS;
-  const [globalName, setGlobalName] = useState<string>(globals[0] ?? "default");
+  // Fase 1: NO usamos "default" en ningún sitio.
+  // Mantengo un único global "main" como puente hasta que migremos a Spot-based.
+  const globals = useMemo(() => [FALLBACK_GLOBAL], []);
+  const [globalName, setGlobalName] = useState<string>(globals[0] ?? FALLBACK_GLOBAL);
 
   const ctrl = useStrategyPage({ globalName });
 
@@ -28,7 +30,10 @@ export default function StrategyPage() {
     return () => window.clearTimeout(t);
   }, [ctrl.error]);
 
-  const editorKey = useMemo(() => `${String(globalName)}:${ctrl.selectedId ?? "none"}`, [globalName, ctrl.selectedId]);
+  const editorKey = useMemo(
+    () => `${String(globalName)}:${ctrl.selectedId ?? "none"}`,
+    [globalName, ctrl.selectedId]
+  );
 
   const situationKey = (ctrl.editorValue as any)?.situacion ?? "unknown";
 
@@ -89,7 +94,11 @@ export default function StrategyPage() {
         </div>
 
         <div className="strategy-orCol">
-          <OrRangesPanel situationKey={situationKey} orRanges={ctrl.orRangesRows} onChangeOrRanges={ctrl.setOrRangesRows} />
+          <OrRangesPanel
+            situationKey={situationKey}
+            orRanges={ctrl.orRangesRows}
+            onChangeOrRanges={ctrl.setOrRangesRows}
+          />
         </div>
       </div>
 
