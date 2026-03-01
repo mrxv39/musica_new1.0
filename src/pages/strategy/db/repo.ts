@@ -1,36 +1,24 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\strategy\db\repo.ts
  *
- * DB boundary (SQLite real via @tauri-apps/plugin-sql)
- * - Guarda OR ranges como 4 columnas (no JSON)  ✅
- * - Guarda OR plan (move + bet_min/max) en payload_json ✅
- * - Carga OR ranges desde columnas y OR plan desde payload_json ✅
- *
- * + Situations CRUD:
- *   - list
- *   - create (upsert)
- *   - rename
- *   - delete (warn si tiene subs; force => cascada)
+ * REBUILD desde cero: boundary estable para StrategyPage
+ * - Situations CRUD (delete force soportado)
+ * - Subs CRUD mínimo (persist payload_json)
  */
+
 import type { StrategyStore, SubStrategyItem, SubStrategyPayload } from "../../../strategy/types";
 import {
   initDB,
-  getDB,
-  listAllSubStrategies,
   listSituations,
   upsertSituationKey,
+  renameSituationKey,
+  deleteSituationByKey,
+  countSubsForSituationKey,
+  listAllSubStrategies,
   upsertSubStrategy,
   deleteSubStrategyById,
 } from "../../../db/sql";
 import { ensureGlobal, emptyStore } from "../state";
-import { coerceOrRangesPlan } from "../orRangesAdapter";
-import { SQL } from "./queries";
-import { buildPayloadFromDb, buildSubNameFromStackRange, coerceOrRanges } from "./mappers";
-
-export type DbSaveSubResult = {
-  situationKey: string;
-  bucket: string; // compat: nombre/clave de la subestrategia
-};
 
 export type DbSituation = {
   id: number;
@@ -39,7 +27,11 @@ export type DbSituation = {
   updated_at: string;
 };
 
-// Inicialización real DB
+export type DbSaveSubResult = {
+  situationKey: string;
+  bucket: string;
+};
+
 export async function dbInit(): Promise<void> {
   await initDB();
 }
@@ -48,14 +40,13 @@ export async function dbInit(): Promise<void> {
 // Situations (CRUD)
 // ------------------------------
 
-export async function dbLoadSituations(): Promise<DbSituation[]> {
+export async function dbListSituations(): Promise<DbSituation[]> {
   await initDB();
   return (await listSituations()) as any;
 }
 
-// Compat alias
-export async function dbListSituations(): Promise<DbSituation[]> {
-  return await dbLoadSituations();
+export async function dbLoadSituations(): Promise<DbSituation[]> {
+  return await dbListSituations();
 }
 
 export async function dbUpsertSituation(key: string): Promise<number> {
@@ -65,67 +56,38 @@ export async function dbUpsertSituation(key: string): Promise<number> {
   return await upsertSituationKey(k);
 }
 
-// ✅ Compat: algunos imports viejos esperan dbUpsertSituationKey
 export async function dbUpsertSituationKey(key: string): Promise<number> {
   return await dbUpsertSituation(key);
 }
 
 export async function dbCountSubsForSituationKey(key: string): Promise<number> {
-  await initDB();
-  const db = await getDB();
-  const k = String(key ?? "").trim();
-  if (!k) return 0;
-
-  const rows = await db.select<Array<{ n: number }>>(SQL.countSubsForSituationKey, [k]);
-  const n = Number((rows?.[0] as any)?.n ?? 0);
-  return Number.isFinite(n) ? n : 0;
+  return await countSubsForSituationKey(String(key ?? "").trim());
 }
 
 export async function dbRenameSituationKey(oldKey: string, newKey: string): Promise<void> {
-  await initDB();
-  const db = await getDB();
-
-  const from = String(oldKey ?? "").trim();
-  const to = String(newKey ?? "").trim();
-  if (!from) throw new Error("oldKey vacío");
-  if (!to) throw new Error("newKey vacío");
-  if (from === to) return;
-
-  // existe origen?
-  const src = await db.select<Array<{ id: number }>>(SQL.selectSituationIdByKey, [from]);
-  if (!src || src.length === 0) throw new Error(`No existe situation: ${from}`);
-
-  // destino ya existe?
-  const dst = await db.select<Array<{ id: number }>>(SQL.selectSituationIdByKey, [to]);
-  if (dst && dst.length > 0) throw new Error(`Ya existe situation con key: ${to}`);
-
-  await db.execute(SQL.updateSituationKey, [to, from]);
+  return await renameSituationKey(oldKey, newKey);
 }
 
 type DeleteOpts = { force?: boolean };
 
-// ✅ Compat: acepta boolean (viejo) o {force}
 export async function dbDeleteSituationKey(
   key: string,
   opts?: DeleteOpts | boolean
 ): Promise<{ deleted: boolean; subCount: number }> {
   await initDB();
-  const db = await getDB();
-
   const k = String(key ?? "").trim();
   if (!k) throw new Error("key vacío");
 
   const force = typeof opts === "boolean" ? opts : (opts?.force ?? false);
   const subCount = await dbCountSubsForSituationKey(k);
 
+  // 🔒 En este rebuild: SIEMPRE soportamos force.
+  // Si force=false y hay subs -> forzamos el patrón de confirmación del UI
   if (subCount > 0 && !force) {
-    // el UI/hook debe pedir confirmación
     throw new Error(`SITUATION_HAS_SUBS:${subCount}`);
   }
 
-  // Si force=true y hay subs, con FK ON DELETE CASCADE se borran también.
-  const res: any = await db.execute(SQL.deleteSituationByKey, [k]);
-  const rowsAffected = Number((res as any)?.rowsAffected ?? 0);
+  const rowsAffected = await deleteSituationByKey(k);
   return { deleted: rowsAffected > 0, subCount };
 }
 
@@ -133,70 +95,67 @@ export async function dbDeleteSituationKey(
 // Subs load/save/delete
 // ------------------------------
 
-// Cargar subs (para UI): cargamos TODO lo que exista en DB y lo metemos en globals[globalName]
 export async function dbLoadSubs(globalName: string): Promise<StrategyStore> {
   await initDB();
 
   const rows = await listAllSubStrategies();
   const store = ensureGlobal(emptyStore(), globalName);
 
-  const subs: SubStrategyItem[] = (rows ?? []).map((r) => {
-    const payload = buildPayloadFromDb(r.payload_json, r.situation_key, r);
+  const subs: any[] = (rows ?? []).map((r: any) => {
+    let payload: SubStrategyPayload;
+    try {
+      payload = JSON.parse(String(r.payload_json ?? "{}"));
+    } catch {
+      payload = {} as any;
+    }
 
-    // compat: dejamos también "or_ranges" (obj plano)
-    const or_ranges = (payload as any).orRanges;
+    // fuente de verdad: situacion = situation_key
+    (payload as any).situacion = String(r.situation_key ?? "");
 
     return {
       id: `db_${r.id}`,
       name: `${r.situation_key} • ${r.name}`,
       payload,
-      or_ranges,
-    } as any;
+      // compat: algunos componentes esperan or_ranges / orRanges
+      or_ranges: (payload as any).orRanges ?? undefined,
+    };
   });
 
   (store as any).globals[globalName].subs = subs;
   return store;
 }
 
-// Guardar 1 subestrategia en DB (1 sub dentro de 1 situación)
+function buildBucketFromStackRange(min: number, max: number): string {
+  const a = Number.isFinite(min) ? min : 0;
+  const b = Number.isFinite(max) ? max : 0;
+  return `${a}_${b}_BB`;
+}
+
 export async function dbSaveSub(item: SubStrategyItem & { globalName?: string }): Promise<DbSaveSubResult> {
   await initDB();
 
   const payload = (item as any)?.payload;
 
-  // ✅ HARD GUARD: no permitir payload vacío/undefined
   if (!payload || typeof payload !== "object" || Object.keys(payload).length === 0) {
     throw new Error("Empty payload");
   }
 
-  // ✅ compat: a veces viene "situation" en vez de "situacion"
   const situationKey = String((payload as any)?.situacion ?? (payload as any)?.situation ?? "").trim();
   if (!situationKey) throw new Error("Missing situation key");
 
-  // OR ranges viene del hook/panel (puede ser rows[] o obj)
-  const orRanges = coerceOrRanges((item as any)?.or_ranges ?? (payload as any)?.orRanges);
-
-  // OR plan: viene del payload (fuente de verdad)
-  const orRangesPlan = coerceOrRangesPlan((payload as any)?.orRangesPlan);
-
-  // payload_json: guardamos también plan + orRanges por debug/compat
-  const payloadForJson: SubStrategyPayload = { ...(payload as any), situacion: situationKey, orRanges, orRangesPlan };
-
-  // ✅ name basado en rango real (NO buckets fijos)
+  // Generamos el nombre de la sub por rango de stack (como ya venías haciendo)
   const stackMin = Number((payload as any)?.p1_stack_min ?? 0);
   const stackMax = Number((payload as any)?.p1_stack_max ?? 0);
-  const bucket = buildSubNameFromStackRange(stackMin, stackMax);
+  const bucket = buildBucketFromStackRange(stackMin, stackMax);
 
   const situationId = await upsertSituationKey(situationKey);
 
-  await upsertSubStrategy(situationId, bucket, payloadForJson, stackMin, stackMax, orRanges);
+  // Guardamos todo el payload; que el editor/UI decida qué usa
+  await upsertSubStrategy(situationId, bucket, payload, stackMin, stackMax);
 
   return { situationKey, bucket };
 }
 
-/**
- * Borrar subestrategia por id UI "db_{id}".
- */
 export async function dbDeleteSub(uiId: string): Promise<void> {
   await initDB();
 
@@ -206,7 +165,3 @@ export async function dbDeleteSub(uiId: string): Promise<void> {
   const ok = await deleteSubStrategyById(Number(m[1]));
   if (!ok) throw new Error(`Not found: ${uiId}`);
 }
-
-
-
-
