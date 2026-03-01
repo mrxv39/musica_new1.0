@@ -125,7 +125,7 @@ export default function StrategySidebar(props: Props) {
           New
         </button>
 
-        <button type="button" onClick={onDuplicate} disabled={disabled}>
+        <button type="button" onClick={() => onDuplicate()} disabled={disabled}>
           Duplicate
         </button>
 
