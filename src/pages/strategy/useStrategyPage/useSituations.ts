@@ -13,6 +13,33 @@ import {
 
 type SetError = (v: string | null) => void;
 
+// Normalizamos a shape que la UI suele esperar: { key }
+type SituationItem = { key: string };
+
+// Aceptamos input flexible para no romper callers antiguos
+function normalizeSituations(input: any): SituationItem[] {
+  const arr = Array.isArray(input) ? input : [];
+  const out: SituationItem[] = [];
+
+  for (const it of arr) {
+    if (typeof it === "string") {
+      const k = it.trim();
+      if (k) out.push({ key: k });
+      continue;
+    }
+    const k = String(it?.key ?? it?.name ?? it?.value ?? "").trim();
+    if (k) out.push({ key: k });
+  }
+
+  // dedupe manteniendo orden
+  const seen = new Set<string>();
+  return out.filter((x) => {
+    if (seen.has(x.key)) return false;
+    seen.add(x.key);
+    return true;
+  });
+}
+
 export function useSituations(args: {
   setIsLoading: (v: boolean) => void;
   setError: SetError;
@@ -22,13 +49,19 @@ export function useSituations(args: {
 }) {
   const { setIsLoading, setError, setEditorValueClean, reload, setSubsView } = args;
 
-  const [situations, setSituations] = useState<string[]>(() => []);
+  // ⚠️ antes era string[]; ahora es [{key}] para que el <select> no muestre undefined
+  const [situations, _setSituations] = useState<SituationItem[]>(() => []);
+
+  // Setter “compatible” (acepta string[] o {key}[])
+  const setSituations = useCallback((v: any) => {
+    _setSituations(normalizeSituations(v));
+  }, []);
 
   const refreshSituations = useCallback(async () => {
     const rows = await dbListSituations();
-    const keys = (rows ?? []).map((r: any) => String(r?.key ?? "")).filter((k) => k.length > 0);
-    setSituations(keys);
-    return keys;
+    const items = normalizeSituations((rows ?? []).map((r: any) => ({ key: String(r?.key ?? "") })));
+    _setSituations(items);
+    return items;
   }, []);
 
   const createSituation = useCallback(
@@ -36,9 +69,10 @@ export function useSituations(args: {
       setIsLoading(true);
       setError(null);
       try {
-        await dbUpsertSituation(key);
+        const k = String(key ?? "").trim();
+        await dbUpsertSituation(k);
         await refreshSituations();
-        setEditorValueClean((prev: any) => ({ ...(prev as any), situacion: String(key).trim() }) as any);
+        setEditorValueClean((prev: any) => ({ ...(prev as any), situacion: k }) as any);
         setError("Situation creada");
       } catch (e: any) {
         const msg = e?.message ? String(e.message) : String(e);
@@ -143,8 +177,8 @@ export function useSituations(args: {
   );
 
   return {
-    situations,
-    setSituations, // útil para preload desde reload()
+    situations, // ahora [{key}] (evita undefined en el select)
+    setSituations, // setter compatible
     refreshSituations,
     createSituation,
     renameSituation,
@@ -152,4 +186,3 @@ export function useSituations(args: {
     deleteSituationForce,
   };
 }
-

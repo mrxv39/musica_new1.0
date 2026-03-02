@@ -58,8 +58,13 @@ export function useSaveAndCopy(args: {
 
       try {
         const id = selectedId ?? makeId();
-        const existing =
-          (id ? subsView.find((x: any) => (x as any)?.id === id) : null) ?? (id ? getSubById(store, globalName, id) : null);
+
+        // Nota: no necesitamos "existing" (solo causaba warning TS).
+        // El nombre viene del item actual si existe, o por defecto.
+        const currentName =
+          (id ? (subsView.find((x: any) => (x as any)?.id === id) as any)?.name : null) ??
+          (id ? (getSubById(store, globalName, id) as any)?.name : null) ??
+          `Auto sub ${subsView.length + 1}`;
 
         const p = coercePayload(editorValue);
 
@@ -71,7 +76,7 @@ export function useSaveAndCopy(args: {
 
         const item: SubStrategyItem = {
           id,
-          name: (existing as any)?.name ?? `Auto sub ${subsView.length + 1}`,
+          name: String(currentName),
           payload: payloadToSave,
           or_ranges: rows as any,
         } as any;

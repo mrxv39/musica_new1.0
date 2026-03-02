@@ -26,15 +26,14 @@ export default function StrategyPage() {
   // editorKey para reset al cambiar selección/spot
   const editorKey = useMemo(
     () => `${String(ctrl.selectedSituationKey ?? "none")}:${ctrl.selectedId ?? "none"}`,
-    [ctrl.selectedSituationKey, ctrl.selectedId],
+    [ctrl.selectedSituationKey, ctrl.selectedId]
   );
 
-  const situationKey = ctrl.selectedSituationKey ?? "unknown";
+  const situationKey = String(ctrl.selectedSituationKey ?? "").trim() || "unknown";
 
   // Empty state: no hay spots
   if (!ctrl.isLoading && (ctrl.situations?.length ?? 0) === 0) {
     const onCreateFirst = async () => {
-      // creación simple y determinista: spot_1, spot_2...
       const k = `spot_${Date.now()}`;
       await ctrl.createSituation(k);
     };
@@ -98,6 +97,9 @@ export default function StrategyPage() {
     );
   }
 
+  // ✅ situations ya es string[]
+  const situationKeys = (ctrl.situations ?? []).map((s: any) => String(s)).filter((x) => x.trim().length > 0);
+
   return (
     <div className="strategy-page">
       {ctrl.error && toastVisible && (
@@ -125,9 +127,9 @@ export default function StrategyPage() {
 
       <div className="strategy-top3">
         <StrategySidebar
-          // Reutilizamos el sidebar: “globals” ahora son spots
           globalName={String(ctrl.selectedSituationKey ?? "")}
-          globals={(ctrl.situations ?? []).map((s: any) => String(s.key))}
+          // ✅ antes era s.key (mal). Ahora es string directo.
+          globals={situationKeys}
           onChangeGlobal={(k) => ctrl.setSelectedSituationKey(String(k))}
           isLoading={ctrl.isLoading}
           status={ctrl.error ?? ""}
@@ -147,11 +149,13 @@ export default function StrategyPage() {
             value={(ctrl.editorValue as any) ?? ({} as any)}
             onChange={ctrl.setEditorValue as any}
             showOrPanel={false}
-            situationOptions={(ctrl.situations ?? []).map((s: any) => String(s.key))}
+            // ✅ antes era s.key (mal). Ahora string directo.
+            situationOptions={situationKeys}
             onCreateSituation={async (k) => ctrl.createSituation(String(k))}
             onRenameSituation={async (from, to) => ctrl.renameSituation(String(from), String(to))}
-            onDeleteSituation={async (k) => ctrl.deleteSituation(String(k))}
-            onDeleteSituationForce={async (k) => ctrl.deleteSituationForce(String(k))}
+            // ✅ aunque llegue undefined, useStrategyPage ya blinda y usa selectedSituationKey
+            onDeleteSituation={async (k) => ctrl.deleteSituation(k as any)}
+            onDeleteSituationForce={async (k) => ctrl.deleteSituationForce(k as any)}
           />
         </div>
 
@@ -189,5 +193,3 @@ function defaultPayload(): any {
     orRangesPlan: {},
   };
 }
-
-

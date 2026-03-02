@@ -1,7 +1,7 @@
 /**
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\strategy\db\repo.ts
  *
- * REBUILD desde cero: boundary estable para StrategyPage
+ * Boundary estable para StrategyPage
  * - Situations CRUD (delete force soportado)
  * - Subs CRUD mínimo (persist payload_json)
  */
@@ -81,8 +81,6 @@ export async function dbDeleteSituationKey(
   const force = typeof opts === "boolean" ? opts : (opts?.force ?? false);
   const subCount = await dbCountSubsForSituationKey(k);
 
-  // 🔒 En este rebuild: SIEMPRE soportamos force.
-  // Si force=false y hay subs -> forzamos el patrón de confirmación del UI
   if (subCount > 0 && !force) {
     throw new Error(`SITUATION_HAS_SUBS:${subCount}`);
   }
@@ -116,7 +114,6 @@ export async function dbLoadSubs(globalName: string): Promise<StrategyStore> {
       id: `db_${r.id}`,
       name: `${r.situation_key} • ${r.name}`,
       payload,
-      // compat: algunos componentes esperan or_ranges / orRanges
       or_ranges: (payload as any).orRanges ?? undefined,
     };
   });
@@ -131,6 +128,14 @@ function buildBucketFromStackRange(min: number, max: number): string {
   return `${a}_${b}_BB`;
 }
 
+function buildNameFromPayload(p: any): string {
+  const stackMin = Number(p?.p1_stack_min ?? 0);
+  const stackMax = Number(p?.p1_stack_max ?? 0);
+  const p2tipo = String(p?.p2_tipo ?? "unknown").trim() || "unknown";
+  const p3tipo = String(p?.p3_tipo ?? "unknown").trim() || "unknown";
+  return `${stackMin}_${stackMax}_${p2tipo}_${p3tipo}`;
+}
+
 export async function dbSaveSub(item: SubStrategyItem & { globalName?: string }): Promise<DbSaveSubResult> {
   await initDB();
 
@@ -140,18 +145,35 @@ export async function dbSaveSub(item: SubStrategyItem & { globalName?: string })
     throw new Error("Empty payload");
   }
 
-  const situationKey = String((payload as any)?.situacion ?? (payload as any)?.situation ?? "").trim();
+  // Mapping legacy: situation -> situacion
+  if (!(payload as any).situacion && (payload as any).situation) {
+    (payload as any).situacion = (payload as any).situation;
+  }
+
+  const situationKey = String((payload as any)?.situacion ?? "").trim();
   if (!situationKey) throw new Error("Missing situation key");
 
-  // Generamos el nombre de la sub por rango de stack (como ya venías haciendo)
+  // ✅ CONTRATO NUEVO: Guardar sub NO debe crear situations.
+  // Si la situacion no existe, rechazamos.
+  const situations = (await listSituations()) as any[];
+  const exists = (situations ?? []).some((s: any) => String(s?.key ?? "").trim() === situationKey);
+  if (!exists) {
+    throw new Error(`SITUATION_NOT_FOUND:${situationKey}`);
+  }
+
   const stackMin = Number((payload as any)?.p1_stack_min ?? 0);
   const stackMax = Number((payload as any)?.p1_stack_max ?? 0);
+
   const bucket = buildBucketFromStackRange(stackMin, stackMax);
+  const name = buildNameFromPayload(payload);
 
-  const situationId = await upsertSituationKey(situationKey);
+  // ⚠️ Ya no hacemos upsertSituationKey aquí. Solo resolvemos el id existente.
+  const situationId = Number((situations ?? []).find((s: any) => String(s?.key ?? "").trim() === situationKey)?.id);
+  if (!Number.isFinite(situationId) || situationId <= 0) {
+    throw new Error(`SITUATION_NOT_FOUND:${situationKey}`);
+  }
 
-  // Guardamos todo el payload; que el editor/UI decida qué usa
-  await upsertSubStrategy(situationId, bucket, payload, stackMin, stackMax);
+  await upsertSubStrategy(situationId, name, payload, stackMin, stackMax);
 
   return { situationKey, bucket };
 }
