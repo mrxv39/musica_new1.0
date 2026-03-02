@@ -21,20 +21,22 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-sql": "^2.3.2",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
-    "typescript": "~5.8.3",
-    "jsdom": "^28.1.0",
-    "@types/react-dom": "^19.1.6",
-    "@vitest/coverage-v8": "^4.0.18",
-    "vite": "^7.0.4",
-    "vitest": "^4.0.18",
-    "@testing-library/user-event": "^14.6.1",
-    "@testing-library/react": "^16.3.2",
     "@tauri-apps/cli": "^2",
-    "cross-env": "^7.0.3",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.3.3",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
-    "@types/react": "^19.1.8"
+    "@vitest/coverage-v8": "^4.0.18",
+    "cross-env": "^7.0.3",
+    "jsdom": "^28.1.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4",
+    "vitest": "^4.0.18"
   }
 }

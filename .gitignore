@@ -34,3 +34,6 @@ modules/preflop/test_images/
 
 
 dump_no_default_strategy.txt
+
+tools/
+

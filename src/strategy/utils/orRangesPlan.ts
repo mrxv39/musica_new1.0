@@ -24,8 +24,8 @@ export function ensureOrRangesPlan(next: SubStrategyPayload): void {
 
     if (k === "OPEN_PUSH") {
       row.move = "OPEN_PUSH";
-      row.bet_min_bb = next.p1_stack_min;
-      row.bet_max_bb = next.p1_stack_max;
+      row.bet_min_bb = (next as any).p1_stack_min;
+      row.bet_max_bb = (next as any).p1_stack_max;
       continue;
     }
 

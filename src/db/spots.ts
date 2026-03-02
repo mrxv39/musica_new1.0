@@ -26,8 +26,27 @@ export type StrategyRow = {
   spot_id: number;
   name: string;
   description: string | null;
+  payload_json: string;
   created_at: string;
 };
+
+async function defensiveMigration_StrategyPayload(db: any): Promise<void> {
+  // Contract del test: que exista strategies.payload_json (TEXT)
+  const cols = (await db.select(`PRAGMA table_info(strategies);`)) as any[];
+  const existing = new Set(
+    (cols ?? []).map((c: any) => String(c?.name ?? "").trim()).filter(Boolean)
+  );
+
+  if (!existing.has("payload_json")) {
+    try {
+      await db.execute(
+        `ALTER TABLE strategies ADD COLUMN payload_json TEXT NOT NULL DEFAULT '{}';`
+      );
+    } catch {
+      // idempotente
+    }
+  }
+}
 
 export async function initSpotsDB(): Promise<void> {
   if (_initSpotsPromise) return _initSpotsPromise;
@@ -52,6 +71,7 @@ export async function initSpotsDB(): Promise<void> {
         spot_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
+        payload_json TEXT NOT NULL DEFAULT '{}',
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (spot_id) REFERENCES spots(id) ON DELETE CASCADE
       );
@@ -61,6 +81,9 @@ export async function initSpotsDB(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_strategies_spot_id
       ON strategies(spot_id);
     `);
+
+    // ✅ Migración defensiva (por si la tabla existía sin payload_json)
+    await defensiveMigration_StrategyPayload(db);
   })();
 
   return _initSpotsPromise;
@@ -71,9 +94,9 @@ export async function initSpotsDB(): Promise<void> {
 export async function listSpots(): Promise<SpotRow[]> {
   await initSpotsDB();
   const db = await getDB();
-  return await db.select<SpotRow[]>(
+  return (await db.select(
     `SELECT id, name, description, created_at FROM spots ORDER BY name ASC;`
-  );
+  )) as SpotRow[];
 }
 
 export async function createSpot(name: string, description?: string): Promise<void> {
@@ -119,11 +142,7 @@ export async function deleteSpot(id: number): Promise<boolean> {
   const n = Number(id);
   if (!Number.isFinite(n) || n <= 0) throw new Error("Invalid spot id");
 
-  const res: any = await db.execute(
-    `DELETE FROM spots WHERE id=?1;`,
-    [n]
-  );
-
+  const res: any = await db.execute(`DELETE FROM spots WHERE id=?1;`, [n]);
   return Number(res?.rowsAffected ?? 0) > 0;
 }
 
@@ -136,21 +155,26 @@ export async function listStrategiesForSpot(spotId: number): Promise<StrategyRow
   const n = Number(spotId);
   if (!Number.isFinite(n) || n <= 0) return [];
 
-  return await db.select<StrategyRow[]>(
+  return (await db.select(
     `
-      SELECT id, spot_id, name, description, created_at
+      SELECT id, spot_id, name, description, payload_json, created_at
       FROM strategies
       WHERE spot_id=?1
       ORDER BY name ASC;
     `,
     [n]
-  );
+  )) as StrategyRow[];
 }
 
+/**
+ * Compat:
+ * - createStrategy(spotId, name, {} )  => payload inicial (contract test)
+ * - createStrategy(spotId, name, "desc") => description legacy
+ */
 export async function createStrategy(
   spotId: number,
   name: string,
-  description?: string
+  payloadOrDescription?: any
 ): Promise<void> {
   await initSpotsDB();
   const db = await getDB();
@@ -161,12 +185,28 @@ export async function createStrategy(
   const n = String(name ?? "").trim();
   if (!n) throw new Error("Strategy name vacío");
 
+  let description: string | null = null;
+  let payload: any = {};
+
+  if (typeof payloadOrDescription === "string") {
+    description = payloadOrDescription;
+    payload = {};
+  } else if (payloadOrDescription && typeof payloadOrDescription === "object") {
+    description = null;
+    payload = payloadOrDescription;
+  } else {
+    description = null;
+    payload = {};
+  }
+
+  const payload_json = JSON.stringify(payload ?? {});
+
   await db.execute(
     `
-      INSERT INTO strategies (spot_id, name, description, created_at)
-      VALUES (?1, ?2, ?3, datetime('now'));
+      INSERT INTO strategies (spot_id, name, description, payload_json, created_at)
+      VALUES (?1, ?2, ?3, ?4, datetime('now'));
     `,
-    [sid, n, description ?? null]
+    [sid, n, description, payload_json]
   );
 }
 
@@ -201,10 +241,47 @@ export async function deleteStrategy(id: number): Promise<boolean> {
   const n = Number(id);
   if (!Number.isFinite(n) || n <= 0) throw new Error("Invalid strategy id");
 
-  const res: any = await db.execute(
-    `DELETE FROM strategies WHERE id=?1;`,
-    [n]
-  );
-
+  const res: any = await db.execute(`DELETE FROM strategies WHERE id=?1;`, [n]);
   return Number(res?.rowsAffected ?? 0) > 0;
+}
+
+/* ------------------- CONTRACT: payload persistence ------------------- */
+
+export async function updateStrategyPayload(id: number, payload: any): Promise<void> {
+  await initSpotsDB();
+  const db = await getDB();
+
+  const n = Number(id);
+  if (!Number.isFinite(n) || n <= 0) throw new Error("Invalid strategy id");
+
+  const payload_json = JSON.stringify(payload ?? {});
+
+  await db.execute(
+    `
+      UPDATE strategies
+      SET payload_json=?1
+      WHERE id=?2;
+    `,
+    [payload_json, n]
+  );
+}
+
+export async function getStrategyById(id: number): Promise<StrategyRow | null> {
+  await initSpotsDB();
+  const db = await getDB();
+
+  const n = Number(id);
+  if (!Number.isFinite(n) || n <= 0) return null;
+
+  const rows = (await db.select(
+    `
+      SELECT id, spot_id, name, description, payload_json, created_at
+      FROM strategies
+      WHERE id=?1
+      LIMIT 1;
+    `,
+    [n]
+  )) as StrategyRow[];
+
+  return rows && rows.length > 0 ? rows[0] : null;
 }
