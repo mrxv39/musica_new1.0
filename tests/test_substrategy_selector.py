@@ -15,22 +15,15 @@ def _make_db(tmp_path):
     cur = conn.cursor()
     cur.executescript(
         """
-        CREATE TABLE situations (
+        CREATE TABLE spots (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           key TEXT NOT NULL UNIQUE
         );
-        CREATE TABLE sub_strategies (
+        CREATE TABLE strategies (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          situation_id INTEGER NOT NULL,
+          spot_id INTEGER NOT NULL,
           name TEXT NOT NULL,
-          stack_min REAL NOT NULL DEFAULT 0,
-          stack_max REAL NOT NULL DEFAULT 0,
-          unit TEXT NOT NULL DEFAULT 'BB',
-          payload_json TEXT NOT NULL DEFAULT '{}',
-          or_to_call_any TEXT NOT NULL DEFAULT '',
-          open_push TEXT NOT NULL DEFAULT '',
-          or_to_call_small TEXT NOT NULL DEFAULT '',
-          or_to_fold TEXT NOT NULL DEFAULT ''
+          payload_json TEXT NOT NULL DEFAULT '{}'
         );
         """
     )
@@ -41,8 +34,8 @@ def _make_db(tmp_path):
 def test_select_move_unique_match(monkeypatch, tmp_path):
     conn, db_path = _make_db(tmp_path)
     cur = conn.cursor()
-    cur.execute("INSERT INTO situations(key) VALUES(?)", ("TEST_SIT",))
-    sid = cur.lastrowid
+    cur.execute("INSERT INTO spots(key) VALUES(?)", ("TEST_SIT",))
+    spot_id = cur.lastrowid
 
     payload = {
         "situacion": "TEST_SIT",
@@ -80,8 +73,8 @@ def test_select_move_unique_match(monkeypatch, tmp_path):
         },
     }
     cur.execute(
-        "INSERT INTO sub_strategies(situation_id,name,payload_json) VALUES(?,?,?)",
-        (sid, "20_75_BB", json.dumps(payload)),
+        "INSERT INTO strategies(spot_id,name,payload_json) VALUES(?,?,?)",
+        (spot_id, "20_75_BB", json.dumps(payload)),
     )
     conn.commit()
     conn.close()
@@ -116,8 +109,8 @@ def test_select_move_unique_match(monkeypatch, tmp_path):
 def test_select_move_default_fold_when_not_in_any_or_range(monkeypatch, tmp_path):
     conn, db_path = _make_db(tmp_path)
     cur = conn.cursor()
-    cur.execute("INSERT INTO situations(key) VALUES(?)", ("TEST_SIT",))
-    sid = cur.lastrowid
+    cur.execute("INSERT INTO spots(key) VALUES(?)", ("TEST_SIT",))
+    spot_id = cur.lastrowid
 
     payload = {
         "situacion": "TEST_SIT",
@@ -155,8 +148,8 @@ def test_select_move_default_fold_when_not_in_any_or_range(monkeypatch, tmp_path
         },
     }
     cur.execute(
-        "INSERT INTO sub_strategies(situation_id,name,payload_json) VALUES(?,?,?)",
-        (sid, "20_75_BB", json.dumps(payload)),
+        "INSERT INTO strategies(spot_id,name,payload_json) VALUES(?,?,?)",
+        (spot_id, "20_75_BB", json.dumps(payload)),
     )
     conn.commit()
     conn.close()
