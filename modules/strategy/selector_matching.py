@@ -8,12 +8,83 @@ from .selector_models import MatchInput, SubStrategySpec
 from .selector_utils import load_payload, norm_lower, norm_upper
 
 
+def _normalize_payload_flat_to_nested(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Compat layer:
+    - Tests legacy guardan payload "plano" (p2_pos, p2_tipo, p1_bet_min, etc.).
+    - Runtime nuevo puede guardar payload anidado (p2:{pos,tipo,...}, p1:{bet_min,...}).
+
+    Regla: si YA existen p1/p2/p3 como dict, no machacamos.
+    Si no existen, pero hay claves planas, construimos p1/p2/p3.
+    """
+
+    def f(key: str, default: Any = "") -> Any:
+        v = payload.get(key, default)
+        return default if v is None else v
+
+    # p1
+    if not isinstance(payload.get("p1"), dict):
+        has_any_p1 = any(k in payload for k in ("p1_bet_min", "p1_bet_max", "p1_stack_min", "p1_stack_max", "p1_se_min", "p1_se_max"))
+        if has_any_p1:
+            payload["p1"] = {
+                "bet_min": f("p1_bet_min", 0),
+                "bet_max": f("p1_bet_max", 0),
+                "st_min": f("p1_stack_min", 0),
+                "st_max": f("p1_stack_max", 0),
+                "se_min": f("p1_se_min", 0),
+                "se_max": f("p1_se_max", 0),
+            }
+
+    # p2
+    if not isinstance(payload.get("p2"), dict):
+        has_any_p2 = any(k in payload for k in ("p2_pos", "p2_tipo", "p2_bet_min", "p2_bet_max", "p2_stack_min", "p2_stack_max"))
+        if has_any_p2:
+            payload["p2"] = {
+                "pos": f("p2_pos", ""),
+                "tipo": f("p2_tipo", ""),
+                "bet_min": f("p2_bet_min", 0),
+                "bet_max": f("p2_bet_max", 0),
+                "st_min": f("p2_stack_min", 0),
+                "st_max": f("p2_stack_max", 0),
+            }
+
+    # p3
+    if not isinstance(payload.get("p3"), dict):
+        has_any_p3 = any(k in payload for k in ("p3_pos", "p3_tipo", "p3_bet_min", "p3_bet_max", "p3_stack_min", "p3_stack_max"))
+        if has_any_p3:
+            payload["p3"] = {
+                "pos": f("p3_pos", ""),
+                "tipo": f("p3_tipo", ""),
+                "bet_min": f("p3_bet_min", 0),
+                "bet_max": f("p3_bet_max", 0),
+                "st_min": f("p3_stack_min", 0),
+                "st_max": f("p3_stack_max", 0),
+            }
+
+    return payload
+
+
 def parse_spec_from_row(row: sqlite3.Row) -> Tuple[Optional[SubStrategySpec], Optional[str]]:
     """
     Returns (spec, error_reason_if_any).
     If invalid payload => (None, "invalid_payload:...").
     """
     payload = load_payload(row)
+
+    # Compat: payload plano -> payload anidado (solo si falta p1/p2/p3)
+    if isinstance(payload, dict):
+        payload = _normalize_payload_flat_to_nested(payload)
+
+    # Inyecta 'situacion' desde DB (spots.key) si falta en payload_json
+    # sqlite3.Row NO tiene .get(), así que convertimos a dict.
+    try:
+        rowd = dict(row)
+    except Exception:
+        rowd = {}
+    situ_from_db = str(rowd.get("situation_key", "") or "")
+    if situ_from_db and not str(payload.get("situacion", "") or "").strip():
+        payload["situacion"] = situ_from_db
+
     try:
         spec = SubStrategySpec.from_payload(payload)
         return spec, None

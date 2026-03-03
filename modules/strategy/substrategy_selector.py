@@ -73,16 +73,37 @@ def _decide_move(payload: Dict[str, Any], hand_class: str) -> Dict[str, Any]:
 # -----------------------------
 
 def _fetch_rows(conn: sqlite3.Connection) -> List[sqlite3.Row]:
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT ss.*, s.key AS situation_key
-        FROM sub_strategies ss
-        JOIN situations s ON s.id = ss.situation_id
-        """
-    )
-    return cur.fetchall()
+    """Fetch candidate rows.
 
+    Compat:
+      - En DBs nuevas puede existir sub_strategies.
+      - En tests legacy se inserta en strategies.
+    """
+
+    # Decide tabla base según exista en la DB
+    tbl = None
+    try:
+        r = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sub_strategies'").fetchone()
+        if r:
+            tbl = "sub_strategies"
+    except Exception:
+        tbl = None
+
+    if not tbl:
+        r = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='strategies'").fetchone()
+        if r:
+            tbl = "strategies"
+
+    if not tbl:
+        return []
+
+    sql = f"""
+        SELECT ss.*, s.key AS situation_key
+        FROM {tbl} ss
+        JOIN spots s ON s.id = ss.spot_id
+    """
+    cur = conn.execute(sql)
+    return list(cur.fetchall())
 
 def find_unique_substrategy(conn: sqlite3.Connection, inp: MatchInput) -> Tuple[sqlite3.Row, Dict[str, Any]]:
     """

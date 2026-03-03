@@ -91,3 +91,9 @@ CREATE TABLE IF NOT EXISTS hand_links (
     FOREIGN KEY(gamecode) REFERENCES hands_xml(gamecode)
 );
 """
+
+
+
+
+
+
