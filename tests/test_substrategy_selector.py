@@ -17,7 +17,7 @@ def _make_db(tmp_path):
         """
         CREATE TABLE spots (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          key TEXT NOT NULL UNIQUE
+          name TEXT NOT NULL UNIQUE
         );
         CREATE TABLE strategies (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +34,7 @@ def _make_db(tmp_path):
 def test_select_move_unique_match(monkeypatch, tmp_path):
     conn, db_path = _make_db(tmp_path)
     cur = conn.cursor()
-    cur.execute("INSERT INTO spots(key) VALUES(?)", ("TEST_SIT",))
+    cur.execute("INSERT INTO spots(name) VALUES(?)", ("TEST_SIT",))
     spot_id = cur.lastrowid
 
     payload = {
@@ -109,7 +109,7 @@ def test_select_move_unique_match(monkeypatch, tmp_path):
 def test_select_move_default_fold_when_not_in_any_or_range(monkeypatch, tmp_path):
     conn, db_path = _make_db(tmp_path)
     cur = conn.cursor()
-    cur.execute("INSERT INTO spots(key) VALUES(?)", ("TEST_SIT",))
+    cur.execute("INSERT INTO spots(name) VALUES(?)", ("TEST_SIT",))
     spot_id = cur.lastrowid
 
     payload = {

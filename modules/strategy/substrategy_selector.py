@@ -16,56 +16,104 @@ from .selector_matching import match_row_strict
 from .selector_diagnostics import build_failure_error_message
 from .selector_fallback import fallback_nearest_se
 
-OR_KEYS = ["OR_TO_CALL_ANY", "OPEN_PUSH", "OR_TO_CALL_SMALL", "OR_TO_FOLD"]
+OR_KEYS = [
+    "OR_TO_CALL_ANY",
+    "OPEN_PUSH",
+    "OR_TO_CALL_SMALL",
+    "OR_TO_FOLD",
+    "LIMP_CALL_ANY",
+    "LIMP_CALL_SMALL",
+    "LIMP_FOLD",
+    "LIMP_TO_CALL_ANY",
+]
+
+# MOVE mapping (as per requested contract):
+# - OR_* keys => move "OR"
+# - OPEN_PUSH => move "PUSH"
+# - LIMP_* keys => move "LIMP"
+OR_BLOCK_MOVE_BY_KEY = {
+    "OR_TO_CALL_ANY": "OR",
+    "OR_TO_CALL_SMALL": "OR",
+    "OR_TO_FOLD": "OR",
+    "OPEN_PUSH": "PUSH",
+    "LIMP_CALL_ANY": "LIMP",
+    "LIMP_CALL_SMALL": "LIMP",
+    "LIMP_FOLD": "LIMP",
+    "LIMP_TO_CALL_ANY": "LIMP",
+}
 
 
 # -----------------------------
-# Decision logic (OR ranges)
+# Decision logic (ranges)
 # -----------------------------
 
 def _decide_move(payload: Dict[str, Any], hand_class: str) -> Dict[str, Any]:
     """
-    Decide qué plan usar basado en OR ranges.
+    Decide plan por rangos.
 
-    CAMBIO IMPORTANTE:
-    - Ya NO hay rango default explícito.
-    - Si la mano NO está en ningún rango => por omisión: move=FOLD y bet_min/max=0.
+    - Tests: orRanges + orRangesPlan
+    - DB real: or_blocks (key -> {min,max,range})
+
+    Regla:
+      - Si NO entra en ningún rango => FOLD + bet 0/0
     """
     hc = normalize_hand_class(hand_class)
 
+    # 1) Formato tests: orRanges + plan
     or_ranges = payload.get("orRanges") or payload.get("or_ranges") or {}
     plan = payload.get("orRangesPlan") or {}
 
     matched_keys: List[str] = []
-    for k in OR_KEYS:
-        rng = ""
-        if isinstance(or_ranges, dict):
+    if isinstance(or_ranges, dict):
+        for k in OR_KEYS:
             rng = as_text(or_ranges.get(k, "") or "")
-        if rng and hand_in_range(hc, rng):
-            matched_keys.append(k)
+            if rng and hand_in_range(hc, rng):
+                matched_keys.append(k)
+
+    # 2) Formato DB: or_blocks
+    if not matched_keys:
+        ob = payload.get("or_blocks") or {}
+        if isinstance(ob, dict):
+            for k in OR_KEYS:
+                v = ob.get(k)
+                if not isinstance(v, dict):
+                    continue
+                rng = as_text(v.get("range", "") or "")
+                if rng and hand_in_range(hc, rng):
+                    matched_keys.append(k)
 
     if len(matched_keys) > 1:
-        raise ValueError(f"Hand {hc} matches multiple OR ranges: {matched_keys}")
+        raise ValueError(f"Hand {hc} matches multiple ranges: {matched_keys}")
 
-    # ✅ DEFAULT (OMISIÓN): si no está en ningún rango => FOLD 0
     if not matched_keys:
         return {"range_key": "FOLD", "move": "FOLD", "bet_min_bb": 0.0, "bet_max_bb": 0.0}
 
     key = matched_keys[0]
+
+    # Prefer plan if available (tests)
     p = plan.get(key) if isinstance(plan, dict) else None
-    if not isinstance(p, dict):
-        p = {}
+    if isinstance(p, dict) and (p.get("move") is not None or p.get("bet_min_bb") is not None or p.get("bet_max_bb") is not None):
+        move = p.get("move", None)
+        bet_min = p.get("bet_min_bb", None)
+        bet_max = p.get("bet_max_bb", None)
 
-    move = p.get("move", None)
-    bet_min = p.get("bet_min_bb", None)
-    bet_max = p.get("bet_max_bb", None)
+        move = str(move) if move is not None else None
+        bet_min = float(bet_min) if bet_min is not None else None
+        bet_max = float(bet_max) if bet_max is not None else None
 
-    # Normalizamos tipos si vienen (pero si faltan, quedan None)
-    move = str(move) if move is not None else None
-    bet_min = float(bet_min) if bet_min is not None else None
-    bet_max = float(bet_max) if bet_max is not None else None
+        return {"range_key": key, "move": move, "bet_min_bb": bet_min, "bet_max_bb": bet_max}
 
-    return {"range_key": key, "move": move, "bet_min_bb": bet_min, "bet_max_bb": bet_max}
+    # DB or_blocks
+    ob = payload.get("or_blocks") or {}
+    if isinstance(ob, dict):
+        v = ob.get(key)
+        if isinstance(v, dict):
+            move = OR_BLOCK_MOVE_BY_KEY.get(key, "FOLD")
+            bet_min = float(v.get("min", 0) or 0)
+            bet_max = float(v.get("max", 0) or 0)
+            return {"range_key": key, "move": move, "bet_min_bb": bet_min, "bet_max_bb": bet_max}
+
+    return {"range_key": "FOLD", "move": "FOLD", "bet_min_bb": 0.0, "bet_max_bb": 0.0}
 
 
 # -----------------------------
@@ -73,39 +121,25 @@ def _decide_move(payload: Dict[str, Any], hand_class: str) -> Dict[str, Any]:
 # -----------------------------
 
 def _fetch_rows(conn: sqlite3.Connection) -> List[sqlite3.Row]:
-    """Fetch candidate rows from the definitive schema.
-
-    Definitive schema (NO legacy support):
-      - spots (id, key, ...)
-      - strategies (id, spot_id, name, payload_json, ...)
+    """Fetch candidate rows from definitive schema.
+      - spots.name is canonical situation key (via spot_id)
     """
-
-    # No fallback / no dynamic detection.
     sql = """
-        SELECT ss.*, s.key AS situation_key
+        SELECT ss.*, s.name AS situation_key
         FROM strategies ss
         JOIN spots s ON s.id = ss.spot_id
     """
     cur = conn.execute(sql)
     return list(cur.fetchall())
 
-def find_unique_substrategy(conn: sqlite3.Connection, inp: MatchInput) -> Tuple[sqlite3.Row, Dict[str, Any]]:
-    """
-    Default behavior:
-      - STRICT only
-      - expects exactly 1 match
-      - on failure, raises ValueError with helpful diagnostics
 
-    Optional fallback (OFF by default):
-      - enable with env var POKER_BOSS_FALLBACK_SE=1
-    """
+def find_unique_substrategy(conn: sqlite3.Connection, inp: MatchInput) -> Tuple[sqlite3.Row, Dict[str, Any]]:
     rows = _fetch_rows(conn)
     if not rows:
         raise ValueError("No strategies rows in database")
 
     matches: List[Tuple[sqlite3.Row, Dict[str, Any]]] = []
     reasons: Dict[str, int] = {}
-
     rows_with_specs: List[Tuple[sqlite3.Row, SubStrategySpec]] = []
 
     for r in rows:
@@ -114,16 +148,13 @@ def find_unique_substrategy(conn: sqlite3.Connection, inp: MatchInput) -> Tuple[
             matches.append((r, load_payload(r)))
         else:
             reasons[reason] = reasons.get(reason, 0) + 1
-
         if spec is not None:
             rows_with_specs.append((r, spec))
 
-    # Strict success
     if len(matches) == 1:
         row, payload = matches[0]
         return row, payload
 
-    # Optional fallback if zero strict matches
     fallback_enabled = env_truthy("POKER_BOSS_FALLBACK_SE", default="0")
     if len(matches) == 0 and fallback_enabled:
         fb = fallback_nearest_se(inp, rows_with_specs)
@@ -133,7 +164,6 @@ def find_unique_substrategy(conn: sqlite3.Connection, inp: MatchInput) -> Tuple[
             payload["_match_note"] = note
             return row, payload
 
-    # Failure (diagnostic)
     msg = build_failure_error_message(
         inp=inp,
         matches=matches,
@@ -154,7 +184,7 @@ def select_move(inp: MatchInput) -> Dict[str, Any]:
         out = {
             "sub_strategy_id": int(row["id"]),
             "sub_strategy_name": str(row["name"]),
-            "situation_key": str(row["situation_key"]),
+            "situation_key": str(row["situation_key"]),  # <- from spots.name via spot_id
             "requested_situacion": (inp.situacion or ""),
             **decision,
         }
@@ -167,10 +197,6 @@ def select_move(inp: MatchInput) -> Dict[str, Any]:
     finally:
         conn.close()
 
-
-# -----------------------------
-# CLI
-# -----------------------------
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Select move from sub_strategies (STRICT)")
