@@ -32,3 +32,10 @@ Thumbs.db
 # Local test screenshots
 modules/preflop/test_images/
 
+
+dump_no_default_strategy.txt
+
+tools/
+
+
+_diag_backend_*/

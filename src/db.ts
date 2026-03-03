@@ -16,15 +16,53 @@ export type HandsObsRow = {
   p2bet?: number | null;
   p3bet?: number | null;
   frame_ref?: string;
+
+  // allow dynamic columns
+  [k: string]: any;
 };
+
+type SqlDb = {
+  execute: (sql: string, bindValues?: any[]) => Promise<any>;
+  select: <T = any>(sql: string, bindValues?: any[]) => Promise<T>;
+};
+
+let _db: SqlDb | null = null;
+let _dbPath: string | null = null;
 
 export async function openDb(dbPath: string) {
   return await Database.load(`sqlite:${dbPath}`);
 }
 
+/**
+ * ✅ Contract export (compat):
+ * src/db.ts debe exportar dbInit/dbQuery/dbExec
+ *
+ * Nota:
+ * - En runtime Tauri: usa @tauri-apps/plugin-sql
+ * - En tests: el plugin está mockeado (ver sql.dbpath.persistence.test.ts)
+ */
+export async function dbInit(dbPath: string = DEFAULT_DB_PATH): Promise<void> {
+  _dbPath = dbPath;
+  _db = (await openDb(dbPath)) as any;
+}
+
+export async function dbQuery<T = any>(sql: string, params: any[] = [], dbPath?: string): Promise<T> {
+  if (!_db || (dbPath && dbPath !== _dbPath)) {
+    await dbInit(dbPath ?? DEFAULT_DB_PATH);
+  }
+  return await (_db as any).select<T>(sql, params);
+}
+
+export async function dbExec(sql: string, params: any[] = [], dbPath?: string): Promise<any> {
+  if (!_db || (dbPath && dbPath !== _dbPath)) {
+    await dbInit(dbPath ?? DEFAULT_DB_PATH);
+  }
+  return await (_db as any).execute(sql, params);
+}
+
 export async function fetchLatestHandsObs(dbPath: string, limit = 50): Promise<HandsObsRow[]> {
   const db = await openDb(dbPath);
-  const rows = await db.select<HandsObsRow[]>(
+  const rows = await (db as any).select<HandsObsRow[]>(
     `SELECT *
      FROM hands_obs
      ORDER BY detected_at_ms DESC

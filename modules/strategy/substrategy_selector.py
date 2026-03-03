@@ -73,16 +73,21 @@ def _decide_move(payload: Dict[str, Any], hand_class: str) -> Dict[str, Any]:
 # -----------------------------
 
 def _fetch_rows(conn: sqlite3.Connection) -> List[sqlite3.Row]:
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT ss.*, s.key AS situation_key
-        FROM sub_strategies ss
-        JOIN situations s ON s.id = ss.situation_id
-        """
-    )
-    return cur.fetchall()
+    """Fetch candidate rows from the definitive schema.
 
+    Definitive schema (NO legacy support):
+      - spots (id, key, ...)
+      - strategies (id, spot_id, name, payload_json, ...)
+    """
+
+    # No fallback / no dynamic detection.
+    sql = """
+        SELECT ss.*, s.key AS situation_key
+        FROM strategies ss
+        JOIN spots s ON s.id = ss.spot_id
+    """
+    cur = conn.execute(sql)
+    return list(cur.fetchall())
 
 def find_unique_substrategy(conn: sqlite3.Connection, inp: MatchInput) -> Tuple[sqlite3.Row, Dict[str, Any]]:
     """
@@ -96,7 +101,7 @@ def find_unique_substrategy(conn: sqlite3.Connection, inp: MatchInput) -> Tuple[
     """
     rows = _fetch_rows(conn)
     if not rows:
-        raise ValueError("No sub_strategies rows in database")
+        raise ValueError("No strategies rows in database")
 
     matches: List[Tuple[sqlite3.Row, Dict[str, Any]]] = []
     reasons: Dict[str, int] = {}

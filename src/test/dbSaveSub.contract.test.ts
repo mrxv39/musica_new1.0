@@ -24,9 +24,13 @@ vi.mock("../db/sql", () => {
     initDB: vi.fn(async () => {}),
     listAllSubStrategies: vi.fn(async () => []),
 
-    // bucket: no nos importa aquí, solo que no rompa
+    // ✅ NUEVO: dbSaveSub ahora consulta listSituations para NO autocrear
+    listSituations: vi.fn(async () => [{ id: 1, key: "BTN_vs_SB_BB" }]),
+
+    // bucket: no nos importa aquí, solo que no rompa (puede no usarse)
     pickBucketName: vi.fn(() => "18_20_BB"),
 
+    // Ya NO debería llamarse desde dbSaveSub (por contrato nuevo), pero lo dejamos por compat
     upsertSituationKey: vi.fn(async (_key: string) => 123),
     ensureBucketsForSituation: vi.fn(async (_sid: number) => {}),
 
@@ -86,13 +90,8 @@ describe("dbSaveSub contract (UI -> DB boundary)", () => {
   });
 
   it("defaultPayload() NO puede permitir un Guardar que llegue a DB sin campos core", async () => {
-    // Simula el flujo del hook:
-    // - editorValue inicial = defaultPayload()
-    // - Guardar llama dbSaveSub con item.payload = editorValue
     const p = defaultPayload();
 
-    // Importante: el UI puede tener or_ranges aparte (rows).
-    // Para este test, dejamos que dbSaveSub derive orRanges desde payload.
     const item: any = {
       id: "ui_test_1",
       name: "Auto sub X",
@@ -101,7 +100,6 @@ describe("dbSaveSub contract (UI -> DB boundary)", () => {
       globalName: "default",
     };
 
-    // Si el payload no tiene spot/hero_pos/etc, nuestro mock de upsertSubStrategy tirará CONTRACT_FAIL
     await expect(dbSaveSub(item)).resolves.toEqual(
       expect.objectContaining({
         bucket: expect.any(String),
@@ -147,12 +145,7 @@ describe("dbSaveSub contract (UI -> DB boundary)", () => {
       globalName: "default",
     };
 
-    // Ahora mismo dbSaveSub hace:
-    // const situationKey = String(payload?.situacion ?? "unknown");
-    // => si NO hay mapping, caerá en "unknown"
     const out = await dbSaveSub(item);
-
-    // Este assert fuerza a que implementemos el mapping en el boundary (dbSaveSub)
     expect(out.situationKey).not.toBe("unknown");
   });
 });

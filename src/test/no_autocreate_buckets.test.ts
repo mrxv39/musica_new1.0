@@ -6,8 +6,15 @@ vi.mock("../db/sql", () => {
   return {
     initDB: vi.fn(async () => {}),
     listAllSubStrategies: vi.fn(async () => []),
+
+    // ✅ NUEVO: dbSaveSub ahora consulta listSituations para NO autocrear
+    listSituations: vi.fn(async () => [{ id: 1, key: "BTN_vs_SB_BB" }]),
+
     pickBucketName: vi.fn(() => "20_75_BB"),
+
+    // Ya NO debería llamarse desde dbSaveSub (por contrato nuevo), pero lo dejamos por compat
     upsertSituationKey: vi.fn(async () => 123),
+
     ensureBucketsForSituation: vi.fn(async () => {}),
     upsertSubStrategy: vi.fn(async () => {}),
     deleteSubStrategyById: vi.fn(async () => true),
