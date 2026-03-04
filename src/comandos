@@ -14,6 +14,6 @@ $env:POKER_BOSS_DB_PATH="C:\Users\Usuario\Desktop\proyectos\poker_boss\data\musi
 
 python .\modules\workers\worker.py `
   --id 1 `
-  --image "C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\preflop\test_images\screenshot_20260126071437059.bmp" `
+  --image "C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\preflop\test_images\screenshot_20260127071605739.bmp" `
   --max_ticks 1 `
   --print_every_tick true

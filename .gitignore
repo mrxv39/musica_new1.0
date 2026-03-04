@@ -39,3 +39,6 @@ tools/
 
 
 _diag_backend_*/
+
+*.bak*
+

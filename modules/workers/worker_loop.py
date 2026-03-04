@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import time
 import json
+import shutil
 from typing import Any, Dict, Optional
 
 from modules.workers.worker_utils import get_fingerprint, list_images_in_dir
@@ -20,6 +21,160 @@ from modules.workers.worker_persist import build_ocr_json, persist_obs
 from .worker_loop_types import LoopConfig, ReplayDirState, Timing
 from .worker_loop_image import select_mode, get_image_for_tick, safe_remove
 from .worker_loop_logic import parse_bool, ensure_ocr_shape, extract_preflop_modules
+
+
+def _ensure_dir(path: str) -> None:
+    os.makedirs(path, exist_ok=True)
+
+
+def _is_preflop_borrar(preflop: Any) -> bool:
+    """
+    True if preflop failed due to:
+      - no cards (mano.valid == False OR mano.mano_ok == False)
+      - noboard == false (noboard_ok == False)
+    If structure is missing/unknown, we treat as borrar to keep dataset clean.
+    """
+    if not isinstance(preflop, dict):
+        return True
+
+    mods = preflop.get("modules", {})
+    if not isinstance(mods, dict):
+        return True
+
+    mano = mods.get("mano", {})
+    noboard = mods.get("noboard", {})
+
+    mano_ok = True
+    noboard_ok = True
+
+    if isinstance(mano, dict):
+        if "mano_ok" in mano:
+            mano_ok = bool(mano.get("mano_ok"))
+        elif "valid" in mano:
+            mano_ok = bool(mano.get("valid"))
+
+    if isinstance(noboard, dict) and "noboard_ok" in noboard:
+        noboard_ok = bool(noboard.get("noboard_ok"))
+
+    return (not mano_ok) or (not noboard_ok)
+
+
+def _is_strategy_error(strategy: Any) -> bool:
+    """
+    True when strategy has an error or is explicitly not ok.
+    """
+    if not isinstance(strategy, dict):
+        return True
+    if strategy.get("error"):
+        return True
+    if strategy.get("ok") is False:
+        return True
+    return False
+
+
+def _move_image(src_path: str, dst_dir: str) -> Optional[str]:
+    """Move file to dst_dir. Returns destination path on success, else None."""
+    try:
+        _ensure_dir(dst_dir)
+        base = os.path.basename(src_path)
+        dst_path = os.path.join(dst_dir, base)
+
+        # Avoid overwriting existing file: add suffix
+        if os.path.exists(dst_path):
+            root, ext = os.path.splitext(base)
+            k = 1
+            while True:
+                cand = os.path.join(dst_dir, f"{root}__{k}{ext}")
+                if not os.path.exists(cand):
+                    dst_path = cand
+                    break
+                k += 1
+
+        shutil.move(src_path, dst_path)
+        return dst_path
+    except Exception:
+        return None
+
+
+def _update_db_frame_ref(dbmod: Any, fingerprint: str, new_frame_ref: str) -> bool:
+    """
+    Update hands_obs.frame_ref after moving the image, so DB always points to the real file path.
+    """
+    try:
+        conn = dbmod.get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE hands_obs SET frame_ref = ? WHERE fingerprint = ?",
+            (new_frame_ref, fingerprint),
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
+
+
+def _route_replay_dir_image(
+    img_path: str,
+    images_dir: str,
+    persisted: bool,
+    preflop: Any,
+    strategy: Any,
+) -> Dict[str, Any]:
+    """
+    Routing rules (priority):
+      1) Preflop fail (no cards OR noboard=false) -> borrar
+      2) Strategy error -> errors (even if persisted happened)
+      3) OK only if persisted == True AND strategy ok -> ok
+      else -> errors
+    """
+    ok_dir = os.path.join(images_dir, "ok")
+    err_dir = os.path.join(images_dir, "errors")
+    del_dir = os.path.join(images_dir, "borrar")
+
+    # 1) Preflop failures -> borrar
+    if _is_preflop_borrar(preflop):
+        dst = _move_image(img_path, del_dir)
+        return {
+            "route": "borrar",
+            "reason": "preflop_no_cards_or_noboard_false",
+            "moved": bool(dst),
+            "dst": dst,
+        }
+
+    # 2) Strategy error -> errors
+    if _is_strategy_error(strategy):
+        reason = "strategy_error"
+        if isinstance(strategy, dict):
+            if strategy.get("error"):
+                reason = f"strategy_error:{strategy.get('error')}"
+            elif strategy.get("reason"):
+                reason = f"strategy_not_ok:{strategy.get('reason')}"
+        dst = _move_image(img_path, err_dir)
+        return {
+            "route": "errors",
+            "reason": reason,
+            "moved": bool(dst),
+            "dst": dst,
+        }
+
+    # 3) OK only if persisted and strategy ok
+    if persisted:
+        dst = _move_image(img_path, ok_dir)
+        return {
+            "route": "ok",
+            "reason": "persisted_and_strategy_ok",
+            "moved": bool(dst),
+            "dst": dst,
+        }
+
+    # 4) Anything else -> errors
+    dst = _move_image(img_path, err_dir)
+    return {
+        "route": "errors",
+        "reason": "not_persisted",
+        "moved": bool(dst),
+        "dst": dst,
+    }
 
 
 def run_loop(args: Any) -> None:
@@ -51,6 +206,10 @@ def run_loop(args: Any) -> None:
     if mode == "replay_dir" and cfg.images_dir:
         cfg.images_dir = os.path.abspath(cfg.images_dir)
         dir_state.files = list_images_in_dir(cfg.images_dir)
+
+        _ensure_dir(os.path.join(cfg.images_dir, "ok"))
+        _ensure_dir(os.path.join(cfg.images_dir, "errors"))
+        _ensure_dir(os.path.join(cfg.images_dir, "borrar"))
 
     last_hand_sig: Optional[str] = None
     tick = 0
@@ -187,6 +346,22 @@ def run_loop(args: Any) -> None:
                 "image_ref": img.image_ref,
                 "persist_without_stack": cfg.persist_without_stack,
             }
+
+            # Routing + DB frame_ref fix
+            if mode == "replay_dir" and cfg.images_dir and img.img_path:
+                routing = _route_replay_dir_image(
+                    img_path=os.path.abspath(img.img_path),
+                    images_dir=cfg.images_dir,
+                    persisted=persisted,
+                    preflop=preflop,
+                    strategy=strategy,
+                )
+                out["replay_dir_routing"] = routing
+
+                # If we persisted and the file was moved, update DB to point to the new path.
+                if persisted and sig and routing.get("moved") and routing.get("dst"):
+                    updated = _update_db_frame_ref(dbmod, sig, routing["dst"])
+                    out["db_frame_ref_updated"] = updated
 
             if cfg.print_every_tick:
                 print(json.dumps(out, ensure_ascii=False))
