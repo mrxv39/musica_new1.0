@@ -3,6 +3,7 @@ import { useState } from "react";
 import StrategyPage from "../pages/StrategyPage";
 import HandsPage from "../pages/HandsPage";
 import SpotsPage from "../pages/SpotsPage";
+import PlayersPage from "../pages/PlayersPage";
 import ComingSoon from "../components/ComingSoon";
 import AppShell from "./AppShell";
 import { Tab } from "./tabs";
@@ -15,6 +16,7 @@ export default function AppRouter() {
       {activeTab === "hands" && <HandsPage />}
       {activeTab === "strategy" && <StrategyPage />}
       {activeTab === "spots" && <SpotsPage />}
+      {activeTab === "players" && <PlayersPage />}
       {activeTab === "account" && <ComingSoon title="Account" />}
       {activeTab === "import" && <ComingSoon title="Import" />}
     </AppShell>
