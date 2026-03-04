@@ -18,7 +18,7 @@ def select_move(inp: MatchInput) -> Dict[str, Any]:
     conn = get_conn()
     try:
         row, payload = find_unique_substrategy(conn, inp)
-        decision = decide_move(payload, inp.hand_class)
+        decision = decide_move(payload, inp)
 
         out: Dict[str, Any] = {
             "sub_strategy_id": int(row["id"]),
