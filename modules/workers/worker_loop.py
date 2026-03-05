@@ -5,7 +5,7 @@ import os
 import time
 import json
 import shutil
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Callable, Tuple
 
 from modules.workers.worker_utils import get_fingerprint, list_images_in_dir
 from modules.workers.worker_preflop import run_preflop
@@ -27,12 +27,12 @@ def _ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
-def _is_preflop_borrar(preflop: Any) -> bool:
+def _is_preflop_fail(preflop: Any) -> bool:
     """
     True if preflop failed due to:
       - no cards (mano.valid == False OR mano.mano_ok == False)
       - noboard == false (noboard_ok == False)
-    If structure is missing/unknown, we treat as borrar to keep dataset clean.
+    If structure is missing/unknown, we treat as fail to keep dataset clean.
     """
     if not isinstance(preflop, dict):
         return True
@@ -59,17 +59,25 @@ def _is_preflop_borrar(preflop: Any) -> bool:
     return (not mano_ok) or (not noboard_ok)
 
 
-def _is_strategy_error(strategy: Any) -> bool:
+def _has_strategy_move(strategy: Any) -> bool:
     """
-    True when strategy has an error or is explicitly not ok.
+    OK cuando strategy.ok == True y existen move, betmin, betmax.
     """
     if not isinstance(strategy, dict):
-        return True
-    if strategy.get("error"):
-        return True
-    if strategy.get("ok") is False:
-        return True
-    return False
+        return False
+    if strategy.get("ok") is not True:
+        return False
+
+    move = strategy.get("move", None)
+    betmin = strategy.get("betmin", None)
+    betmax = strategy.get("betmax", None)
+
+    if move is None or str(move).strip() == "":
+        return False
+    if betmin is None or betmax is None:
+        return False
+
+    return True
 
 
 def _move_image(src_path: str, dst_dir: str) -> Optional[str]:
@@ -121,29 +129,30 @@ def _route_replay_dir_image(
     strategy: Any,
 ) -> Dict[str, Any]:
     """
-    Routing rules (priority):
-      1) Preflop fail (no cards OR noboard=false) -> borrar
-      2) Strategy error -> errors (even if persisted happened)
-      3) OK only if persisted == True AND strategy ok -> ok
-      else -> errors
+    Reglas EXACTAS (prioridad):
+      1) Si preflop falla -> mover a borrar/
+      2) Si NO hay estrategia (no hay move/betmin/betmax) -> mover a errors/
+      3) Si hay move + betmin + betmax -> mover a ok/
+
+    Nota: persisted NO decide la ruta; sólo sirve para actualizar frame_ref en DB si se movió.
     """
     ok_dir = os.path.join(images_dir, "ok")
     err_dir = os.path.join(images_dir, "errors")
     del_dir = os.path.join(images_dir, "borrar")
 
-    # 1) Preflop failures -> borrar
-    if _is_preflop_borrar(preflop):
+    # 1) Preflop fail -> borrar/
+    if _is_preflop_fail(preflop):
         dst = _move_image(img_path, del_dir)
         return {
             "route": "borrar",
-            "reason": "preflop_no_cards_or_noboard_false",
+            "reason": "preflop_failed_move_to_borrar",
             "moved": bool(dst),
             "dst": dst,
         }
 
-    # 2) Strategy error -> errors
-    if _is_strategy_error(strategy):
-        reason = "strategy_error"
+    # 2) Sin estrategia -> errors/
+    if not _has_strategy_move(strategy):
+        reason = "no_strategy_or_missing_move_bets"
         if isinstance(strategy, dict):
             if strategy.get("error"):
                 reason = f"strategy_error:{strategy.get('error')}"
@@ -157,24 +166,181 @@ def _route_replay_dir_image(
             "dst": dst,
         }
 
-    # 3) OK only if persisted and strategy ok
-    if persisted:
-        dst = _move_image(img_path, ok_dir)
-        return {
-            "route": "ok",
-            "reason": "persisted_and_strategy_ok",
-            "moved": bool(dst),
-            "dst": dst,
-        }
-
-    # 4) Anything else -> errors
-    dst = _move_image(img_path, err_dir)
+    # 3) OK -> ok/
+    dst = _move_image(img_path, ok_dir)
     return {
-        "route": "errors",
-        "reason": "not_persisted",
+        "route": "ok",
+        "reason": "strategy_has_move_and_bets",
         "moved": bool(dst),
         "dst": dst,
     }
+
+
+# --------------------------------------------------------------------------------------
+# Reusable pipeline for ONE image (used by external loops)
+# --------------------------------------------------------------------------------------
+
+RunPreflopFn = Callable[[str], Any]
+RunOcrFn = Callable[[str], Dict[str, Any]]
+ExtractModulesFn = Callable[[Any], Tuple[Dict[str, Any], Dict[str, Any]]]
+ComputeStrategyFn = Callable[..., Dict[str, Any]]
+
+
+def process_one_image(
+    *,
+    cfg: LoopConfig,
+    mode: str,
+    img_path: Optional[str],
+    image_ref: str,
+    dbmod: Any,
+    run_ocr_fn: RunOcrFn,
+    MatchInput: Any,
+    select_move: Any,
+    last_hand_sig: Optional[str],
+    # injectables for tests / alternate loops
+    run_preflop_fn: Optional[RunPreflopFn] = None,
+    extract_modules_fn: Optional[ExtractModulesFn] = None,
+    compute_strategy_fn: Optional[ComputeStrategyFn] = None,
+) -> Tuple[Dict[str, Any], Optional[str]]:
+    """
+    Same pipeline as run_loop for a single image:
+      preflop -> ocr -> dedupe -> strategy -> persist -> (optional replay_dir routing)
+    Returns: (out_dict, updated_last_hand_sig)
+    """
+    ts = time.time()
+
+    timing = Timing.empty()
+    timing.t_tick0 = time.perf_counter()
+
+    rp = run_preflop_fn or run_preflop
+    em = extract_modules_fn or extract_preflop_modules
+    cs = compute_strategy_fn or compute_strategy
+
+    # preflop
+    timing.t_preflop0 = time.perf_counter()
+    preflop = rp(img_path) if img_path else {"error": "no image", "preflop_ok": False}
+    timing.t_preflop1 = time.perf_counter()
+
+    preflop_ok = bool(preflop.get("preflop_ok", False)) if isinstance(preflop, dict) else False
+
+    # ocr
+    timing.t_ocr0 = time.perf_counter()
+    ocr: Dict[str, Any] = ensure_ocr_shape()
+    if img_path:
+        try:
+            ocr = run_ocr_fn(img_path)
+        except Exception as e:
+            ocr = ensure_ocr_shape(err=f"run_ocr:{e}")
+    timing.t_ocr1 = time.perf_counter()
+
+    mano_result, stacks_result = em(preflop)
+
+    ocr_stacks = ocr.get("stacks", {}) if isinstance(ocr, dict) else {}
+    bets_result = ocr.get("bets", {}) if isinstance(ocr, dict) else {}
+    stackefectivo_result = ocr.get("stackefectivo", {}) if isinstance(ocr, dict) else {}
+    names_result = ocr.get("names", {}) if isinstance(ocr, dict) else {}
+    villano_result = ocr.get("villano", {}) if isinstance(ocr, dict) else {}
+
+    fingerprint = get_fingerprint(cfg.worker_id, mode, image_ref)
+
+    # dedupe
+    p1 = normalize_p1(stacks_result, ocr_stacks)
+    can_persist = compute_can_persist(mano_result, p1, cfg.persist_without_stack, preflop_ok)
+
+    sig: Optional[str] = None
+    if can_persist:
+        sig = compute_sig(mano_result, p1, cfg.persist_without_stack)
+
+    dedupe_skipped, dedupe_reason, last_hand_sig = apply_dedupe(can_persist, sig, last_hand_sig)
+
+    # strategy
+    timing.t_strategy0 = time.perf_counter()
+    strategy = cs(
+        preflop=preflop,
+        mano_result=mano_result,
+        ocr=ocr,
+        bets_result=bets_result,
+        ocr_stacks=ocr_stacks,
+        stackefectivo_result=stackefectivo_result,
+        villano_result=villano_result,
+        MatchInput=MatchInput,
+        select_move=select_move,
+    )
+    timing.t_strategy1 = time.perf_counter()
+
+    # persist
+    timing.t_persist0 = time.perf_counter()
+    persisted = False
+    if (not dedupe_skipped) and can_persist and sig:
+        ocr_json = build_ocr_json(
+            mano_result=mano_result,
+            stacks_result=stacks_result,
+            ocr=ocr,
+            preflop=preflop,
+            strategy=strategy,
+            tempo_s=round((time.perf_counter() - timing.t_tick0), 3),
+        )
+
+        frame_ref = ""
+        if img_path and mode != "screen":
+            frame_ref = os.path.abspath(img_path)
+
+        persist_obs(
+            dbmod,
+            sig=sig,
+            ts=ts,
+            mano_result=mano_result,
+            preflop=preflop,
+            ocr_json=ocr_json,
+            bets_result=bets_result,
+            frame_ref=frame_ref,
+        )
+        persisted = True
+    timing.t_persist1 = time.perf_counter()
+
+    tempo_s = round((time.perf_counter() - timing.t_tick0), 3)
+
+    out: Dict[str, Any] = {
+        "worker_id": cfg.worker_id,
+        "mode": mode,
+        "ts": ts,
+        "tempo_s": tempo_s,
+        "timing_ms": timing.as_ms(),
+        "persisted": persisted,
+        "preflop": preflop,
+        "ocr": ocr,
+        "strategy": strategy,
+        "mano_result": mano_result,
+        "stacks_result": stacks_result,
+        "ocr_stacks": ocr_stacks,
+        "bets_result": bets_result,
+        "stackefectivo_result": stackefectivo_result,
+        "names_result": names_result,
+        "villano_result": villano_result,
+        "errors": [],
+        "fingerprint": fingerprint,
+        "dedupe_skipped": dedupe_skipped,
+        "dedupe_reason": dedupe_reason,
+        "image_ref": image_ref,
+        "persist_without_stack": cfg.persist_without_stack,
+    }
+
+    # Routing + DB frame_ref fix (only replay_dir)
+    if mode == "replay_dir" and cfg.images_dir and img_path:
+        routing = _route_replay_dir_image(
+            img_path=os.path.abspath(img_path),
+            images_dir=cfg.images_dir,
+            persisted=persisted,
+            preflop=preflop,
+            strategy=strategy,
+        )
+        out["replay_dir_routing"] = routing
+
+        if persisted and sig and routing.get("moved") and routing.get("dst"):
+            updated = _update_db_frame_ref(dbmod, sig, routing["dst"])
+            out["db_frame_ref_updated"] = updated
+
+    return out, last_hand_sig
 
 
 def run_loop(args: Any) -> None:
@@ -237,131 +403,22 @@ def run_loop(args: Any) -> None:
             if img.done:
                 break
 
-            # preflop
-            timing.t_preflop0 = time.perf_counter()
-            preflop = run_preflop(img.img_path) if img.img_path else {"error": "no image", "preflop_ok": False}
-            timing.t_preflop1 = time.perf_counter()
-
-            preflop_ok = bool(preflop.get("preflop_ok", False)) if isinstance(preflop, dict) else False
-
-            # ocr
-            timing.t_ocr0 = time.perf_counter()
-            ocr: Dict[str, Any] = ensure_ocr_shape()
-            if img.img_path:
-                try:
-                    ocr = run_ocr(img.img_path)
-                except Exception as e:
-                    ocr = ensure_ocr_shape(err=f"run_ocr:{e}")
-            timing.t_ocr1 = time.perf_counter()
-
-            mano_result, stacks_result = extract_preflop_modules(preflop)
-
-            ocr_stacks = ocr.get("stacks", {}) if isinstance(ocr, dict) else {}
-            bets_result = ocr.get("bets", {}) if isinstance(ocr, dict) else {}
-            stackefectivo_result = ocr.get("stackefectivo", {}) if isinstance(ocr, dict) else {}
-            names_result = ocr.get("names", {}) if isinstance(ocr, dict) else {}
-            villano_result = ocr.get("villano", {}) if isinstance(ocr, dict) else {}
-
-            fingerprint = get_fingerprint(cfg.worker_id, mode, img.image_ref)
-
-            # dedupe
-            p1 = normalize_p1(stacks_result, ocr_stacks)
-            can_persist = compute_can_persist(mano_result, p1, cfg.persist_without_stack, preflop_ok)
-
-            sig: Optional[str] = None
-            if can_persist:
-                sig = compute_sig(mano_result, p1, cfg.persist_without_stack)
-
-            dedupe_skipped, dedupe_reason, last_hand_sig = apply_dedupe(can_persist, sig, last_hand_sig)
-
-            # strategy
-            timing.t_strategy0 = time.perf_counter()
-            strategy = compute_strategy(
-                preflop=preflop,
-                mano_result=mano_result,
-                ocr=ocr,
-                bets_result=bets_result,
-                ocr_stacks=ocr_stacks,
-                stackefectivo_result=stackefectivo_result,
-                villano_result=villano_result,
+            out, last_hand_sig = process_one_image(
+                cfg=cfg,
+                mode=mode,
+                img_path=img.img_path,
+                image_ref=img.image_ref,
+                dbmod=dbmod,
+                run_ocr_fn=run_ocr,
                 MatchInput=MatchInput,
                 select_move=select_move,
+                last_hand_sig=last_hand_sig,
             )
-            timing.t_strategy1 = time.perf_counter()
 
-            # persist
-            timing.t_persist0 = time.perf_counter()
-            persisted = False
-            if (not dedupe_skipped) and can_persist and sig:
-                ocr_json = build_ocr_json(
-                    mano_result=mano_result,
-                    stacks_result=stacks_result,
-                    ocr=ocr,
-                    preflop=preflop,
-                    strategy=strategy,
-                    tempo_s=round((time.perf_counter() - timing.t_get_image0), 3),
-                )
-
-                frame_ref = ""
-                if img.img_path and mode != "screen":
-                    frame_ref = os.path.abspath(img.img_path)
-
-                persist_obs(
-                    dbmod,
-                    sig=sig,
-                    ts=ts,
-                    mano_result=mano_result,
-                    preflop=preflop,
-                    ocr_json=ocr_json,
-                    bets_result=bets_result,
-                    frame_ref=frame_ref,
-                )
-                persisted = True
-            timing.t_persist1 = time.perf_counter()
-
-            tempo_s = round((time.perf_counter() - timing.t_get_image0), 3)
-
-            out = {
-                "worker_id": cfg.worker_id,
-                "mode": mode,
-                "tick": tick,
-                "ts": ts,
-                "tempo_s": tempo_s,
-                "timing_ms": timing.as_ms(),
-                "persisted": persisted,
-                "preflop": preflop,
-                "ocr": ocr,
-                "strategy": strategy,
-                "mano_result": mano_result,
-                "stacks_result": stacks_result,
-                "ocr_stacks": ocr_stacks,
-                "bets_result": bets_result,
-                "stackefectivo_result": stackefectivo_result,
-                "names_result": names_result,
-                "villano_result": villano_result,
-                "errors": img.errors,
-                "fingerprint": fingerprint,
-                "dedupe_skipped": dedupe_skipped,
-                "dedupe_reason": dedupe_reason,
-                "image_ref": img.image_ref,
-                "persist_without_stack": cfg.persist_without_stack,
-            }
-
-            # Routing + DB frame_ref fix
-            if mode == "replay_dir" and cfg.images_dir and img.img_path:
-                routing = _route_replay_dir_image(
-                    img_path=os.path.abspath(img.img_path),
-                    images_dir=cfg.images_dir,
-                    persisted=persisted,
-                    preflop=preflop,
-                    strategy=strategy,
-                )
-                out["replay_dir_routing"] = routing
-
-                # If we persisted and the file was moved, update DB to point to the new path.
-                if persisted and sig and routing.get("moved") and routing.get("dst"):
-                    updated = _update_db_frame_ref(dbmod, sig, routing["dst"])
-                    out["db_frame_ref_updated"] = updated
+            # add non-core fields
+            out["tick"] = tick
+            out["ts"] = ts
+            out["errors"] = img.errors
 
             if cfg.print_every_tick:
                 print(json.dumps(out, ensure_ascii=False))

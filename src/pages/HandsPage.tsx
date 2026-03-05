@@ -1,5 +1,5 @@
 /// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\HandsPage.tsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import HandsToolbar from "./hands/HandsToolbar";
 import HandsTable from "./hands/HandsTable";
@@ -25,6 +25,9 @@ export default function HandsPage() {
   const [actionStatus, setActionStatus] = useState<string>("");
   const [lastLog, setLastLog] = useState<string>("");
 
+  const [workersRunning, setWorkersRunning] = useState<boolean>(false);
+  const pollRef = useRef<number | null>(null);
+
   const [stackEfRangeText, setStackEfRangeText] = useState<string>(
     () => localStorage.getItem("hands.stackEfRangeText") || ""
   );
@@ -48,6 +51,28 @@ export default function HandsPage() {
     [filtered.rows, sortKey, sortAsc]
   );
 
+  useEffect(() => {
+    // polling status while workers running (UI feedback)
+    if (workersRunning) {
+      if (pollRef.current == null) {
+        pollRef.current = window.setInterval(async () => {
+          try {
+            const s = await invoke<string>("get_workers_status");
+            if (s) setLastLog(String(s));
+          } catch {
+            // ignore
+          }
+        }, 700);
+      }
+    } else {
+      if (pollRef.current != null) {
+        window.clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    }
+    return () => {};
+  }, [workersRunning]);
+
   const onReset = async () => {
     const p = dbPath.trim();
     if (!p) return;
@@ -67,25 +92,6 @@ export default function HandsPage() {
       setActionStatus("reset: " + summarize(m));
     } finally {
       setBusy(false);
-    }
-  };
-
-  // ✅ esto es lo que usa el modal (dinámico, por imagen abierta)
-  const onRunOneForImage = async (imagePath: string) => {
-    const p = dbPath.trim();
-    const img = (imagePath || "").trim();
-
-    if (!p) return "ERROR: dbPath vacío";
-    if (!img) return "ERROR: imagePath vacío";
-
-    try {
-      // IMPORTANTE: la key tiene que llamarse imagePath (mismo nombre que te pide el error)
-      const msg = await invoke<string>("run_worker_one", { imagePath: img, dbPath: p });
-      const m = String(msg || "");
-      await loadOnce();
-      return m.trim();
-    } catch (e: any) {
-      return "ERROR: " + (e?.message || String(e));
     }
   };
 
@@ -112,6 +118,50 @@ export default function HandsPage() {
       setActionStatus("50 hands: " + summarize(m));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Esto lo usa el modal (run one por imagen abierta)
+  const onRunOneForImage = async (imagePath: string) => {
+    const p = dbPath.trim();
+    const img = (imagePath || "").trim();
+
+    if (!p) return "ERROR: dbPath vacío";
+    if (!img) return "ERROR: imagePath vacío";
+
+    try {
+      const msg = await invoke<string>("run_worker_one", { imagePath: img, dbPath: p });
+      const m = String(msg || "");
+      await loadOnce();
+      return m.trim();
+    } catch (e: any) {
+      return "ERROR: " + (e?.message || String(e));
+    }
+  };
+
+  const onToggleWorkers = async () => {
+    const p = dbPath.trim();
+    if (!p) return;
+
+    const next = !workersRunning;
+    setWorkersRunning(next);
+    setActionStatus(next ? "workers: starting..." : "workers: stopping...");
+
+    try {
+      const msg = await invoke<string>("set_workers_running", {
+        running: next,
+        dbPath: p,
+        outDir: BATCH_FOLDER_PATH,
+        intervalMs: 800,
+      });
+      setLastLog(String(msg || ""));
+      setActionStatus("workers: " + (next ? "running" : "stopped"));
+      await loadOnce();
+    } catch (e: any) {
+      const m = "ERROR: " + (e?.message || String(e));
+      setLastLog(m);
+      setActionStatus("workers: " + summarize(m));
+      setWorkersRunning(false);
     }
   };
 
@@ -152,6 +202,8 @@ export default function HandsPage() {
         busy={busy}
         onReset={onReset}
         onRunBatch={onRunBatch}
+        workersRunning={workersRunning}
+        onToggleWorkers={onToggleWorkers}
         stackEfRangeText={stackEfRangeText}
         onChangeStackEfRangeText={onChangeStackEfRangeText}
         betRangeText={betRangeText}
@@ -161,35 +213,22 @@ export default function HandsPage() {
         onClearFilters={onClearFilters}
       />
 
+      <div style={{ height: 10 }} />
+
       <HandsTable
         rows={sortedRows}
+        sortKey={sortKey}
+        sortAsc={sortAsc}
         onSort={onSort}
         canRunOne={Boolean(canLoad && dbPath.trim().length > 0)}
         onRunOneForImage={onRunOneForImage}
+        lastLog={lastLog}
+        dbPath={dbPath.trim()}
+        totalRows={rows.length}
+        shownRows={sortedRows.length}
+        rangeError={filtered.rangeError || ""}
+        batchFolderPath={BATCH_FOLDER_PATH}
       />
-
-      <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-        Rows: {sortedRows.length} / {rows.length} | DB actual: {dbPath.trim()}
-      </div>
-
-      {filtered.rangeError ? (
-        <div style={{ marginTop: 6, fontSize: 12, color: "#b00020" }}>
-          Rango inválido: {filtered.rangeError}
-        </div>
-      ) : null}
-
-      <div style={{ marginTop: 2, fontSize: 12, opacity: 0.7 }}>
-        Folder 50-hands: {BATCH_FOLDER_PATH}
-      </div>
-
-      {lastLog ? (
-        <details style={{ marginTop: 10 }}>
-          <summary style={{ cursor: "pointer", fontSize: 12, opacity: 0.8 }}>
-            Ver log completo (stdout/stderr)
-          </summary>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, marginTop: 8 }}>{lastLog}</pre>
-        </details>
-      ) : null}
     </>
   );
 }

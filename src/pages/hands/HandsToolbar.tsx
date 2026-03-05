@@ -11,14 +11,15 @@ export default function HandsToolbar({
   onReset,
   onRunBatch,
 
+  workersRunning,
+  onToggleWorkers,
+
   stackEfRangeText,
   onChangeStackEfRangeText,
   betRangeText,
   onChangeBetRangeText,
-
   rangeListText,
   onChangeRangeListText,
-
   onClearFilters,
 }: {
   dbPath: string;
@@ -32,6 +33,9 @@ export default function HandsToolbar({
   busy: boolean;
   onReset: () => void;
   onRunBatch: () => void;
+
+  workersRunning: boolean;
+  onToggleWorkers: () => void;
 
   stackEfRangeText: string;
   onChangeStackEfRangeText: (v: string) => void;
@@ -64,6 +68,14 @@ export default function HandsToolbar({
 
       <button disabled={!canLoad || busy} onClick={onRunBatch} title="Analiza 50 imágenes de la carpeta test_images">
         50 hands
+      </button>
+
+      <button
+        disabled={!canLoad || busy}
+        onClick={onToggleWorkers}
+        title="Start/Stop bucle infinito: captura 4 mesas y corre el worker"
+      >
+        {workersRunning ? "Stop workers" : "Start workers"}
       </button>
 
       <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>

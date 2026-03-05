@@ -1,3 +1,4 @@
+/// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\db.ts
 import Database from "@tauri-apps/plugin-sql";
 
 export const DEFAULT_DB_PATH = "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\musica_new.db";
@@ -23,6 +24,8 @@ export type HandsObsRow = {
 
 type SqlDb = {
   execute: (sql: string, bindValues?: any[]) => Promise<any>;
+  // Nota: dejamos el tipo genérico aquí porque es útil, pero NO lo usaremos
+  // al llamar cuando db sea any (para evitar TS2347).
   select: <T = any>(sql: string, bindValues?: any[]) => Promise<T>;
 };
 
@@ -50,7 +53,11 @@ export async function dbQuery<T = any>(sql: string, params: any[] = [], dbPath?:
   if (!_db || (dbPath && dbPath !== _dbPath)) {
     await dbInit(dbPath ?? DEFAULT_DB_PATH);
   }
-  return await (_db as any).select<T>(sql, params);
+
+  // ❌ NO: (_db as any).select<T>(...)  -> TS2347
+  // ✅ Sí: llamar sin genérico y castear el resultado
+  const rows = await (_db as any).select(sql, params);
+  return rows as T;
 }
 
 export async function dbExec(sql: string, params: any[] = [], dbPath?: string): Promise<any> {
@@ -62,14 +69,18 @@ export async function dbExec(sql: string, params: any[] = [], dbPath?: string): 
 
 export async function fetchLatestHandsObs(dbPath: string, limit = 50): Promise<HandsObsRow[]> {
   const db = await openDb(dbPath);
-  const rows = await (db as any).select<HandsObsRow[]>(
+
+  // ❌ NO: (db as any).select<HandsObsRow[]>(...)  -> TS2347
+  // ✅ Sí: llamar sin genérico y castear
+  const rows = await (db as any).select(
     `SELECT *
      FROM hands_obs
      ORDER BY detected_at_ms DESC
      LIMIT ?1`,
     [limit]
   );
-  return rows;
+
+  return rows as HandsObsRow[];
 }
 
 function safeJson(ocrJson?: string): any | null {
