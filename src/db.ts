@@ -1,10 +1,14 @@
 /// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\db.ts
 import Database from "@tauri-apps/plugin-sql";
 
-export const DEFAULT_DB_PATH = "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\musica_new.db";
+export const DEFAULT_DB_PATH = "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\poker_boss.db";
 
+/** =========================
+ * OCR / OBS
+ * ========================= */
 export type HandsObsRow = {
   id?: number;
+  obs_id?: number;
   fingerprint?: string;
   table_id?: string;
   detected_at_ms?: number;
@@ -22,10 +26,43 @@ export type HandsObsRow = {
   [k: string]: any;
 };
 
+/** =========================
+ * REAL / XML import
+ * ========================= */
+export type HandRealRow = {
+  id: number;
+  room: string;
+  hero: string;
+  tournament_path: string;
+  source_file: string;
+  gamecode: string;
+  startdate: string;
+  sb: number;
+  bb: number;
+  hero_cards: string;
+  flop: string;
+  turn: string;
+  river: string;
+  players_json: string;
+  created_at: string;
+};
+
+export type ActionRealRow = {
+  id: number;
+  hand_id: number;
+  gamecode: string;
+  round_no: number; // 1..4
+  action_no: number;
+  player: string;
+  type_id: number;
+  type_name: string;
+  sum_chips: number;
+  sum_bb: number;
+  created_at: string;
+};
+
 type SqlDb = {
   execute: (sql: string, bindValues?: any[]) => Promise<any>;
-  // Nota: dejamos el tipo genérico aquí porque es útil, pero NO lo usaremos
-  // al llamar cuando db sea any (para evitar TS2347).
   select: <T = any>(sql: string, bindValues?: any[]) => Promise<T>;
 };
 
@@ -39,10 +76,6 @@ export async function openDb(dbPath: string) {
 /**
  * ✅ Contract export (compat):
  * src/db.ts debe exportar dbInit/dbQuery/dbExec
- *
- * Nota:
- * - En runtime Tauri: usa @tauri-apps/plugin-sql
- * - En tests: el plugin está mockeado (ver sql.dbpath.persistence.test.ts)
  */
 export async function dbInit(dbPath: string = DEFAULT_DB_PATH): Promise<void> {
   _dbPath = dbPath;
@@ -53,9 +86,6 @@ export async function dbQuery<T = any>(sql: string, params: any[] = [], dbPath?:
   if (!_db || (dbPath && dbPath !== _dbPath)) {
     await dbInit(dbPath ?? DEFAULT_DB_PATH);
   }
-
-  // ❌ NO: (_db as any).select<T>(...)  -> TS2347
-  // ✅ Sí: llamar sin genérico y castear el resultado
   const rows = await (_db as any).select(sql, params);
   return rows as T;
 }
@@ -67,11 +97,9 @@ export async function dbExec(sql: string, params: any[] = [], dbPath?: string): 
   return await (_db as any).execute(sql, params);
 }
 
+/** ========== OBS helpers ========== */
 export async function fetchLatestHandsObs(dbPath: string, limit = 50): Promise<HandsObsRow[]> {
   const db = await openDb(dbPath);
-
-  // ❌ NO: (db as any).select<HandsObsRow[]>(...)  -> TS2347
-  // ✅ Sí: llamar sin genérico y castear
   const rows = await (db as any).select(
     `SELECT *
      FROM hands_obs
@@ -79,10 +107,35 @@ export async function fetchLatestHandsObs(dbPath: string, limit = 50): Promise<H
      LIMIT ?1`,
     [limit]
   );
-
   return rows as HandsObsRow[];
 }
 
+/** ========== REAL helpers ========== */
+export async function fetchLatestHandsReal(dbPath: string, limit = 200): Promise<HandRealRow[]> {
+  const db = await openDb(dbPath);
+  const rows = await (db as any).select(
+    `SELECT *
+     FROM hands_real
+     ORDER BY startdate DESC, id DESC
+     LIMIT ?1`,
+    [limit]
+  );
+  return rows as HandRealRow[];
+}
+
+export async function fetchActionsRealForHand(dbPath: string, handId: number): Promise<ActionRealRow[]> {
+  const db = await openDb(dbPath);
+  const rows = await (db as any).select(
+    `SELECT *
+     FROM actions_real
+     WHERE hand_id = ?1
+     ORDER BY round_no ASC, action_no ASC`,
+    [handId]
+  );
+  return rows as ActionRealRow[];
+}
+
+/** ========== Existing extractors used by UI ========== */
 function safeJson(ocrJson?: string): any | null {
   if (!ocrJson) return null;
   try {
@@ -103,7 +156,11 @@ function asNumber(v: any): number | null {
 
 export function extractP1Stack(ocrJson?: string): number | null {
   const obj = safeJson(ocrJson);
-  const v = obj?.ocr?.stacks?.p1 ?? obj?.stacks?.p1 ?? obj?.stacks_preflop?.stacks?.p1 ?? obj?.stacks_preflop?.p1;
+  const v =
+    obj?.ocr?.stacks?.p1 ??
+    obj?.stacks?.p1 ??
+    obj?.stacks_preflop?.stacks?.p1 ??
+    obj?.stacks_preflop?.p1;
   return asNumber(v);
 }
 
@@ -149,8 +206,6 @@ export function extractStackEfectivo(ocrJson?: string): number | null {
 }
 
 // ✅ tempo en SEGUNDOS
-// - nuevo: ocr_json.tempo_s
-// - compat: ocr_json.tempo_ms -> se convierte a segundos
 export function extractTempoS(ocrJson?: string): number | null {
   const obj = safeJson(ocrJson);
   const s = asNumber(obj?.tempo_s ?? obj?.tempoS);
