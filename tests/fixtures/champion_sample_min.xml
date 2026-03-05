@@ -1,0 +1,24 @@
+<session>
+  <game gamecode="G1">
+    <general>
+      <startdate>2026-03-05 00:00:00</startdate>
+      <smallblind>20</smallblind>
+      <bigblind>40</bigblind>
+      <players>
+        <player name="hero" chips="1000" dealer="0" win="0" reg_code="x"/>
+        <player name="vill" chips="1000" dealer="1" win="0"/>
+      </players>
+    </general>
+    <round no="0">
+      <action no="1" player="vill" type="15" sum="5"/>
+      <action no="2" player="hero" type="15" sum="5"/>
+      <action no="3" player="vill" type="1" sum="20"/>
+      <action no="4" player="hero" type="2" sum="40"/>
+    </round>
+    <round no="1">
+      <cards>S10 H5</cards>
+      <action no="5" player="vill" type="23" sum="120"/>
+      <action no="6" player="hero" type="0" sum="0"/>
+    </round>
+  </game>
+</session>

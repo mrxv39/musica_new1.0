@@ -1,0 +1,494 @@
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\importers\championpoker_xml_importer.py
+from __future__ import annotations
+
+import os
+import json
+import sqlite3
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
+
+# -------------------------
+# Action type mapping (inferred from your XML)
+# -------------------------
+ACTION_TYPE_MAP: Dict[int, str] = {
+    0: "FOLD",
+    1: "POST_SB",
+    2: "POST_BB",
+    3: "CALL",
+    4: "CHECK",
+    5: "BET",
+    7: "ALL_IN",
+    15: "ANTE",
+    23: "RAISE",
+}
+
+
+@dataclass(frozen=True)
+class ImportedAction:
+    gamecode: str
+    round_no: int
+    action_no: int
+    player: str
+    type_id: int
+    type_name: str
+    sum_chips: float
+    sum_bb: float
+
+
+@dataclass(frozen=True)
+class ImportedHand:
+    room: str
+    hero: str
+    tournament_path: str  # folder/source group (optional)
+    source_file: str
+    gamecode: str
+    startdate: str
+    sb: float
+    bb: float
+    hero_cards: str
+    flop: str
+    turn: str
+    river: str
+    players_json: Dict[str, Any]
+    actions: List[ImportedAction]
+
+
+# -------------------------
+# SQLite schema (v1)
+# -------------------------
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS hands_real (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room TEXT NOT NULL,
+    hero TEXT NOT NULL,
+    tournament_path TEXT NOT NULL DEFAULT '',
+    source_file TEXT NOT NULL,
+    gamecode TEXT NOT NULL,
+    startdate TEXT NOT NULL DEFAULT '',
+    sb REAL NOT NULL DEFAULT 0,
+    bb REAL NOT NULL DEFAULT 0,
+    hero_cards TEXT NOT NULL DEFAULT '',
+    flop TEXT NOT NULL DEFAULT '',
+    turn TEXT NOT NULL DEFAULT '',
+    river TEXT NOT NULL DEFAULT '',
+    players_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_hands_real_unique ON hands_real(room, hero, gamecode);
+
+CREATE TABLE IF NOT EXISTS actions_real (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hand_id INTEGER NOT NULL,
+    gamecode TEXT NOT NULL,
+    round_no INTEGER NOT NULL,
+    action_no INTEGER NOT NULL,
+    player TEXT NOT NULL,
+    type_id INTEGER NOT NULL,
+    type_name TEXT NOT NULL,
+    sum_chips REAL NOT NULL DEFAULT 0,
+    sum_bb REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(hand_id) REFERENCES hands_real(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_actions_real_hand_round_no ON actions_real(hand_id, round_no, action_no);
+
+-- Spots: hero decision points (v1 minimal)
+CREATE TABLE IF NOT EXISTS spots_real (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hand_id INTEGER NOT NULL,
+    gamecode TEXT NOT NULL,
+    hero TEXT NOT NULL,
+    street TEXT NOT NULL,              -- 'PREFLOP'/'FLOP'/'TURN'/'RIVER'
+    round_no INTEGER NOT NULL,
+    action_no INTEGER NOT NULL,
+    to_act_player TEXT NOT NULL,       -- should be hero
+    raw_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(hand_id) REFERENCES hands_real(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_spots_real_hand_street ON spots_real(hand_id, street, action_no);
+"""
+
+
+def ensure_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(SCHEMA_SQL)
+    conn.commit()
+
+
+def _safe_float(x: Any, default: float = 0.0) -> float:
+    try:
+        return float(x)
+    except Exception:
+        return default
+
+
+def _txt(node: Optional[ET.Element]) -> str:
+    if node is None or node.text is None:
+        return ""
+    return str(node.text).strip()
+
+
+def _is_unknown_cards(s: str) -> bool:
+    """
+    Normalize the common "unknown cards" variants we see in these HH.
+    """
+    if not s:
+        return True
+    t = "".join(s.split()).upper()  # remove spaces
+    return t in {"X", "XX", "X X".replace(" ", "")}  # "XX" covers "X X" too
+
+
+def _find_hero_pocket_cards_from_game(game: ET.Element, hero: str) -> str:
+    """
+    Fallback: some XMLs store pocket cards in <cards type="Pocket" player="...">...</cards>.
+    We must pick the hero, otherwise we may pick a villain with 'X X'.
+    """
+    for c in game.findall(".//cards"):
+        if (c.get("type") or "") != "Pocket":
+            continue
+        player = (c.get("player") or "").strip()
+        if player != hero:
+            continue
+        val = _txt(c)
+        if val:
+            return val
+    return ""
+
+
+def _round_to_street(round_no: int) -> str:
+    # ChampionPoker convention (matches your prior rule set)
+    # round 1 = preflop, 2=flop, 3=turn, 4=river, 0=blinds/antes
+    if round_no <= 1:
+        return "PREFLOP"
+    if round_no == 2:
+        return "FLOP"
+    if round_no == 3:
+        return "TURN"
+    return "RIVER"
+
+
+def parse_one_xml_file(
+    xml_path: str,
+    *,
+    room: str,
+    hero: str,
+    tournament_path: str = "",
+) -> List[ImportedHand]:
+    root = ET.parse(xml_path).getroot()
+
+    hands: List[ImportedHand] = []
+    for game in root.findall("game"):
+        gamecode = str(game.attrib.get("gamecode", "") or "").strip()
+        if not gamecode:
+            continue
+
+        gen = game.find("general")
+        if gen is None:
+            continue
+
+        sb = _safe_float(_txt(gen.find("smallblind")), 0.0)
+        bb = _safe_float(_txt(gen.find("bigblind")), 0.0)
+        startdate = _txt(gen.find("startdate"))
+
+        # players
+        players_node = gen.find("players")
+        players: List[Dict[str, Any]] = []
+        if players_node is not None:
+            for p in list(players_node):
+                if p.tag != "player":
+                    continue
+                players.append(
+                    {
+                        "name": str(p.attrib.get("name", "") or ""),
+                        "chips": _safe_float(p.attrib.get("chips", 0), 0.0),
+                        "dealer": str(p.attrib.get("dealer", "") or ""),
+                        "win": str(p.attrib.get("win", "") or ""),
+                        "reg_code": str(p.attrib.get("reg_code", "") or ""),
+                    }
+                )
+
+        players_json: Dict[str, Any] = {"players": players}
+
+        # rounds
+        hero_cards = ""
+        flop = ""
+        turn = ""
+        river = ""
+        actions: List[ImportedAction] = []
+
+        for rnd in game.findall("round"):
+            round_no = int(rnd.attrib.get("no", "-1") or -1)
+
+            cards_txt = _txt(rnd.find("cards"))
+            # In your files:
+            # - round 1 cards = hero hole cards (sometimes "X X" depending on export)
+            # - round 2 cards = flop
+            # - round 3 cards = turn
+            # - round 4 cards = river
+            if round_no == 1 and cards_txt:
+                # only take it if it's not unknown placeholder
+                if not _is_unknown_cards(cards_txt):
+                    hero_cards = cards_txt
+            elif round_no == 2 and cards_txt:
+                flop = cards_txt
+            elif round_no == 3 and cards_txt:
+                turn = cards_txt
+            elif round_no == 4 and cards_txt:
+                river = cards_txt
+
+            for act in rnd.findall("action"):
+                a_no = int(act.attrib.get("no", "-1") or -1)
+                player = str(act.attrib.get("player", "") or "")
+                t_id = int(act.attrib.get("type", "-1") or -1)
+                s = _safe_float(act.attrib.get("sum", 0), 0.0)
+
+                # bb conversion
+                s_bb = (s / bb) if bb > 0 else 0.0
+
+                t_name = ACTION_TYPE_MAP.get(t_id, f"TYPE_{t_id}")
+
+                actions.append(
+                    ImportedAction(
+                        gamecode=gamecode,
+                        round_no=round_no,
+                        action_no=a_no,
+                        player=player,
+                        type_id=t_id,
+                        type_name=t_name,
+                        sum_chips=s,
+                        sum_bb=s_bb,
+                    )
+                )
+
+        # FINAL HERO CARDS RESOLUTION (robust)
+        # If round 1 didn't give us real cards, try <cards type="Pocket" player="hero">...</cards>
+        if not hero_cards or _is_unknown_cards(hero_cards):
+            hc = _find_hero_pocket_cards_from_game(game, hero)
+            if hc and not _is_unknown_cards(hc):
+                hero_cards = hc
+
+        # Hard fallback
+        if not hero_cards:
+            hero_cards = "X X"
+
+        hands.append(
+            ImportedHand(
+                room=room,
+                hero=hero,
+                tournament_path=tournament_path,
+                source_file=os.path.abspath(xml_path),
+                gamecode=gamecode,
+                startdate=startdate,
+                sb=sb,
+                bb=bb,
+                hero_cards=hero_cards,
+                flop=flop,
+                turn=turn,
+                river=river,
+                players_json=players_json,
+                actions=actions,
+            )
+        )
+
+    return hands
+
+
+def _insert_hand(conn: sqlite3.Connection, hand: ImportedHand) -> int:
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT OR IGNORE INTO hands_real(
+            room, hero, tournament_path, source_file, gamecode, startdate,
+            sb, bb, hero_cards, flop, turn, river, players_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            hand.room,
+            hand.hero,
+            hand.tournament_path,
+            hand.source_file,
+            hand.gamecode,
+            hand.startdate,
+            hand.sb,
+            hand.bb,
+            hand.hero_cards,
+            hand.flop,
+            hand.turn,
+            hand.river,
+            json.dumps(hand.players_json, ensure_ascii=False),
+        ),
+    )
+
+    # If existed, fetch id
+    cur.execute(
+        "SELECT id FROM hands_real WHERE room=? AND hero=? AND gamecode=?",
+        (hand.room, hand.hero, hand.gamecode),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise RuntimeError("Failed to insert/fetch hands_real row")
+    return int(row[0])
+
+
+def _insert_actions(conn: sqlite3.Connection, hand_id: int, hand: ImportedHand) -> None:
+    cur = conn.cursor()
+    # idempotency: delete actions for this hand_id then insert fresh
+    cur.execute("DELETE FROM actions_real WHERE hand_id=?", (hand_id,))
+
+    cur.executemany(
+        """
+        INSERT INTO actions_real(
+            hand_id, gamecode, round_no, action_no, player, type_id, type_name, sum_chips, sum_bb
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                hand_id,
+                a.gamecode,
+                a.round_no,
+                a.action_no,
+                a.player,
+                a.type_id,
+                a.type_name,
+                a.sum_chips,
+                a.sum_bb,
+            )
+            for a in sorted(hand.actions, key=lambda x: (x.round_no, x.action_no))
+        ],
+    )
+
+
+def _extract_hero_spots(hand: ImportedHand) -> List[Dict[str, Any]]:
+    """
+    v1: a "spot" is any action where player == hero and round_no >= 1
+    (We can later enrich with: pot, to_call, last aggressor, positions, etc.)
+    """
+    spots: List[Dict[str, Any]] = []
+    for a in sorted(hand.actions, key=lambda x: (x.round_no, x.action_no)):
+        if a.round_no < 1:
+            continue
+        if a.player != hand.hero:
+            continue
+
+        spots.append(
+            {
+                "gamecode": hand.gamecode,
+                "hero": hand.hero,
+                "street": _round_to_street(a.round_no),
+                "round_no": a.round_no,
+                "action_no": a.action_no,
+                "to_act_player": a.player,
+                "action_type": a.type_name,
+                "action_type_id": a.type_id,
+                "sum_bb": a.sum_bb,
+                "sum_chips": a.sum_chips,
+                "hero_cards": hand.hero_cards,
+                "flop": hand.flop,
+                "turn": hand.turn,
+                "river": hand.river,
+            }
+        )
+
+    return spots
+
+
+def _insert_spots(conn: sqlite3.Connection, hand_id: int, hand: ImportedHand) -> int:
+    cur = conn.cursor()
+    cur.execute("DELETE FROM spots_real WHERE hand_id=?", (hand_id,))
+
+    spots = _extract_hero_spots(hand)
+    cur.executemany(
+        """
+        INSERT INTO spots_real(hand_id, gamecode, hero, street, round_no, action_no, to_act_player, raw_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                hand_id,
+                s["gamecode"],
+                s["hero"],
+                s["street"],
+                int(s["round_no"]),
+                int(s["action_no"]),
+                s["to_act_player"],
+                json.dumps(s, ensure_ascii=False),
+            )
+            for s in spots
+        ],
+    )
+    return len(spots)
+
+
+def import_xml_folder(
+    *,
+    folder: str,
+    db_path: str,
+    room: str,
+    hero: str,
+    tournament_path: str = "",
+    recursive: bool = True,
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    folder = os.path.abspath(folder)
+    db_path = os.path.abspath(db_path)
+
+    if not os.path.isdir(folder):
+        raise FileNotFoundError(f"Folder not found: {folder}")
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        ensure_schema(conn)
+
+        xml_files: List[str] = []
+        if recursive:
+            for root, _dirs, files in os.walk(folder):
+                for fn in files:
+                    if fn.lower().endswith(".xml"):
+                        xml_files.append(os.path.join(root, fn))
+        else:
+            for fn in os.listdir(folder):
+                if fn.lower().endswith(".xml"):
+                    xml_files.append(os.path.join(folder, fn))
+
+        total_files = len(xml_files)
+        total_hands = 0
+        total_spots = 0
+
+        for i, xp in enumerate(sorted(xml_files)):
+            try:
+                hands = parse_one_xml_file(xp, room=room, hero=hero, tournament_path=tournament_path)
+            except Exception as e:
+                if verbose:
+                    print(f"[IMPORT] file {i+1}/{total_files} FAIL: {xp} -> {type(e).__name__}: {e}")
+                continue
+
+            for h in hands:
+                hand_id = _insert_hand(conn, h)
+                _insert_actions(conn, hand_id, h)
+                total_spots += _insert_spots(conn, hand_id, h)
+                total_hands += 1
+
+            conn.commit()
+
+            if verbose:
+                print(f"[IMPORT] {i+1}/{total_files} OK: {os.path.basename(xp)} -> hands={len(hands)}")
+
+        return {
+            "ok": True,
+            "folder": folder,
+            "db_path": db_path,
+            "room": room,
+            "hero": hero,
+            "xml_files": total_files,
+            "hands_imported": total_hands,
+            "hero_spots_imported": total_spots,
+        }
+    finally:
+        conn.close()
