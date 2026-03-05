@@ -14,7 +14,8 @@
     "test:coverage": "cross-env VITEST_MODE=fast vitest run --coverage",
     "gate:coverage": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/gate-coverage-strategy.ps1",
     "preview": "vite preview",
-    "gate:fast": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/gate-fast.ps1"
+    "gate:fast": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/gate-fast.ps1",
+    "test:ui": "vitest run src/tests/ui_import_xml_payload.test.tsx"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^25.3.3",
