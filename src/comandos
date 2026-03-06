@@ -19,3 +19,7 @@ python .\modules\workers\worker.py `
   --print_every_tick true
 
   probando
+
+https://embed-cloudfront.wistia.com/deliveries/01606e6003c2da2ac63a5cd97b150824c8dc7c71.m3u8
+
+yt-dlp.exe "https://embed-cloudfront.wistia.com/deliveries/01606e6003c2da2ac63a5cd97b150824c8dc7c71.m3u8"

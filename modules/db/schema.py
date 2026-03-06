@@ -1,4 +1,4 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\db\schema.py
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\db\schema.py
 
 # NOTA:
 # - Aquí solo dejamos CREATE TABLE (sin índices que dependan de columnas),
@@ -90,10 +90,22 @@ CREATE TABLE IF NOT EXISTS hand_links (
     FOREIGN KEY(obs_id) REFERENCES hands_obs(obs_id),
     FOREIGN KEY(gamecode) REFERENCES hands_xml(gamecode)
 );
+
+-- =========================
+-- Workers captures (dedupe persistente entre ticks / reinicios)
+-- =========================
+CREATE TABLE IF NOT EXISTS workers_captures (
+    capture_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mesa INTEGER NOT NULL DEFAULT 0,
+    image_path TEXT DEFAULT '',
+    final_image_path TEXT DEFAULT '',
+    image_fingerprint TEXT NOT NULL,
+    image_size_bytes INTEGER DEFAULT 0,
+    status TEXT DEFAULT '',
+    reason TEXT DEFAULT '',
+    ocr_ok INTEGER DEFAULT 0,
+    ocr_json TEXT DEFAULT '',
+    created_at_ms INTEGER DEFAULT 0,
+    updated_at_ms INTEGER DEFAULT 0
+);
 """
-
-
-
-
-
-

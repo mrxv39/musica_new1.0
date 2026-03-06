@@ -1,55 +1,16 @@
-/// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\hands\RealHandsTable.tsx
 import React from "react";
 import type { HandRealRow } from "../../db";
 import RealHandModal from "./RealHandModal";
+import RealHandsImageModal from "./RealHandsImageModal";
+import RealHandsTableBody from "./RealHandsTableBody";
+import RealHandsTableSummary from "./RealHandsTableSummary";
 
-function suitLower(s: string) {
-  const u = (s || "").toUpperCase();
-  if (u === "C") return "c";
-  if (u === "D") return "d";
-  if (u === "H") return "h";
-  if (u === "S") return "s";
-  return "?";
+function getSpotPng(h: HandRealRow): string {
+  return ((h as any).spot_png as string) || "";
 }
 
-function rankPoker(r: string) {
-  const u = (r || "").toUpperCase();
-  if (u === "10") return "T";
-  return u;
-}
-
-/**
- * Token DB examples:
- *  - "CK" (suit first) => Kc
- *  - "D10" => Td
- *  - "HA" => Ah
- *  - "X" / "XX" => X
- */
-function formatCardToken(tok: string): string {
-  const t = (tok || "").trim();
-  if (!t) return "";
-  const u = t.toUpperCase();
-  if (u === "X" || u === "XX") return "X";
-
-  const suit = u.slice(0, 1);
-  const rank = u.slice(1);
-
-  if (!rank) return t;
-
-  return `${rankPoker(rank)}${suitLower(suit)}`;
-}
-
-function formatCardsString(s: string): string {
-  const parts = (s || "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "-";
-  return parts.map(formatCardToken).join(" ");
-}
-
-function formatBoardCompact(flop: string, turn: string, river: string): string {
-  const f = flop ? `F:${formatCardsString(flop)}` : "F:-";
-  const t = turn ? `T:${formatCardsString(turn)}` : "T:-";
-  const r = river ? `R:${formatCardsString(river)}` : "R:-";
-  return `${f} ${t} ${r}`;
+function buildSpotTitle(h: HandRealRow): string {
+  return `Spot | id=${h.id} | ${h.startdate || ""} | ${h.gamecode || ""}`;
 }
 
 export function RealHandsTable({
@@ -59,77 +20,64 @@ export function RealHandsTable({
   rows: HandRealRow[];
   dbPath: string;
 }) {
-  const [open, setOpen] = React.useState(false);
-  const [sel, setSel] = React.useState<HandRealRow | null>(null);
+  const [openHandModal, setOpenHandModal] = React.useState(false);
+  const [selectedHand, setSelectedHand] = React.useState<HandRealRow | null>(null);
+
+  const [openImageModal, setOpenImageModal] = React.useState(false);
+  const [imagePath, setImagePath] = React.useState<string>("");
+  const [imageTitle, setImageTitle] = React.useState<string>("");
 
   const openHand = (h: HandRealRow) => {
-    setSel(h);
-    setOpen(true);
+    setSelectedHand(h);
+    setOpenHandModal(true);
   };
 
-  const close = () => {
-    setOpen(false);
-    setSel(null);
+  const closeHand = () => {
+    setOpenHandModal(false);
+    setSelectedHand(null);
+  };
+
+  const openImage = (h: HandRealRow) => {
+    const p = getSpotPng(h);
+    if (!p) return;
+    setImagePath(p);
+    setImageTitle(buildSpotTitle(h));
+    setOpenImageModal(true);
+  };
+
+  const closeImage = () => {
+    setOpenImageModal(false);
+    setImagePath("");
+    setImageTitle("");
   };
 
   return (
     <>
-      <RealHandModal open={open} dbPath={dbPath} hand={sel} onClose={close} />
+      <RealHandModal open={openHandModal} dbPath={dbPath} hand={selectedHand} onClose={closeHand} />
+      <RealHandsImageModal open={openImageModal} title={imageTitle} imagePath={imagePath} onClose={closeImage} />
 
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>
-              Gamecode
-            </th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>
-              Start
-            </th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>
-              Blinds
-            </th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>
-              Hero cards
-            </th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>
-              Board
-            </th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>
-              Room/Hero
-            </th>
+            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>📷</th>
+            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Gamecode</th>
+            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Start</th>
+            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Blinds</th>
+            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Hero cards</th>
+            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Board</th>
+            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Room/Hero</th>
           </tr>
         </thead>
 
-        <tbody>
-          {rows.map((h) => (
-            <tr
-              key={h.id}
-              style={{ borderBottom: "1px solid #f0f0f0", cursor: "pointer" }}
-              onClick={() => openHand(h)}
-              title="Click para abrir"
-            >
-              <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-                <b>{h.gamecode}</b>
-              </td>
-              <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{h.startdate || ""}</td>
-              <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-                {h.sb} / {h.bb}
-              </td>
-              <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>{formatCardsString(h.hero_cards || "")}</td>
-              <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-                {formatBoardCompact(h.flop || "", h.turn || "", h.river || "")}
-              </td>
-              <td style={{ padding: "6px 8px", whiteSpace: "nowrap", opacity: 0.8 }}>
-                {h.room} / {h.hero}
-              </td>
-            </tr>
-          ))}
-        </tbody>
+        <RealHandsTableBody
+          rows={rows}
+          getSpotPng={getSpotPng}
+          onOpenHand={openHand}
+          onOpenImage={openImage}
+        />
       </table>
 
-      <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-        Rows: {rows.length} | DB actual: {dbPath}
-      </div>
+      <RealHandsTableSummary rowsCount={rows.length} dbPath={dbPath} />
     </>
   );
 }

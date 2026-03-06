@@ -18,14 +18,19 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out_dir", required=True)
     ap.add_argument("--interval_ms", type=int, default=800)
+    ap.add_argument("--max_ticks", type=int, default=None)
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
-    base_dir = os.path.abspath(args.out_dir)
-    dirs = ensure_dirs(base_dir)
+    ensure_dirs(os.path.abspath(args.out_dir))
 
-    with open(dirs.log_path, "a", encoding="utf-8") as fp:
-        run_loop(out_dir=base_dir, interval_ms=int(args.interval_ms), verbose=bool(args.verbose), fp=fp)
+    run_loop(
+        out_dir=args.out_dir,
+        interval_ms=args.interval_ms,
+        verbose=args.verbose,
+        fp=sys.stdout,
+        max_ticks=args.max_ticks,
+    )
 
 
 if __name__ == "__main__":

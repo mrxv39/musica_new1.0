@@ -1,0 +1,247 @@
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import time
+from typing import Any, Dict, Optional, TextIO, Tuple
+
+from modules.ocr.ocr import run_ocr
+from modules.workers.worker_loop import process_one_image
+from modules.workers.worker_loop_types import LoopConfig
+from modules.workers.worker_utils import get_file_fingerprint
+
+from .capture import capture_to_tmp
+from .fs_utils import log, safe_move
+from .preflop_logic import preflop_fail
+from .strategy_utils import force_ok_on_default_fold, has_strategy_move
+from .time_gate import run_time_gate_for_area
+from .worker_mesa_debug import safe_remove, write_no_strategy_debug
+from .worker_mesa_preflop import (
+    describe_preflop_fail,
+    run_preflop_direct,
+    write_preflop_fail_debug,
+)
+
+RECENT_CAPTURE_WINDOW_MS = int(os.environ.get("POKER_BOSS_CAPTURE_DEDUPE_WINDOW_MS", "15000"))
+
+# Backward-compatible private aliases for tests/monkeypatching.
+_run_preflop_direct = run_preflop_direct
+_describe_preflop_fail = describe_preflop_fail
+_write_preflop_fail_debug = write_preflop_fail_debug
+_safe_remove = safe_remove
+
+
+def run_worker_mesa_once(
+    *,
+    area: Dict[str, Any],
+    dirs: Any,
+    ts: str,
+    interval_ms: int,
+    verbose: bool,
+    fp: TextIO,
+    fixed_input: Optional[str],
+    last_sig_by_mesa: Dict[int, Optional[str]],
+    dbg: bool,
+    dbmod: Any,
+    MatchInput: Any,
+    select_move: Any,
+    extract_modules_fn: Any,
+    build_ocr_safe_fn: Any,
+    compute_strategy_safe_fn: Any,
+) -> None:
+    mesa = int(area["mesa"])
+    last_sig_by_mesa.setdefault(mesa, None)
+
+    if fixed_input:
+        try:
+            img_path = os.path.join(dirs.tmp_dir, f"{ts}__mesa_{mesa}.bmp")
+            shutil.copy2(fixed_input, img_path)
+        except Exception as e:
+            log(fp, f"[mesa {mesa}] CAPTURE ERROR: {e}")
+            return
+    else:
+        time_gate = run_time_gate_for_area(area, dirs.tmp_dir, ts)
+        if not bool(time_gate.get("time_ok")):
+            if dbg:
+                score = time_gate.get("score", None)
+                reason = time_gate.get("error") or time_gate.get("reason") or "time_false"
+                log(fp, f"[mesa {mesa}] TIME FALSE -> skip | score={score!r} | reason={reason}")
+            return
+
+        try:
+            img_path = capture_to_tmp(area, dirs.tmp_dir, ts)
+        except Exception as e:
+            log(fp, f"[mesa {mesa}] CAPTURE ERROR: {e}")
+            return
+
+    capture_id: Optional[int] = None
+    image_fp: Optional[str] = None
+    ocr: Dict[str, Any] = {}
+
+    try:
+        image_fp = get_file_fingerprint(img_path)
+        image_size_bytes = os.path.getsize(img_path)
+        since_ms = int(time.time() * 1000) - RECENT_CAPTURE_WINDOW_MS
+
+        recent = dbmod.find_recent_capture_by_fingerprint(
+            image_fingerprint=image_fp,
+            since_ms=since_ms,
+        )
+
+        if recent:
+            _safe_remove(img_path)
+            if dbg or verbose:
+                log(
+                    fp,
+                    f"[mesa {mesa}] DUPLICATE CAPTURE -> skip | fp={image_fp} | prev_capture_id={recent.get('capture_id')} | prev_status={recent.get('status')} | window_ms={RECENT_CAPTURE_WINDOW_MS}",
+                )
+            return
+
+        capture_id = dbmod.insert_worker_capture(
+            mesa=mesa,
+            image_path=os.path.abspath(img_path),
+            image_fingerprint=image_fp,
+            image_size_bytes=image_size_bytes,
+            status="captured",
+            reason="time_gate_passed",
+        )
+
+        ocr = run_ocr(img_path)
+        if capture_id is not None:
+            dbmod.update_worker_capture_ocr(
+                capture_id=capture_id,
+                ocr_ok=bool((ocr or {}).get("ok")),
+                ocr_json=json.dumps(ocr or {}, ensure_ascii=False),
+            )
+    except Exception as e:
+        _safe_remove(img_path)
+        log(fp, f"[mesa {mesa}] CAPTURE/OCR ERROR: {e}")
+        return
+
+    try:
+        preflop: Dict[str, Any] = _run_preflop_direct(img_path)
+    except Exception as e:
+        preflop = {"preflop_ok": False, "error": f"run_preflop_direct:{e}"}
+
+    if preflop_fail(preflop):
+        dst = safe_move(img_path, dirs.del_dir)
+        reason_text = _describe_preflop_fail(preflop)
+
+        log(fp, f"[mesa {mesa}] preflop FAIL -> borrar: {dst} | {reason_text}")
+
+        try:
+            _write_preflop_fail_debug(dst, mesa, preflop)
+        except Exception as e:
+            log(fp, f"[mesa {mesa}] preflop FAIL debug write error: {e}")
+
+        if capture_id is not None:
+            try:
+                dbmod.update_worker_capture_route(
+                    capture_id=capture_id,
+                    final_image_path=dst,
+                    status="borrar",
+                    reason=reason_text,
+                )
+            except Exception:
+                pass
+
+        return
+
+    mano_result, stacks_result = extract_modules_fn(preflop)
+
+    strategy, err = compute_strategy_safe_fn(preflop, mano_result, ocr)
+    strategy = force_ok_on_default_fold(strategy)
+
+    cfg = LoopConfig(
+        worker_id=mesa,
+        interval_ms=int(interval_ms),
+        image_path=None,
+        images_dir=None,
+        loop_dir=False,
+        region=None,
+        max_ticks=None,
+        print_every_tick=False,
+        persist_without_stack=False,
+    )
+
+    def _rp(_p: str) -> Any:
+        return preflop
+
+    def _em(_pf: Any) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        return (mano_result, stacks_result)
+
+    def _run_ocr_fn(_p: str) -> Dict[str, Any]:
+        return ocr
+
+    def _cs(**_kw: Any) -> Dict[str, Any]:
+        return strategy
+
+    out, new_sig = process_one_image(
+        cfg=cfg,
+        mode="screen",
+        img_path=img_path,
+        image_ref=img_path,
+        dbmod=dbmod,
+        run_ocr_fn=_run_ocr_fn,
+        MatchInput=MatchInput,
+        select_move=select_move,
+        last_hand_sig=last_sig_by_mesa[mesa],
+        run_preflop_fn=_rp,
+        extract_modules_fn=_em,
+        compute_strategy_fn=_cs,
+    )
+    last_sig_by_mesa[mesa] = new_sig
+
+    if has_strategy_move(strategy):
+        dst = safe_move(img_path, dirs.ok_dir)
+        if verbose:
+            log(fp, f"[mesa {mesa}] OK -> ok: {dst}")
+
+        if capture_id is not None:
+            try:
+                dbmod.update_worker_capture_route(
+                    capture_id=capture_id,
+                    final_image_path=dst,
+                    status="ok",
+                    reason="strategy_has_move_and_bets",
+                )
+            except Exception:
+                pass
+    else:
+        dst = safe_move(img_path, dirs.err_dir)
+        reason = None
+        if isinstance(strategy, dict):
+            reason = strategy.get("error") or strategy.get("reason")
+        reason_text = str(reason or err or "no_move/bets")
+
+        if verbose:
+            log(fp, f"[mesa {mesa}] NO STRATEGY -> errors: {dst} | reason={reason_text}")
+
+        if capture_id is not None:
+            try:
+                dbmod.update_worker_capture_route(
+                    capture_id=capture_id,
+                    final_image_path=dst,
+                    status="errors",
+                    reason=reason_text,
+                )
+            except Exception:
+                pass
+
+        if dbg:
+            try:
+                write_no_strategy_debug(
+                    dst=dst,
+                    mesa=mesa,
+                    preflop=preflop,
+                    strategy=strategy,
+                    ocr=ocr,
+                    out=out,
+                    image_fingerprint=image_fp,
+                    capture_id=capture_id,
+                )
+            except Exception:
+                pass
+
+
