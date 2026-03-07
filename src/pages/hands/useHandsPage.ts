@@ -11,7 +11,6 @@ import { sortHands } from "./sortHands";
 import { useHandsSort } from "./useHandsSort";
 import { filterHandsByAllFilters, parseNumericRange } from "./handsFilters";
 
-import { summarize } from "./handsPagePaths";
 import { ensureNonEmptyPath } from "./handsPageUtils";
 import { useWorkersPolling } from "./useWorkersPolling";
 import { useHandsPageActions } from "./useHandsPageActions";
@@ -180,3 +179,4 @@ export function useHandsPage() {
     onWorkersTick,
   };
 }
+
