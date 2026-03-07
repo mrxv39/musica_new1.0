@@ -1,61 +1,58 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// IMPORTANT: mock Tauri invoke
-const invokeMock = vi.fn(async () => "OK_MOCK");
+const invokeMock = vi.fn();
+
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: (...args: any[]) => invokeMock(...args),
+  invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
 import HandsPage from "../pages/HandsPage";
 
-function getLastInvoke() {
-  const calls = invokeMock.mock.calls;
-  if (!calls.length) return null;
-  const last = calls[calls.length - 1];
-  return { cmd: last[0], payload: last[1] };
-}
-
 describe("UI Import XML", () => {
   beforeEach(() => {
-    invokeMock.mockClear();
+    localStorage.clear();
+    invokeMock.mockReset();
 
-    // Force REAL mode in UI
-    localStorage.setItem("hands.mode", "REAL");
-    localStorage.setItem("dbPath", "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\poker_boss.db");
-    localStorage.setItem("autoRefresh", "false");
+    localStorage.setItem(
+      "dbPath",
+      "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\poker_boss.db"
+    );
   });
 
   it("click Import XML calls invoke() with non-empty folder + hero + dbPath", async () => {
-    const user = userEvent.setup();
+    invokeMock.mockResolvedValue("ok");
+
     render(<HandsPage />);
 
+    const modeSelect = screen.getByRole("combobox");
+    fireEvent.change(modeSelect, { target: { value: "REAL" } });
+
     const btn = await screen.findByRole("button", { name: /import xml/i });
-    await user.click(btn);
+    fireEvent.click(btn);
 
-    expect(invokeMock).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(invokeMock.mock.calls.some((c) => c[0] === "import_champion_xml")).toBe(true);
+    });
 
-    const last = getLastInvoke();
-    expect(last).not.toBeNull();
+    const importCall = invokeMock.mock.calls.find((c) => c[0] === "import_champion_xml");
+    expect(importCall).toBeTruthy();
 
-    // We don't assume the exact command name because you may have import_xml_folder/import_and_link_real/etc.
-    // But we DO require the payload to contain dbPath + folder + hero in some form.
-    const payload = (last as any).payload || {};
+    const payload = (importCall?.[1] as Record<string, unknown>) ?? {};
 
-    // dbPath key can be dbPath or db_path depending on your wiring
     const dbPath = payload.dbPath ?? payload.db_path ?? payload.db ?? "";
     expect(String(dbPath)).toMatch(/poker_boss\.db$/i);
 
-    // folder key might be xmlFolder OR xmlDir OR folder depending on your current code
     const folder =
-      payload.xmlFolder ?? payload.xml_dir ?? payload.xmlDir ?? payload.folder ?? payload.folderPath ?? "";
+      payload.xmlFolder ??
+      payload.xmlDir ??
+      payload.folder ??
+      payload.xml_dir ??
+      payload.xml_dir_path ??
+      "";
+    expect(String(folder).trim().length).toBeGreaterThan(0);
 
-    // hero key might be hero OR heroName
-    const hero = payload.hero ?? payload.heroName ?? payload.CHAMPION_HERO ?? "";
-
-    // If this fails, vitest will show the payload so we can fix the exact key mismatch in 1 shot.
-    expect(String(folder).trim().length).toBeGreaterThan(5);
+    const hero = payload.hero ?? payload.heroName ?? "";
     expect(String(hero).trim().length).toBeGreaterThan(0);
   });
 });

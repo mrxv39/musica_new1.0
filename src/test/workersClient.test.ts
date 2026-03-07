@@ -63,7 +63,7 @@ describe("workersClient", () => {
     });
   });
 
-  it("getWorkersStatusState maps running from status text", async () => {
+  it("getWorkersStatusState maps running=true from status text", async () => {
     invokeMock.mockResolvedValue("workers running | pid=123");
 
     const state = await getWorkersStatusState();
@@ -72,6 +72,29 @@ describe("workersClient", () => {
     expect(state).toEqual({
       running: true,
       statusText: "workers running | pid=123",
+    });
+  });
+
+  it("getWorkersStatusState maps running=false from status text", async () => {
+    invokeMock.mockResolvedValue("stopped");
+
+    const state = await getWorkersStatusState();
+
+    expect(invokeMock).toHaveBeenCalledWith("get_workers_status");
+    expect(state).toEqual({
+      running: false,
+      statusText: "stopped",
+    });
+  });
+
+  it("getWorkersStatusState normalizes empty/null-ish status text", async () => {
+    invokeMock.mockResolvedValue("");
+
+    const state = await getWorkersStatusState();
+
+    expect(state).toEqual({
+      running: false,
+      statusText: "",
     });
   });
 });

@@ -1,6 +1,5 @@
 /// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\hands\HandsTableHeader.tsx
 
-import React from "react";
 import type { HandsSortKey } from "./sortHands";
 
 type Column = {
@@ -59,3 +58,4 @@ export function HandsTableHeader({
 }
 
 export default HandsTableHeader;
+
