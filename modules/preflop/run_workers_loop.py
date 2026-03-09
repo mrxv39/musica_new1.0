@@ -17,7 +17,7 @@ from modules.preflop.workers_loop.loop_runner import run_loop
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out_dir", required=True)
-    ap.add_argument("--interval_ms", type=int, default=800)
+    ap.add_argument("--interval_ms", type=int, default=150)
     ap.add_argument("--max_ticks", type=int, default=None)
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
