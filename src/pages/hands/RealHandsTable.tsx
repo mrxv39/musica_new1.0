@@ -65,6 +65,7 @@ export function RealHandsTable({
             <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Blinds</th>
             <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Hero cards</th>
             <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Board</th>
+            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>OCR Audit</th>
             <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Room/Hero</th>
           </tr>
         </thead>
@@ -77,7 +78,7 @@ export function RealHandsTable({
         />
       </table>
 
-      <RealHandsTableSummary rowsCount={rows.length} dbPath={dbPath} />
+      <RealHandsTableSummary rows={rows} rowsCount={rows.length} dbPath={dbPath} />
     </>
   );
 }
