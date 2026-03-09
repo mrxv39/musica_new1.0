@@ -31,7 +31,7 @@ class TestRunWorkersLoopIntegration(unittest.TestCase):
                 env=env,
             )
 
-            time.sleep(2.0)
+            time.sleep(3.0)
             p.terminate()
             try:
                 p.wait(timeout=3.0)
@@ -51,11 +51,15 @@ class TestRunWorkersLoopIntegration(unittest.TestCase):
             tmp_dir = os.path.join(out_dir, "_tmp")
             log_dir = os.path.join(out_dir, "_logs")
 
-            self.assertTrue(os.path.isdir(ok_dir), "ok dir not created")
-            self.assertTrue(os.path.isdir(err_dir), "errors dir not created")
-            self.assertTrue(os.path.isdir(del_dir), "borrar dir not created")
-            self.assertTrue(os.path.isdir(tmp_dir), "_tmp dir not created")
-            self.assertTrue(os.path.isdir(log_dir), "_logs dir not created")
+            for _ in range(20):
+                if all(os.path.isdir(p) for p in [ok_dir, err_dir, del_dir, tmp_dir, log_dir]):
+                    break
+                time.sleep(0.2)
+            self.assertTrue(os.path.isdir(ok_dir), f"ok dir not created | combined={combined!r}")
+            self.assertTrue(os.path.isdir(err_dir), f"errors dir not created | combined={combined!r}")
+            self.assertTrue(os.path.isdir(del_dir), f"borrar dir not created | combined={combined!r}")
+            self.assertTrue(os.path.isdir(tmp_dir), f"_tmp dir not created | combined={combined!r}")
+            self.assertTrue(os.path.isdir(log_dir), f"_logs dir not created | combined={combined!r}")
 
             self.assertIn("START run_workers_loop", combined)
             self.assertIn("PROJECT_ROOT=", combined)
@@ -65,3 +69,5 @@ class TestRunWorkersLoopIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+

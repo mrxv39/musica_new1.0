@@ -32,6 +32,20 @@ _write_preflop_fail_debug = write_preflop_fail_debug
 _safe_remove = safe_remove
 
 
+def _update_obs_frame_ref(dbmod: Any, fingerprint: str, new_frame_ref: str) -> bool:
+    try:
+        conn = dbmod.get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE hands_obs SET frame_ref = ? WHERE fingerprint = ?",
+            (new_frame_ref, fingerprint),
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
+
+
 def run_worker_mesa_once(
     *,
     area: Dict[str, Any],
@@ -208,6 +222,12 @@ def run_worker_mesa_once(
                 )
             except Exception:
                 pass
+
+        if out.get("persisted") and new_sig and dst:
+            try:
+                _update_obs_frame_ref(dbmod, new_sig, dst)
+            except Exception:
+                pass
     else:
         dst = safe_move(img_path, dirs.err_dir)
         reason = None
@@ -229,6 +249,12 @@ def run_worker_mesa_once(
             except Exception:
                 pass
 
+        if out.get("persisted") and new_sig and dst:
+            try:
+                _update_obs_frame_ref(dbmod, new_sig, dst)
+            except Exception:
+                pass
+
         if dbg:
             try:
                 write_no_strategy_debug(
@@ -243,5 +269,8 @@ def run_worker_mesa_once(
                 )
             except Exception:
                 pass
+
+
+
 
 

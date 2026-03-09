@@ -6,8 +6,10 @@ use std::sync::Arc;
 
 mod image_io;
 mod import_xml;
+mod match_spots;
 mod obs;
 mod python;
+mod reset_real;
 mod workers;
 
 fn main() {
@@ -24,6 +26,10 @@ fn main() {
             obs::run_worker_one,
             obs::run_worker_batch,
             obs::capture_test_images,
+            obs::get_hand_obs_image,
+
+            // REAL reset
+            reset_real::reset_hands_real,
 
             // workers loop/tick
             workers::commands::set_workers_running,
@@ -31,8 +37,12 @@ fn main() {
             workers::commands::run_workers_tick,
 
             // REAL import
-            import_xml::import_champion_xml
+            import_xml::import_champion_xml,
+
+            // REAL ↔ OCR linking
+            match_spots::match_spots
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+

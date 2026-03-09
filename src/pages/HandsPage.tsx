@@ -5,7 +5,7 @@ import HandsTable from "./hands/HandsTable";
 import RealHandsTable from "./hands/RealHandsTable";
 
 import { useHandsPage } from "./hands/useHandsPage";
-import { CHAMPION_XML_DIR, XML_ARCHIVE_DIR } from "./hands/handsPagePaths";
+import { CHAMPION_XML_DIR, XML_ARCHIVE_DIR, SPOTS_OUT_BASE } from "./hands/handsPagePaths";
 
 const ensureDbPath = (p: string | undefined | null) => {
   if (!p || p.trim() === "") {
@@ -20,8 +20,7 @@ export default function HandsPage() {
   const canRunOne = hp.mode === "OBS" && hp.canLoad && !hp.busy;
 
   const runMatchImages = async () => {
-    const spotsDir =
-      "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\spots_raw\\time_spots\\20260305";
+    const spotsDir = SPOTS_OUT_BASE;
 
     try {
       const res = await invoke<string>("match_spots", {

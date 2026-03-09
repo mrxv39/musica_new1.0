@@ -1,5 +1,6 @@
 /// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\hands\RealHandModal.tsx
 import React from "react";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { ActionRealRow, HandRealRow } from "../../db";
 import { fetchActionsRealForHand } from "../../db";
 
@@ -72,6 +73,8 @@ export function RealHandModal({
 }) {
   const [actions, setActions] = React.useState<ActionRealRow[]>([]);
   const [status, setStatus] = React.useState<string>("idle");
+  const [obsImagePath, setObsImagePath] = React.useState<string | null>(null);
+  const [obsImageStatus, setObsImageStatus] = React.useState<string>("idle");
 
   React.useEffect(() => {
     let alive = true;
@@ -95,6 +98,46 @@ export function RealHandModal({
     };
   }, [open, hand, dbPath]);
 
+  React.useEffect(() => {
+    let alive = true;
+
+    async function run() {
+      if (!open || !hand) {
+        setObsImagePath(null);
+        setObsImageStatus("idle");
+        return;
+      }
+
+      setObsImageStatus("loading...");
+      try {
+        const path = await invoke<string | null>("get_hand_obs_image", {
+          dbPath,
+          gamecode: hand.gamecode,
+        });
+
+        if (!alive) return;
+
+        const cleaned = typeof path === "string" ? path.trim() : "";
+        if (cleaned) {
+          setObsImagePath(cleaned);
+          setObsImageStatus("ok");
+        } else {
+          setObsImagePath(null);
+          setObsImageStatus("not_found");
+        }
+      } catch (e: any) {
+        if (!alive) return;
+        setObsImagePath(null);
+        setObsImageStatus("ERROR: " + (e?.message || String(e)));
+      }
+    }
+
+    run();
+    return () => {
+      alive = false;
+    };
+  }, [open, hand, dbPath]);
+
   if (!open || !hand) return null;
 
   const byStreet = new Map<number, ActionRealRow[]>();
@@ -106,6 +149,7 @@ export function RealHandModal({
 
   const streets = [1, 2, 3, 4].filter((n) => (byStreet.get(n) || []).length > 0);
   const board = formatBoardPretty(hand);
+  const obsImageUrl = obsImagePath ? convertFileSrc(obsImagePath) : null;
 
   return (
     <div
@@ -167,6 +211,39 @@ export function RealHandModal({
               <div><b>River:</b> {board.river}</div>
             </div>
           </div>
+
+          <div style={{ gridColumn: "1 / -1", border: "1px solid #eee", borderRadius: 10, padding: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>OCR capture relacionada</div>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>
+                match image: {obsImageStatus}
+              </div>
+            </div>
+
+            {obsImageUrl ? (
+              <div style={{ marginTop: 8 }}>
+                <img
+                  src={obsImageUrl}
+                  alt={`OCR capture ${hand.gamecode}`}
+                  style={{
+                    display: "block",
+                    maxWidth: "100%",
+                    maxHeight: 420,
+                    borderRadius: 8,
+                    border: "1px solid #eee",
+                    background: "#fafafa",
+                  }}
+                />
+                <div style={{ marginTop: 6, fontSize: 11, opacity: 0.65, wordBreak: "break-all" }}>
+                  {obsImagePath}
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: 8, fontSize: 13, opacity: 0.75 }}>
+                No hay imagen OCR enlazada para esta mano.
+              </div>
+            )}
+          </div>
         </div>
 
         <div style={{ marginTop: 14, fontSize: 13, opacity: 0.8 }}>
@@ -224,3 +301,6 @@ export function RealHandModal({
 }
 
 export default RealHandModal;
+
+
+

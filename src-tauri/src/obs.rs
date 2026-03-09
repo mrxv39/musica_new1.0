@@ -92,3 +92,34 @@ pub async fn capture_test_images(out_dir: String) -> Result<String, String> {
     .await
     .map_err(|e| format!("spawn_blocking error: {e}"))?
 }
+#[tauri::command]
+pub fn get_hand_obs_image(db_path: String, gamecode: String) -> Result<Option<String>, String> {
+    use rusqlite::Connection;
+
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            NULLIF(h.frame_ref, '') AS img_path
+        FROM hand_links l
+        JOIN hands_obs h
+          ON h.obs_id = l.obs_id
+        WHERE l.gamecode = ?
+        LIMIT 1
+        "
+    ).map_err(|e| e.to_string())?;
+
+    let mut rows = stmt.query([gamecode]).map_err(|e| e.to_string())?;
+
+    if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let path: Option<String> = row.get(0).map_err(|e| e.to_string())?;
+        Ok(path.filter(|p| !p.trim().is_empty()))
+    } else {
+        Ok(None)
+    }
+}
+
+
+
+

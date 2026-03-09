@@ -42,3 +42,5 @@ _diag_backend_*/
 
 *.bak*
 
+*.sqlite
+tmp_*.py

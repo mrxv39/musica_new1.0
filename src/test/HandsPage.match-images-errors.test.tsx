@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import HandsPage from "../pages/HandsPage";
+import { SPOTS_OUT_BASE } from "../pages/hands/handsPagePaths";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
@@ -133,7 +134,7 @@ describe("HandsPage match images errors", () => {
     expect(invokeMock).toHaveBeenCalledWith("match_spots", {
       dbPath: "C:\\db.sqlite",
       spotsDir:
-        "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\spots_raw\\time_spots\\20260305",
+        SPOTS_OUT_BASE,
       windowMs: 60000,
     });
 
@@ -162,7 +163,7 @@ describe("HandsPage match images errors", () => {
     expect(invokeMock).toHaveBeenCalledWith("match_spots", {
       dbPath: "poker_boss.db",
       spotsDir:
-        "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\spots_raw\\time_spots\\20260305",
+        SPOTS_OUT_BASE,
       windowMs: 60000,
     });
   });
@@ -185,7 +186,7 @@ describe("HandsPage match images errors", () => {
     expect(invokeMock).toHaveBeenCalledWith("match_spots", {
       dbPath: "poker_boss.db",
       spotsDir:
-        "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\spots_raw\\time_spots\\20260305",
+        SPOTS_OUT_BASE,
       windowMs: 60000,
     });
   });
@@ -251,3 +252,4 @@ describe("HandsPage match images errors", () => {
     expect(screen.queryByRole("button", { name: "Match Images" })).toBeNull();
   });
 });
+

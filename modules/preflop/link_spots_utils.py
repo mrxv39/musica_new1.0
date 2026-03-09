@@ -77,7 +77,7 @@ def parse_startdate_to_ms(s: str):
 def load_spots(spots_dir: str):
     items = []
 
-    for jp in glob.glob(os.path.join(spots_dir, "spot_*.json")):
+    for jp in glob.glob(os.path.join(spots_dir, "**", "spot_*.json"), recursive=True):
         try:
             with open(jp, "r", encoding="utf-8") as f:
                 j = json.load(f)

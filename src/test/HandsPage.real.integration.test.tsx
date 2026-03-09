@@ -75,6 +75,7 @@ beforeEach(() => {
 });
 
 import HandsPage from "../pages/HandsPage";
+import { SPOTS_OUT_BASE } from "../pages/hands/handsPagePaths";
 
 describe("HandsPage REAL mode integration", () => {
   it("renders REAL controls and real table", () => {
@@ -116,7 +117,7 @@ describe("HandsPage REAL mode integration", () => {
     expect(invokeMock).toHaveBeenCalledWith("match_spots", {
       dbPath: "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\poker_boss.db",
       spotsDir:
-        "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\spots_raw\\time_spots\\20260305",
+        SPOTS_OUT_BASE,
       windowMs: 60000,
     });
 
@@ -138,9 +139,10 @@ describe("HandsPage REAL mode integration", () => {
       expect(invokeMock).toHaveBeenCalledWith("match_spots", {
         dbPath: "poker_boss.db",
         spotsDir:
-          "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\spots_raw\\time_spots\\20260305",
+          SPOTS_OUT_BASE,
         windowMs: 60000,
       });
     });
   });
 });
+

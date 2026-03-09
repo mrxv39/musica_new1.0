@@ -282,7 +282,7 @@ def process_one_image(
         )
 
         frame_ref = ""
-        if img_path and mode != "screen":
+        if img_path:
             frame_ref = os.path.abspath(img_path)
 
         persist_obs(
@@ -433,3 +433,4 @@ def run_loop(args: Any) -> None:
 
     except KeyboardInterrupt:
         print(json.dumps({"worker_id": cfg.worker_id, "event": "shutdown", "ts": time.time()}, ensure_ascii=False))
+
