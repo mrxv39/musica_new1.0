@@ -63,6 +63,13 @@ describe("RealHandsTable", () => {
       room: "mesa 1",
       hero: "hero1",
       spot_png: "C:\\spots\\spot1.png",
+      linked_obs_id: 100,
+      ocr_cards_match: false,
+      ocr_warn_stacks: true,
+      ocr_warn_bets: false,
+      ocr_warn_pos: false,
+      ocr_warn_dealer: false,
+      ocr_warn_table: false,
     },
     {
       id: 11,
@@ -77,6 +84,13 @@ describe("RealHandsTable", () => {
       room: "mesa 2",
       hero: "hero2",
       spot_png: "",
+      linked_obs_id: null,
+      ocr_cards_match: null,
+      ocr_warn_stacks: false,
+      ocr_warn_bets: true,
+      ocr_warn_pos: false,
+      ocr_warn_dealer: false,
+      ocr_warn_table: false,
     },
   ] as any[];
 
@@ -87,7 +101,7 @@ describe("RealHandsTable", () => {
     realHandsTableSummaryMock.mockReset();
   });
 
-  it("renders table headers and summary", () => {
+  it("renders table headers, filter buttons and summary", () => {
     render(<RealHandsTable rows={rows as any} dbPath={dbPath} />);
 
     expect(screen.getByText("Gamecode")).toBeTruthy();
@@ -95,15 +109,20 @@ describe("RealHandsTable", () => {
     expect(screen.getByText("Blinds")).toBeTruthy();
     expect(screen.getByText("Hero cards")).toBeTruthy();
     expect(screen.getByText("Board")).toBeTruthy();
+    expect(screen.getByText("OCR Audit")).toBeTruthy();
     expect(screen.getByText("Room/Hero")).toBeTruthy();
+
+    expect(screen.getByRole("button", { name: "All" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "No OCR" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cards diff" })).toBeTruthy();
     expect(screen.getByTestId("real-hands-summary")).toBeTruthy();
   });
 
-  it("passes rows and callbacks to RealHandsTableBody", () => {
+  it("passes filtered rows and callbacks to RealHandsTableBody", () => {
     render(<RealHandsTable rows={rows as any} dbPath={dbPath} />);
 
     expect(realHandsTableBodyMock).toHaveBeenCalled();
-    const props = realHandsTableBodyMock.mock.calls[0][0];
+    const props = realHandsTableBodyMock.mock.calls.at(-1)?.[0];
     expect(props.rows).toEqual(rows);
     expect(typeof props.getSpotPng).toBe("function");
     expect(typeof props.onOpenHand).toBe("function");
@@ -142,11 +161,31 @@ describe("RealHandsTable", () => {
     expect(lastCall.open).toBe(false);
   });
 
-  it("passes rowsCount and dbPath to summary", () => {
+  it("filters rows by No OCR", () => {
     render(<RealHandsTable rows={rows as any} dbPath={dbPath} />);
 
-    const props = realHandsTableSummaryMock.mock.calls[0][0];
-    expect(props.rowsCount).toBe(2);
+    fireEvent.click(screen.getByRole("button", { name: "No OCR" }));
+
+    const props = realHandsTableBodyMock.mock.calls.at(-1)?.[0];
+    expect(props.rows).toEqual([rows[1]]);
+  });
+
+  it("filters rows by Cards diff", () => {
+    render(<RealHandsTable rows={rows as any} dbPath={dbPath} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cards diff" }));
+
+    const props = realHandsTableBodyMock.mock.calls.at(-1)?.[0];
+    expect(props.rows).toEqual([rows[0]]);
+  });
+
+  it("passes filtered rowsCount and dbPath to summary", () => {
+    render(<RealHandsTable rows={rows as any} dbPath={dbPath} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "No OCR" }));
+
+    const props = realHandsTableSummaryMock.mock.calls.at(-1)?.[0];
+    expect(props.rowsCount).toBe(1);
     expect(props.dbPath).toBe(dbPath);
   });
 });

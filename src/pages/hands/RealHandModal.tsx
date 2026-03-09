@@ -60,6 +60,30 @@ function formatAmtBb(a: ActionRealRow) {
   return ` ${s}bb`;
 }
 
+function flagLabel(ok: unknown, hasWarn: unknown) {
+  if (ok === true || ok === 1 || ok === "1") {
+    return hasWarn ? "WARN" : "OK";
+  }
+  return hasWarn ? "WARN" : "NO";
+}
+
+function boolWarn(v: unknown) {
+  return !!v;
+}
+
+function valueText(v: unknown, fallback = "-") {
+  if (v === null || v === undefined) return fallback;
+  const s = String(v).trim();
+  return s ? s : fallback;
+}
+
+function auditColors(status?: HandRealRow["ocr_audit_status"]) {
+  if (status === "ok") return { bg: "#eefaf0", border: "#cfe9d5", fg: "#1d6b35" };
+  if (status === "warn") return { bg: "#fff7e8", border: "#f0ddb3", fg: "#8a6116" };
+  if (status === "diff") return { bg: "#fdeeee", border: "#efcaca", fg: "#9b2c2c" };
+  return { bg: "#f4f4f4", border: "#dddddd", fg: "#666666" };
+}
+
 export function RealHandModal({
   open,
   dbPath,
@@ -151,6 +175,12 @@ export function RealHandModal({
   const board = formatBoardPretty(hand);
   const obsImageUrl = obsImagePath ? convertFileSrc(obsImagePath) : null;
 
+  const auditColorsNow = auditColors(hand.ocr_audit_status);
+  const cardsResult =
+    hand.ocr_cards_match === true ? "MATCH" :
+    hand.ocr_cards_match === false ? "DIFF" :
+    hand.linked_obs_id == null ? "NO OCR" : "?";
+
   return (
     <div
       style={{
@@ -209,6 +239,43 @@ export function RealHandModal({
               <div><b>Flop:</b> {board.flop}</div>
               <div><b>Turn:</b> {board.turn}</div>
               <div><b>River:</b> {board.river}</div>
+            </div>
+          </div>
+
+          <div style={{ gridColumn: "1 / -1", border: "1px solid #eee", borderRadius: 10, padding: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>OCR Audit</div>
+              <span
+                style={{
+                  display: "inline-block",
+                  padding: "3px 8px",
+                  borderRadius: 999,
+                  border: `1px solid ${auditColorsNow.border}`,
+                  background: auditColorsNow.bg,
+                  color: auditColorsNow.fg,
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {hand.ocr_audit_summary || "NO OCR"}
+              </span>
+            </div>
+
+            <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, fontSize: 13 }}>
+              <div><b>Cards XML:</b> {formatCardsString(hand.hero_cards || "")}</div>
+              <div><b>Cards OCR:</b> {valueText(hand.ocr_mano_raw)}</div>
+              <div><b>Cards result:</b> {cardsResult}</div>
+              <div><b>Linked obs_id:</b> {valueText(hand.linked_obs_id)}</div>
+              <div><b>Match method:</b> {valueText(hand.ocr_match_method)}</div>
+              <div><b>Match score:</b> {valueText(hand.ocr_match_score)}</div>
+              <div><b>Workers status:</b> {valueText(hand.wc_status)}</div>
+              <div><b>Workers reason:</b> {valueText(hand.wc_reason)}</div>
+              <div><b>Stacks:</b> {flagLabel(hand.stacks_ok, boolWarn(hand.ocr_warn_stacks))}</div>
+              <div><b>Bets:</b> {flagLabel(hand.bets_ok, boolWarn(hand.ocr_warn_bets))}</div>
+              <div><b>Pos:</b> {flagLabel(hand.posiciones_ok, boolWarn(hand.ocr_warn_pos))}</div>
+              <div><b>Dealer:</b> {flagLabel(hand.dealer_ok, boolWarn(hand.ocr_warn_dealer))}</div>
+              <div><b>Table:</b> {flagLabel(hand.table_state_ok, boolWarn(hand.ocr_warn_table))}</div>
+              <div><b>Frame ref:</b> {valueText(hand.ocr_frame_ref)}</div>
             </div>
           </div>
 
@@ -301,6 +368,3 @@ export function RealHandModal({
 }
 
 export default RealHandModal;
-
-
-

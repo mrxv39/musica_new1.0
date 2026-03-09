@@ -217,7 +217,7 @@ describe("RealHandModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("muestra hero cards, board y players_json", async () => {
+  it("muestra hero cards, board, OCR audit y players_json", async () => {
     vi.mocked(fetchActionsRealForHand).mockResolvedValueOnce([]);
 
     render(
@@ -230,6 +230,24 @@ describe("RealHandModal", () => {
           turn: "HJ",
           river: "SQ",
           players_json: '{"players":[{"name":"hero1"},{"name":"villain"}]}',
+          ocr_audit_summary: "CARDS DIFF | WARN stacks",
+          ocr_cards_match: false,
+          ocr_mano_raw: "AdKd",
+          ocr_match_method: "rank+time",
+          ocr_match_score: 1,
+          linked_obs_id: 55,
+          wc_status: "errors",
+          wc_reason: "ocr failed",
+          stacks_ok: 0,
+          bets_ok: 1,
+          posiciones_ok: 1,
+          dealer_ok: 1,
+          table_state_ok: 1,
+          ocr_warn_stacks: true,
+          ocr_warn_bets: false,
+          ocr_warn_pos: false,
+          ocr_warn_dealer: false,
+          ocr_warn_table: false,
         })}
         onClose={vi.fn()}
       />
@@ -242,6 +260,17 @@ describe("RealHandModal", () => {
     expect(screen.getByText(/Flop:/)).toBeTruthy();
     expect(screen.getByText(/Turn:/)).toBeTruthy();
     expect(screen.getByText(/River:/)).toBeTruthy();
+
+    expect(screen.getByText("OCR Audit")).toBeTruthy();
+    expect(screen.getByText(/CARDS DIFF \| WARN stacks/i)).toBeTruthy();
+    expect(screen.getByText(/Cards XML:/)).toBeTruthy();
+    expect(screen.getByText(/Cards OCR:/)).toBeTruthy();
+    expect(screen.getByText(/Cards result:/)).toBeTruthy();
+    expect(screen.getByText(/Match method:/)).toBeTruthy();
+    expect(screen.getByText(/Match score:/)).toBeTruthy();
+    expect(screen.getByText(/Workers status:/)).toBeTruthy();
+    expect(screen.getByText(/Workers reason:/)).toBeTruthy();
+    expect(screen.getByText(/Stacks:/)).toBeTruthy();
 
     fireEvent.click(screen.getByText(/Ver players_json/));
     expect(screen.getByText(/"name":"hero1"/)).toBeTruthy();
