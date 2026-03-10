@@ -40,10 +40,11 @@ def test_run_one_tick_procesa_areas_esperadas(monkeypatch):
         compute_strategy_safe_fn=lambda *a, **k: {},
     )
 
-    assert calls == [1, 2, 3]
+    assert set(calls) == {1, 2, 3}
+    assert len(calls) == 3
 
 
-def test_run_one_tick_si_falla_una_area_propaga_excepcion(monkeypatch):
+def test_run_one_tick_si_falla_una_area_loggea_error_y_sigue(monkeypatch):
     calls = []
 
     monkeypatch.setattr(
@@ -66,29 +67,29 @@ def test_run_one_tick_si_falla_una_area_propaga_excepcion(monkeypatch):
 
     fp = io.StringIO()
 
-    try:
-        tickmod.run_one_tick(
-            dirs={"base_dir": "x"},
-            ts="20260306_120000_000000",
-            interval_ms=300,
-            verbose=False,
-            fp=fp,
-            fixed_input=None,
-            last_sig_by_mesa={},
-            dbg=False,
-            worker_preflop_mod=object(),
-            dbmod=object(),
-            MatchInput=None,
-            select_move=None,
-            extract_modules_fn=lambda *a, **k: {},
-            build_ocr_safe_fn=lambda *a, **k: {},
-            compute_strategy_safe_fn=lambda *a, **k: {},
-        )
-        assert False, "Se esperaba RuntimeError"
-    except RuntimeError as e:
-        assert str(e) == "mesa_fail"
+    tickmod.run_one_tick(
+        dirs={"base_dir": "x"},
+        ts="20260306_120000_000000",
+        interval_ms=300,
+        verbose=False,
+        fp=fp,
+        fixed_input=None,
+        last_sig_by_mesa={},
+        dbg=False,
+        worker_preflop_mod=object(),
+        dbmod=object(),
+        MatchInput=None,
+        select_move=None,
+        extract_modules_fn=lambda *a, **k: {},
+        build_ocr_safe_fn=lambda *a, **k: {},
+        compute_strategy_safe_fn=lambda *a, **k: {},
+    )
 
-    assert calls == [1, 2]
+    assert set(calls) == {1, 2, 3}
+    assert len(calls) == 3
+
+    log_text = fp.getvalue()
+    assert "[mesa 2] TICK_WORKER_ERROR: RuntimeError:mesa_fail" in log_text
 
 
 def test_run_one_tick_pasa_last_sig_by_mesa_y_area(monkeypatch):
