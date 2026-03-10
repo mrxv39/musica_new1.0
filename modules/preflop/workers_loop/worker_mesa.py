@@ -23,7 +23,7 @@ from .worker_mesa_preflop import (
     write_preflop_fail_debug,
 )
 
-RECENT_CAPTURE_WINDOW_MS = int(os.environ.get("POKER_BOSS_CAPTURE_DEDUPE_WINDOW_MS", "15000"))
+RECENT_CAPTURE_WINDOW_MS = int(os.environ.get("POKER_BOSS_CAPTURE_DEDUPE_WINDOW_MS", "3000"))
 
 # Backward-compatible private aliases for tests/monkeypatching.
 _run_preflop_direct = run_preflop_direct
