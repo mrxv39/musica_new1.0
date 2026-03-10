@@ -1,4 +1,4 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\preflop\preflop.py
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\preflop\preflop.py
 import sys
 import os
 import json
@@ -9,12 +9,12 @@ import subprocess
 
 MANO_PATH = os.path.join(os.path.dirname(__file__), "mano.py")
 TIME_PATH = os.path.join(os.path.dirname(__file__), "time.py")
-NOBOARD_PATH = os.path.join(os.path.dirname(__file__), "noboard.py")
+BOARD_STATE_PATH = os.path.join(os.path.dirname(__file__), "board_state.py")
 
 MODULES = {
     "mano": (MANO_PATH, "mano_ok"),
     "time": (TIME_PATH, "time_ok"),
-    "noboard": (NOBOARD_PATH, "noboard_ok"),
+    "board_state": (BOARD_STATE_PATH, "street_state"),
 }
 
 
@@ -37,7 +37,7 @@ def run_module(name: str, path: str, image_path: str):
         )
         if proc.returncode != 0 or not (proc.stdout or "").strip():
             return (
-                {"error": "nonzero exit or no output", MODULES[name][1]: False},
+                {"error": "nonzero exit or no output"},
                 f"{name}: nonzero exit or no output",
             )
 
@@ -45,29 +45,35 @@ def run_module(name: str, path: str, image_path: str):
             data = json.loads(proc.stdout)
             if not isinstance(data, dict):
                 return (
-                    {"error": "invalid json (not an object)", MODULES[name][1]: False},
+                    {"error": "invalid json (not an object)"},
                     f"{name}: invalid json (not an object)",
                 )
             return data, None
         except Exception:
-            return ({"error": "invalid json", MODULES[name][1]: False}, f"{name}: invalid json")
+            return ({"error": "invalid json"}, f"{name}: invalid json")
 
     except subprocess.TimeoutExpired:
-        return ({"error": "timeout", MODULES[name][1]: False}, f"{name}: timeout")
+        return ({"error": "timeout"}, f"{name}: timeout")
     except Exception as e:
-        return ({"error": str(e), MODULES[name][1]: False}, f"{name}: {str(e)}")
+        return ({"error": str(e)}, f"{name}: {str(e)}")
 
 
 def extract_ok_flag(name: str, data: dict) -> bool:
-    if name == "mano":
-        if isinstance(data, dict):
-            hand_class = data.get("hand_class", "")
-            mano_raw = data.get("mano_raw", "")
-            return bool(hand_class and mano_raw)
+    if not isinstance(data, dict):
         return False
 
-    key = MODULES[name][1]
-    return bool(isinstance(data, dict) and data.get(key, False))
+    if name == "mano":
+        hand_class = data.get("hand_class", "")
+        mano_raw = data.get("mano_raw", "")
+        return bool(hand_class and mano_raw)
+
+    if name == "time":
+        return bool(data.get("time_ok", False))
+
+    if name == "board_state":
+        return str(data.get("street_state", "")).strip().lower() == "preflop"
+
+    return False
 
 
 def main():
@@ -77,7 +83,6 @@ def main():
 
         image_path = sys.argv[sys.argv.index("--image") + 1]
 
-        # ✅ FIX: si la imagen no existe, error global (y errors no vacío)
         if not os.path.exists(image_path):
             raise Exception("Image not found")
 
@@ -87,9 +92,11 @@ def main():
         errors = []
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futs = {name: executor.submit(run_module, name, path, image_path) for name, (path, _) in MODULES.items()}
+            futs = {
+                name: executor.submit(run_module, name, path, image_path)
+                for name, (path, _) in MODULES.items()
+            }
 
-            # ✅ FIX: iteración correcta
             for name, future in futs.items():
                 data, err = future.result()
                 results[name] = data
@@ -98,9 +105,9 @@ def main():
 
         mano_ok = extract_ok_flag("mano", results.get("mano", {}))
         time_ok = extract_ok_flag("time", results.get("time", {}))
-        noboard_ok = extract_ok_flag("noboard", results.get("noboard", {}))
+        board_preflop_ok = extract_ok_flag("board_state", results.get("board_state", {}))
 
-        preflop_ok = bool(mano_ok and time_ok and noboard_ok)
+        preflop_ok = bool(mano_ok and time_ok and board_preflop_ok)
 
         out = {
             "preflop_ok": preflop_ok,
@@ -126,7 +133,7 @@ def main():
             "modules": {
                 "mano": {"error": msg, "mano_ok": False},
                 "time": {"error": msg, "time_ok": False},
-                "noboard": {"error": msg, "noboard_ok": False},
+                "board_state": {"error": msg, "street_state": "unknown", "valid_count": 0},
             },
             "errors": [msg],
         }

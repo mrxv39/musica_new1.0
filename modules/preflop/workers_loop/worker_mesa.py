@@ -27,6 +27,9 @@ from .worker_mesa_preflop import (
 
 RECENT_CAPTURE_WINDOW_MS = int(os.environ.get("POKER_BOSS_CAPTURE_DEDUPE_WINDOW_MS", "3000"))
 
+# Cache en memoria por mesa para cortar frames idénticos antes del pipeline pesado.
+_LAST_CAPTURE_FP_BY_MESA: Dict[int, Optional[str]] = {}
+
 _run_preflop_direct = run_preflop_direct
 _describe_preflop_fail = describe_preflop_fail
 _write_preflop_fail_debug = write_preflop_fail_debug
@@ -53,6 +56,7 @@ def run_worker_mesa_once(
 ) -> None:
     mesa = int(area["mesa"])
     last_sig_by_mesa.setdefault(mesa, None)
+    _LAST_CAPTURE_FP_BY_MESA.setdefault(mesa, None)
 
     tick_t0 = time.perf_counter()
 
@@ -86,6 +90,16 @@ def run_worker_mesa_once(
     try:
         image_fp = get_file_fingerprint(img_path)
         image_size_bytes = os.path.getsize(img_path)
+
+        last_capture_fp = _LAST_CAPTURE_FP_BY_MESA.get(mesa)
+        if last_capture_fp == image_fp:
+            _safe_remove(img_path)
+            if dbg or verbose:
+                log(fp, f"[mesa {mesa}] UNCHANGED_FRAME -> skip | fp={image_fp}")
+            return
+
+        _LAST_CAPTURE_FP_BY_MESA[mesa] = image_fp
+
         since_ms = int(time.time() * 1000) - RECENT_CAPTURE_WINDOW_MS
 
         recent = dbmod.find_recent_capture_by_fingerprint(

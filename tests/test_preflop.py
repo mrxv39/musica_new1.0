@@ -45,16 +45,18 @@ class TestPreflop(unittest.TestCase):
         self.assertIn('modules', data)
         self.assertIn('mano', data['modules'])
         self.assertIn('time', data['modules'])
-        self.assertIn('noboard', data['modules'])
+        self.assertIn('board_state', data['modules'])
         self.assertIsInstance(data['modules']['mano'], dict)
         self.assertIsInstance(data['modules']['time'], dict)
-        self.assertIsInstance(data['modules']['noboard'], dict)
+        self.assertIsInstance(data['modules']['board_state'], dict)
         self.assertTrue(len(data['fingerprint']) > 0)
         # preflop_ok must be AND of ok flags
         mano_ok = bool(data['modules']['mano'].get('hand_class', '') and data['modules']['mano'].get('mano_raw', ''))
         time_ok = bool(data['modules']['time'].get('time_ok', False))
-        noboard_ok = bool(data['modules']['noboard'].get('noboard_ok', False))
+        noboard_ok = bool(data['modules']['board_state'].get('noboard_ok', False))
         self.assertEqual(data['preflop_ok'], mano_ok and time_ok and noboard_ok)
 
 if __name__ == '__main__':
     unittest.main()
+
+
