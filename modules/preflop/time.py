@@ -55,17 +55,14 @@ def main():
             roi = arr
             mode = 'exact_template_size'
 
-        # Caso 2: imagen pequeña (ya viene del precheck ROI por mesa)
-        elif img_h <= h and img_w <= w:
+        # Caso 2: imagen ya recortada del reloj por mesa (time_gate / build_time_bbox)
+        # Debe respetarse tal cual y NO reaplicar la ROI legacy.
+        elif img_h < y + h or img_w < x + w:
             roi = arr
-            mode = 'small_input_full'
+            mode = 'pre_cropped_time_roi'
 
         # Caso 3: imagen completa de mesa -> recortar ROI interna legacy
         else:
-            if img_h < y + h or img_w < x + w:
-                raise Exception(
-                    f'ROI out of bounds | img={img_w}x{img_h} | roi=({x},{y},{w},{h})'
-                )
             roi = arr[y:y + h, x:x + w]
             mode = 'cropped_from_full_table'
 

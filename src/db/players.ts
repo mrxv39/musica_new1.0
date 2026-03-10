@@ -9,9 +9,14 @@
  *   players(id INTEGER PK, name TEXT, tipo TEXT, created_at TEXT)
  */
 
-import { getDB } from "./sql";
+import Database from "@tauri-apps/plugin-sql";
 
+let _playersDb: Database | null = null;
 let _initPlayersPromise: Promise<void> | null = null;
+
+// ✅ Players debe leer la DB principal real de Poker Boss
+export const PLAYERS_DB_URL =
+  "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/poker_boss.db";
 
 export type PlayerRow = {
   id: number;
@@ -20,11 +25,17 @@ export type PlayerRow = {
   created_at: string;
 };
 
+async function getPlayersDB(): Promise<Database> {
+  if (_playersDb) return _playersDb;
+  _playersDb = await Database.load(PLAYERS_DB_URL);
+  return _playersDb;
+}
+
 export async function initPlayersDB(): Promise<void> {
   if (_initPlayersPromise) return _initPlayersPromise;
 
   _initPlayersPromise = (async () => {
-    const db = await getDB();
+    const db = await getPlayersDB();
 
     await db.execute(`PRAGMA foreign_keys = ON;`);
 
@@ -53,13 +64,12 @@ export async function initPlayersDB(): Promise<void> {
       }
     }
 
-    // Índice útil
     try {
       await db.execute(
         `CREATE INDEX IF NOT EXISTS idx_players_name ON players(name);`
       );
     } catch {
-      // ignore
+        // ignore
     }
   })();
 
@@ -68,7 +78,7 @@ export async function initPlayersDB(): Promise<void> {
 
 export async function listPlayers(): Promise<PlayerRow[]> {
   await initPlayersDB();
-  const db = await getDB();
+  const db = await getPlayersDB();
 
   return (await db.select(
     `SELECT id, name, tipo, created_at FROM players ORDER BY name ASC;`
@@ -80,7 +90,7 @@ export async function updatePlayerTipo(
   tipo: string
 ): Promise<void> {
   await initPlayersDB();
-  const db = await getDB();
+  const db = await getPlayersDB();
 
   const id = Number(playerId);
   if (!Number.isFinite(id) || id <= 0) throw new Error("Invalid playerId");

@@ -22,3 +22,4 @@ def build_time_bbox(area: Dict) -> Tuple[int, int, int, int]:
     x2 = x1 + w
     y2 = y1 + h
     return (x1, y1, x2, y2)
+

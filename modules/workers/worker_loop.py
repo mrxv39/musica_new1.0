@@ -197,6 +197,7 @@ def process_one_image(
     MatchInput: Any,
     select_move: Any,
     last_hand_sig: Optional[str],
+    persist_to_db: bool = True,
     # injectables for tests / alternate loops
     run_preflop_fn: Optional[RunPreflopFn] = None,
     extract_modules_fn: Optional[ExtractModulesFn] = None,
@@ -271,7 +272,7 @@ def process_one_image(
     # persist
     timing.t_persist0 = time.perf_counter()
     persisted = False
-    if (not dedupe_skipped) and can_persist and sig:
+    if persist_to_db and (not dedupe_skipped) and can_persist and sig:
         ocr_json = build_ocr_json(
             mano_result=mano_result,
             stacks_result=stacks_result,

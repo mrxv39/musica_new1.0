@@ -16,7 +16,9 @@ from .fs_utils import log, safe_move
 from .preflop_logic import preflop_fail
 from .strategy_utils import force_ok_on_default_fold, has_strategy_move
 from .time_gate import run_time_gate_for_area
+from .worker_mesa_candidates import write_time_mano_candidate
 from .worker_mesa_debug import safe_remove, write_no_strategy_debug
+from .worker_mesa_obs import persist_preflop_obs, update_obs_frame_ref
 from .worker_mesa_preflop import (
     describe_preflop_fail,
     run_preflop_direct,
@@ -25,110 +27,10 @@ from .worker_mesa_preflop import (
 
 RECENT_CAPTURE_WINDOW_MS = int(os.environ.get("POKER_BOSS_CAPTURE_DEDUPE_WINDOW_MS", "3000"))
 
-# Backward-compatible private aliases for tests/monkeypatching.
 _run_preflop_direct = run_preflop_direct
 _describe_preflop_fail = describe_preflop_fail
 _write_preflop_fail_debug = write_preflop_fail_debug
 _safe_remove = safe_remove
-
-
-def _extract_time_mano_candidate(preflop: Any) -> Dict[str, Any]:
-    if not isinstance(preflop, dict):
-        return {"candidate_ok": False, "mano_ok": False, "time_ok": False, "mano": {}, "time": {}}
-
-    mods = preflop.get("modules", {})
-    if not isinstance(mods, dict):
-        return {"candidate_ok": False, "mano_ok": False, "time_ok": False, "mano": {}, "time": {}}
-
-    mano = mods.get("mano", {})
-    time_mod = mods.get("time", {})
-
-    mano_ok = False
-    if isinstance(mano, dict):
-        if "mano_ok" in mano:
-            mano_ok = bool(mano.get("mano_ok"))
-        elif "valid" in mano:
-            mano_ok = bool(mano.get("valid"))
-        else:
-            hand_class = str(mano.get("hand_class", "")).strip()
-            mano_raw = str(mano.get("mano_raw", "")).strip()
-            mano_ok = bool(hand_class and hand_class != "??" and mano_raw and mano_raw != "UNKNOWNUNKNOWN")
-
-    time_ok = False
-    if isinstance(time_mod, dict):
-        if "time_ok" in time_mod:
-            time_ok = bool(time_mod.get("time_ok"))
-
-    return {
-        "candidate_ok": bool(mano_ok and time_ok),
-        "mano_ok": bool(mano_ok),
-        "time_ok": bool(time_ok),
-        "mano": mano if isinstance(mano, dict) else {},
-        "time": time_mod if isinstance(time_mod, dict) else {},
-    }
-
-
-def _write_time_mano_candidate(
-    *,
-    dirs: Any,
-    src_img_path: str,
-    mesa: int,
-    capture_id: Optional[int],
-    image_fingerprint: Optional[str],
-    preflop: Any,
-) -> Optional[str]:
-    info = _extract_time_mano_candidate(preflop)
-    if not info.get("candidate_ok"):
-        return None
-
-    base_dir = os.path.dirname(getattr(dirs, "err_dir"))
-    cand_dir = os.path.join(base_dir, "time_mano_candidates")
-    os.makedirs(cand_dir, exist_ok=True)
-
-    base_name = os.path.basename(src_img_path)
-    dst_img = os.path.join(cand_dir, base_name)
-    shutil.copy2(src_img_path, dst_img)
-
-    payload = {
-        "mesa": mesa,
-        "capture_id": capture_id,
-        "image_fingerprint": image_fingerprint,
-        "src_img_path": os.path.abspath(src_img_path),
-        "candidate_img_path": os.path.abspath(dst_img),
-        "preflop_ok": bool(preflop.get("preflop_ok")) if isinstance(preflop, dict) else False,
-        "mano_ok": bool(info.get("mano_ok")),
-        "time_ok": bool(info.get("time_ok")),
-        "mano_raw": info.get("mano", {}).get("mano_raw"),
-        "hand_class": info.get("mano", {}).get("hand_class"),
-        "score1": info.get("mano", {}).get("score1"),
-        "score2": info.get("mano", {}).get("score2"),
-        "time_score": info.get("time", {}).get("score"),
-        "noboard_ok": (
-            bool(((preflop.get("modules") or {}).get("noboard") or {}).get("noboard_ok"))
-            if isinstance(preflop, dict) else False
-        ),
-        "errors": preflop.get("errors", []) if isinstance(preflop, dict) else [],
-        "preflop": preflop if isinstance(preflop, dict) else str(preflop),
-    }
-
-    with open(dst_img + ".json", "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
-
-    return dst_img
-
-
-def _update_obs_frame_ref(dbmod: Any, fingerprint: str, new_frame_ref: str) -> bool:
-    try:
-        conn = dbmod.get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE hands_obs SET frame_ref = ? WHERE fingerprint = ?",
-            (new_frame_ref, fingerprint),
-        )
-        conn.commit()
-        return True
-    except Exception:
-        return False
 
 
 def run_worker_mesa_once(
@@ -151,6 +53,8 @@ def run_worker_mesa_once(
 ) -> None:
     mesa = int(area["mesa"])
     last_sig_by_mesa.setdefault(mesa, None)
+
+    tick_t0 = time.perf_counter()
 
     if fixed_input:
         try:
@@ -177,6 +81,7 @@ def run_worker_mesa_once(
     capture_id: Optional[int] = None
     image_fp: Optional[str] = None
     ocr: Dict[str, Any] = {}
+    obs_id: Optional[int] = None
 
     try:
         image_fp = get_file_fingerprint(img_path)
@@ -225,7 +130,7 @@ def run_worker_mesa_once(
 
     candidate_dst = None
     try:
-        candidate_dst = _write_time_mano_candidate(
+        candidate_dst = write_time_mano_candidate(
             dirs=dirs,
             src_img_path=img_path,
             mesa=mesa,
@@ -267,6 +172,24 @@ def run_worker_mesa_once(
     strategy, err = compute_strategy_safe_fn(preflop, mano_result, ocr)
     strategy = force_ok_on_default_fold(strategy)
 
+    try:
+        obs_id = persist_preflop_obs(
+            dbmod=dbmod,
+            preflop=preflop,
+            image_fp=image_fp,
+            img_path=img_path,
+            mesa=mesa,
+            ocr=ocr,
+            mano_result=mano_result,
+            stacks_result=stacks_result,
+            strategy=strategy,
+            tempo_s=round(time.perf_counter() - tick_t0, 3),
+        )
+        if obs_id and (dbg or verbose):
+            log(fp, f"[mesa {mesa}] hands_obs persisted -> obs_id={obs_id} | fp={image_fp}")
+    except Exception as e:
+        log(fp, f"[mesa {mesa}] hands_obs persist error: {e}")
+
     cfg = LoopConfig(
         worker_id=mesa,
         interval_ms=int(interval_ms),
@@ -301,6 +224,7 @@ def run_worker_mesa_once(
         MatchInput=MatchInput,
         select_move=select_move,
         last_hand_sig=last_sig_by_mesa[mesa],
+        persist_to_db=False,
         run_preflop_fn=_rp,
         extract_modules_fn=_em,
         compute_strategy_fn=_cs,
@@ -323,9 +247,15 @@ def run_worker_mesa_once(
             except Exception:
                 pass
 
-        if out.get("persisted") and new_sig and dst:
+        if image_fp and dst:
             try:
-                _update_obs_frame_ref(dbmod, new_sig, dst)
+                update_obs_frame_ref(dbmod, image_fp, dst)
+            except Exception:
+                pass
+
+        if out.get("persisted") and new_sig and dst and new_sig != image_fp:
+            try:
+                update_obs_frame_ref(dbmod, new_sig, dst)
             except Exception:
                 pass
     else:
@@ -349,9 +279,15 @@ def run_worker_mesa_once(
             except Exception:
                 pass
 
-        if out.get("persisted") and new_sig and dst:
+        if image_fp and dst:
             try:
-                _update_obs_frame_ref(dbmod, new_sig, dst)
+                update_obs_frame_ref(dbmod, image_fp, dst)
+            except Exception:
+                pass
+
+        if out.get("persisted") and new_sig and dst and new_sig != image_fp:
+            try:
+                update_obs_frame_ref(dbmod, new_sig, dst)
             except Exception:
                 pass
 
@@ -369,8 +305,3 @@ def run_worker_mesa_once(
                 )
             except Exception:
                 pass
-
-
-
-
-

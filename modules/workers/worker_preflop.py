@@ -12,7 +12,9 @@ DEFAULT_PREFLOP_TIMEOUT_SEC = int(os.environ.get("POKER_BOSS_PREFLOP_TIMEOUT_SEC
 
 
 def run_preflop_subprocess(image_path: str, timeout_sec: int = DEFAULT_PREFLOP_TIMEOUT_SEC) -> Dict[str, Any]:
-    script_path = os.path.join("modules", "preflop", "run_preflop.py")
+    script_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "preflop", "preflop.py")
+    )
 
     cmd = [
         sys.executable,

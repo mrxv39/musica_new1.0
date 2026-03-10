@@ -12,11 +12,71 @@ from .mesa_config import build_time_bbox
 
 
 DEBUG_SAVE_SCORE_MIN = float(os.environ.get("POKER_BOSS_TIME_GATE_DEBUG_SCORE_MIN", "0.70"))
+_DEBUG_SAVED_MESAS: set[int] = set()
 
 
 def _safe_name(value: Any) -> str:
     text = str(value)
     return "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in text)
+
+
+def _write_area_and_roi_probe_once(
+    *,
+    area: Dict[str, Any],
+    tmp_dir: str,
+    ts: str,
+    roi_path: str,
+) -> None:
+    try:
+        mesa = int(area["mesa"])
+        if mesa in _DEBUG_SAVED_MESAS:
+            return
+
+        base_dir = os.path.dirname(tmp_dir)
+        probe_dir = os.path.join(base_dir, "time_gate_probe")
+        os.makedirs(probe_dir, exist_ok=True)
+
+        base_name = f"{_safe_name(ts)}__mesa_{mesa}"
+
+        area_bbox = (
+            int(area["x1"]),
+            int(area["y1"]),
+            int(area["x2"]),
+            int(area["y2"]),
+        )
+
+        area_dst = os.path.join(probe_dir, base_name + "__AREA.bmp")
+        time_dst = os.path.join(probe_dir, base_name + "__TIME.bmp")
+
+        capture_bbox_to_tmp(
+            area_bbox,
+            probe_dir,
+            os.path.basename(area_dst),
+        )
+
+        shutil.copy2(roi_path, time_dst)
+
+        payload = {
+            "mesa": mesa,
+            "ts": ts,
+            "area": {
+                "mesa": area.get("mesa"),
+                "x1": area.get("x1"),
+                "y1": area.get("y1"),
+                "x2": area.get("x2"),
+                "y2": area.get("y2"),
+            },
+            "area_probe_path": os.path.abspath(area_dst),
+            "time_probe_path": os.path.abspath(time_dst),
+            "roi_source_path": os.path.abspath(roi_path),
+        }
+
+        with open(os.path.join(probe_dir, base_name + "__probe.json"), "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+
+        _DEBUG_SAVED_MESAS.add(mesa)
+    except Exception:
+        pass
 
 
 def _maybe_write_time_gate_debug(
@@ -91,6 +151,13 @@ def run_time_gate_for_area(area: Dict[str, Any], tmp_dir: str, ts: str, timeout_
         bbox,
         tmp_dir,
         f"{ts}__mesa_{mesa}__time_roi.bmp",
+    )
+
+    _write_area_and_roi_probe_once(
+        area=area,
+        tmp_dir=tmp_dir,
+        ts=ts,
+        roi_path=roi_path,
     )
 
     script_path = os.path.abspath(
