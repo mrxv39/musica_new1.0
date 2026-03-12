@@ -1,6 +1,6 @@
 /// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\PlayersPage.tsx
 import { useEffect, useMemo, useState } from "react";
-import { listPlayers, updatePlayerTipo, PlayerRow } from "../db/players";
+import { listPlayers, updatePlayerTipo, resetPlayersTable, PlayerRow } from "../db/players";
 
 const TIPO_OPTIONS = ["fish", "reg"] as const;
 
@@ -10,6 +10,7 @@ export default function PlayersPage() {
   const [q, setQ] = useState("");
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState<string>("");
+  const [resetting, setResetting] = useState(false);
 
   async function reload() {
     setLoading(true);
@@ -54,6 +55,20 @@ export default function PlayersPage() {
     }
   }
 
+  async function handleResetPlayers() {
+    if (!window.confirm("¿Vaciar toda la tabla players? Esta acción no se puede deshacer.")) return;
+    setResetting(true);
+    setError("");
+    try {
+      await resetPlayersTable();
+      setPlayers([]);
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setResetting(false);
+    }
+  }
+
   return (
     <div>
       <h2>Players</h2>
@@ -67,6 +82,9 @@ export default function PlayersPage() {
         />
         <button onClick={reload} disabled={loading}>
           {loading ? "Loading..." : "Reload"}
+        </button>
+        <button onClick={handleResetPlayers} disabled={resetting} style={{ marginLeft: 8 }}>
+          {resetting ? "Reseteando..." : "Resetear tabla players"}
         </button>
         {error && <span style={{ color: "crimson" }}>{error}</span>}
       </div>

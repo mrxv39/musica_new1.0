@@ -38,6 +38,8 @@ describe("workersClient", () => {
       dbPath: "C:\\db\\poker_boss.db",
       outDir: "C:\\tmp\\workers_out",
       intervalMs: 3000,
+      xmlDir: "",
+      hero: "",
     });
   });
 
@@ -98,3 +100,4 @@ describe("workersClient", () => {
     });
   });
 });
+

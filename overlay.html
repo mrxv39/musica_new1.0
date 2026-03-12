@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>overlay</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: Arial, sans-serif;
+      pointer-events: none;
+    }
+
+    .stage {
+      position: relative;
+      width: 2200px;
+      height: 1500px;
+      background: transparent;
+    }
+
+    .led {
+      position: absolute;
+      width:20px;
+      height:20px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.55);
+      box-shadow: 0 0 8px rgba(0,0,0,0.35);
+      background: #6b7280;
+      transition: background 120ms ease, box-shadow 120ms ease;
+    }
+
+    .led.on {
+      background: #22c55e;
+      box-shadow: 0 0 12px rgba(34,197,94,0.9);
+    }
+
+    .lbl {
+      position: absolute;
+      top: -14px;
+      left: -1px;
+      font-size: 9px;
+      color: rgba(255,255,255,0.9);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+      user-select: none;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div id="led-1" class="led" style="left:953px; top:681px;"><div class="lbl">M1</div></div>
+    <div id="led-2" class="led" style="left:953px; top:1278px;"><div class="lbl">M2</div></div>
+    <div id="led-3" class="led" style="left:1729px; top:681px;"><div class="lbl">M3</div></div>
+    <div id="led-4" class="led" style="left:1729px; top:1278px;"><div class="lbl">M4</div></div>
+  </div>
+
+  <script>
+    const FRESH_MS = 4000;
+
+    function isTauriAvailable() {
+      try {
+        return !!window.__TAURI_INTERNALS__;
+      } catch {
+        return false;
+      }
+    }
+
+    async function tauriInvoke(cmd, args) {
+      return window.__TAURI_INTERNALS__.invoke(cmd, args || {});
+    }
+
+    const lastLedState = { 1: false, 2: false, 3: false, 4: false };
+
+    function setLed(mesa, on) {
+      const el = document.getElementById(`led-${mesa}`);
+      if (!el) return;
+
+      const prev = !!lastLedState[mesa];
+
+      if (on) {
+        el.classList.add("on");
+        if (!prev) {
+          el.classList.remove("flash");
+          void el.offsetWidth;
+          el.classList.add("flash");
+          setTimeout(() => {
+            el.classList.remove("flash");
+          }, 260);
+        }
+      } else {
+        el.classList.remove("on");
+        el.classList.remove("flash");
+      }
+
+      lastLedState[mesa] = !!on;
+    }
+
+    async function poll() {
+      if (!isTauriAvailable()) return;
+
+      try {
+        const dbPath = localStorage.getItem("dbPath") || "poker_boss.db";
+        const rows = await tauriInvoke("get_mesas_overlay_state", { dbPath });
+
+        const now = Date.now();
+
+        for (let mesa = 1; mesa <= 4; mesa++) {
+          const row = Array.isArray(rows) ? rows.find(x => Number(x.mesa) === mesa) : null;
+          const isFresh =
+            !!row &&
+            !!row.preflop_ok &&
+            typeof row.last_detected_at_ms === "number" &&
+            (now - row.last_detected_at_ms) <= FRESH_MS;
+
+          setLed(mesa, isFresh);
+        }
+      } catch (e) {
+        console.error("overlay poll failed", e);
+      }
+    }
+
+    setInterval(poll, 800);
+    poll();
+  </script>
+</body>
+</html>
+
+

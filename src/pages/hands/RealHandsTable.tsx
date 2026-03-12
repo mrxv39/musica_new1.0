@@ -156,7 +156,7 @@ export function RealHandsTable({
         />
       </table>
 
-      <RealHandsTableSummary rows={filteredRows} rowsCount={filteredRows.length} dbPath={dbPath} />
+      <RealHandsTableSummary rowsCount={filteredRows.length} />
     </>
   );
 }

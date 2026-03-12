@@ -24,8 +24,6 @@ describe("HandsToolbar", () => {
   const baseProps = {
     mode: "OBS" as const,
     onChangeMode: vi.fn(),
-    dbPath: "C:\\db\\poker_boss.db",
-    onChangeDbPath: vi.fn(),
     canLoad: true,
     onRefresh: vi.fn(),
     auto: true,
@@ -62,7 +60,6 @@ describe("HandsToolbar", () => {
 
     const props = commonMock.mock.calls[0][0];
     expect(props.mode).toBe("OBS");
-    expect(props.dbPath).toBe("C:\\db\\poker_boss.db");
     expect(props.canLoad).toBe(true);
     expect(props.auto).toBe(true);
     expect(props.status).toBe("ok");

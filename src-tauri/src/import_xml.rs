@@ -1,6 +1,10 @@
 // C:\Users\Usuario\Desktop\proyectos\poker_boss\src-tauri\src\import_xml.rs
 
-use crate::python::run_python_with_env;
+use crate::python::{
+    run_python_with_env,
+    PY_SCRIPT_IMPORT_XML,
+    PY_SCRIPT_LINK_HANDS_OBS_TO_SPOTS_XML_REAL,
+};
 
 // ===== IMPORT XML (con HERO) + AUTO MATCH OCR =====
 //
@@ -21,11 +25,9 @@ pub async fn import_champion_xml(
     let hero_name = hero;
 
     tauri::async_runtime::spawn_blocking(move || {
-        let import_script = r".\modules\preflop\import_xml.py";
-
         let import_out = run_python_with_env(
             &[
-                import_script,
+                PY_SCRIPT_IMPORT_XML,
                 "--folder",
                 &xmld,
                 "--db",
@@ -37,11 +39,9 @@ pub async fn import_champion_xml(
             Some(&dbp),
         )?;
 
-        let match_script = r".\modules\preflop\link_hands_obs_to_real.py";
-
         let match_out = run_python_with_env(
             &[
-                match_script,
+                PY_SCRIPT_LINK_HANDS_OBS_TO_SPOTS_XML_REAL,
                 "--db",
                 &dbp,
             ],

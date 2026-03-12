@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getHandsDefaultDbPath } from "../config";
 import HandsPage from "../pages/HandsPage";
 import { SPOTS_OUT_BASE } from "../pages/hands/handsPagePaths";
 
@@ -96,7 +97,7 @@ describe("HandsPage match images UI contract", () => {
     });
   });
 
-  it("si dbPath está vacío usa poker_boss.db", async () => {
+  it("si dbPath está vacío usa la ruta por defecto de config", async () => {
     mockHandsPageState.dbPath = "";
     invokeMock.mockResolvedValueOnce("match ok");
 
@@ -106,7 +107,7 @@ describe("HandsPage match images UI contract", () => {
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith("match_spots", {
-        dbPath: "poker_boss.db",
+        dbPath: getHandsDefaultDbPath(),
         spotsDir: SPOTS_OUT_BASE,
         windowMs: 60000,
       });

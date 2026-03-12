@@ -21,12 +21,16 @@ export const setWorkersRunningCommand = async (args: {
   dbPath: string;
   outDir: string;
   intervalMs: number;
+  xmlDir?: string;
+  hero?: string;
 }): Promise<string> => {
   return invoke<string>("set_workers_running", {
     running: args.running,
     dbPath: args.dbPath,
     outDir: args.outDir,
     intervalMs: args.intervalMs,
+    xmlDir: args.xmlDir ?? "",
+    hero: args.hero ?? "",
   });
 };
 

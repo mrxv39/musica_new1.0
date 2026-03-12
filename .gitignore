@@ -44,3 +44,4 @@ _diag_backend_*/
 
 *.sqlite
 tmp_*.py
+.aider*

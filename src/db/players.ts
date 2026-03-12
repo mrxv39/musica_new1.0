@@ -10,13 +10,13 @@
  */
 
 import Database from "@tauri-apps/plugin-sql";
+import { getPlayersDbUrl } from "../config";
 
 let _playersDb: Database | null = null;
 let _initPlayersPromise: Promise<void> | null = null;
 
-// ✅ Players debe leer la DB principal real de Poker Boss
-export const PLAYERS_DB_URL =
-  "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/poker_boss.db";
+// ✅ Players debe leer la DB principal real de Poker Boss (centralizada en src/config.ts)
+export const PLAYERS_DB_URL = getPlayersDbUrl();
 
 export type PlayerRow = {
   id: number;
@@ -99,4 +99,11 @@ export async function updatePlayerTipo(
   if (!t) throw new Error("tipo vacío");
 
   await db.execute(`UPDATE players SET tipo=?1 WHERE id=?2;`, [t, id]);
+}
+
+/** Borra todos los registros de la tabla players. */
+export async function resetPlayersTable(): Promise<void> {
+  await initPlayersDB();
+  const db = await getPlayersDB();
+  await db.execute(`DELETE FROM players;`);
 }

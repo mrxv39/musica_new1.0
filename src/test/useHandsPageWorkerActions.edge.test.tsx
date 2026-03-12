@@ -11,6 +11,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("../pages/hands/handsPagePaths", () => ({
   BATCH_FOLDER_PATH: "C:\\batch\\folder",
+  CHAMPION_XML_DIR: "C:\\xml",
+  CHAMPION_HERO: "hero",
   summarize: (s: string) => s,
 }));
 
@@ -180,3 +182,4 @@ describe("useHandsPageWorkerActions edge cases", () => {
     expect(setLastLog).toHaveBeenCalledWith(expect.stringContaining("ERROR:"));
   });
 });
+

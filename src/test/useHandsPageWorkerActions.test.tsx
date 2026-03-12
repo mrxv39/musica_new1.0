@@ -11,6 +11,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("../pages/hands/handsPagePaths", () => ({
   BATCH_FOLDER_PATH: "C:\\batch\\folder",
+  CHAMPION_XML_DIR: "C:\\xml",
+  CHAMPION_HERO: "hero",
   summarize: (s: string) => s,
 }));
 
@@ -123,6 +125,8 @@ describe("useHandsPageWorkerActions", () => {
       dbPath: "C:\\db\\poker_boss.db",
       outDir: "C:\\tmp\\workers_out",
       intervalMs: 3000,
+      xmlDir: "C:\\xml",
+      hero: "hero",
     });
     expect(setWorkersRunning).toHaveBeenCalledWith(true);
   });
@@ -151,6 +155,8 @@ describe("useHandsPageWorkerActions", () => {
       dbPath: "C:\\db\\poker_boss.db",
       outDir: "C:\\tmp\\workers_out",
       intervalMs: 3000,
+      xmlDir: "C:\\xml",
+      hero: "hero",
     });
     expect(setWorkersRunning).toHaveBeenCalledWith(false);
   });
@@ -206,3 +212,4 @@ describe("useHandsPageWorkerActions", () => {
     expect(loadObsOnce).not.toHaveBeenCalled();
   });
 });
+

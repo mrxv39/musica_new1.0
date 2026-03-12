@@ -114,7 +114,6 @@ export function HandsTable({
       <HandsTableSummary
         shown={shown}
         total={total}
-        dbPath={dbPath}
         rangeError={rangeError}
         batchFolderPath={batchFolderPath}
         lastLog={lastLog}

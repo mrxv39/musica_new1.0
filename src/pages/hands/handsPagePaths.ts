@@ -1,17 +1,26 @@
 /// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\hands\handsPagePaths.ts
 
-export const BATCH_FOLDER_PATH =
-  "C:\\\\Users\\\\Usuario\\\\Desktop\\\\proyectos\\\\poker_boss\\\\modules\\\\preflop\\\\test_images";
+import {
+  BATCH_FOLDER_PATH as CONFIG_BATCH_FOLDER_PATH,
+  PROJECT_ROOT,
+  CHAMPION_XML_DIR as CONFIG_CHAMPION_XML_DIR,
+  XML_ARCHIVE_DIR as CONFIG_XML_ARCHIVE_DIR,
+  SPOTS_OUT_BASE as CONFIG_SPOTS_OUT_BASE,
+  CHAMPION_HERO as CONFIG_CHAMPION_HERO,
+} from "../../config";
+
+// Re-export concrete values from central config so existing callers
+// (and tests that mock this module) keep the same public API.
+export const BATCH_FOLDER_PATH = CONFIG_BATCH_FOLDER_PATH;
 
 // === REAL (XML import) paths (ajusta si cambia el usuario/carpeta) ===
-export const PROJECT_ROOT = "C:\\\\Users\\\\Usuario\\\\Desktop\\\\proyectos\\\\poker_boss";
-export const CHAMPION_XML_DIR =
-  "C:\\\\Users\\\\Usuario\\\\Desktop\\\\Nueva carpeta\\\\ChampionPoker\\\\Championpoker\\\\data\\\\xavieeee2\\\\History\\\\Data\\\\Tournaments";
-export const XML_ARCHIVE_DIR = `${PROJECT_ROOT}\\\\data\\\\xml_imported`;
-export const SPOTS_OUT_BASE = `${PROJECT_ROOT}\\\\data\\\\spots_raw\\\\time_spots`;
+export { PROJECT_ROOT };
+export const CHAMPION_XML_DIR = CONFIG_CHAMPION_XML_DIR;
+export const XML_ARCHIVE_DIR = CONFIG_XML_ARCHIVE_DIR;
+export const SPOTS_OUT_BASE = CONFIG_SPOTS_OUT_BASE;
 
 // ✅ HERO fijo para Champion
-export const CHAMPION_HERO = "xavieeee2";
+export const CHAMPION_HERO = CONFIG_CHAMPION_HERO;
 
 export function summarize(s: string, max = 220) {
   const t = (s || "").replace(/\s+/g, " ").trim();

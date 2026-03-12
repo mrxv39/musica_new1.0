@@ -4,20 +4,49 @@ import HandsToolbar from "./hands/HandsToolbar";
 import HandsTable from "./hands/HandsTable";
 import RealHandsTable from "./hands/RealHandsTable";
 
+import { getHandsDefaultDbPath } from "../config";
 import { useHandsPage } from "./hands/useHandsPage";
 import { CHAMPION_XML_DIR, XML_ARCHIVE_DIR, SPOTS_OUT_BASE } from "./hands/handsPagePaths";
 
 const ensureDbPath = (p: string | undefined | null) => {
   if (!p || p.trim() === "") {
-    return "poker_boss.db";
+    return getHandsDefaultDbPath();
   }
   return p;
+};
+
+const canUseTauriInvoke = () => {
+  try {
+    return typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__;
+  } catch {
+    return false;
+  }
 };
 
 export default function HandsPage() {
   const hp = useHandsPage();
 
   const canRunOne = hp.mode === "OBS" && hp.canLoad && !hp.busy;
+
+  const handleToggleWorkers = async () => {
+    const shouldStart = !hp.workersRunning;
+
+    await Promise.resolve(hp.onToggleWorkers());
+
+    if (!canUseTauriInvoke()) {
+      return;
+    }
+
+    try {
+      if (shouldStart) {
+        await invoke("show_overlay");
+      } else {
+        await invoke("hide_overlay");
+      }
+    } catch (e) {
+      console.error("overlay toggle failed", e);
+    }
+  };
 
   const runMatchImages = async () => {
     const spotsDir = SPOTS_OUT_BASE;
@@ -44,8 +73,6 @@ export default function HandsPage() {
       <HandsToolbar
         mode={hp.mode}
         onChangeMode={hp.setMode}
-        dbPath={hp.dbPath}
-        onChangeDbPath={hp.setDbPath}
         canLoad={hp.canLoad}
         onRefresh={hp.loadOnce}
         auto={hp.auto}
@@ -55,7 +82,7 @@ export default function HandsPage() {
         onReset={hp.onReset}
         onRunBatch={hp.onRunBatch}
         workersRunning={hp.workersRunning}
-        onToggleWorkers={hp.onToggleWorkers}
+        onToggleWorkers={handleToggleWorkers}
         stackEfRangeText={hp.stackEfRangeText}
         onChangeStackEfRangeText={hp.setStackEfRangeText}
         betRangeText={hp.betRangeText}
@@ -70,7 +97,7 @@ export default function HandsPage() {
       {hp.mode === "REAL" ? (
         <>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button disabled={!hp.canLoad} onClick={hp.onToggleWorkers}>
+            <button disabled={!hp.canLoad} onClick={handleToggleWorkers}>
               {hp.workersRunning ? "Stop workers" : "Run workers (loop)"}
             </button>
 

@@ -6,9 +6,6 @@ export type HandsMode = "OBS" | "REAL";
 type HandsToolbarProps = {
   mode: HandsMode;
   onChangeMode: (m: HandsMode) => void;
-
-  dbPath: string;
-  onChangeDbPath: (v: string) => void;
   canLoad: boolean;
   onRefresh: () => void;
   auto: boolean;
@@ -42,8 +39,6 @@ export default function HandsToolbar(props: HandsToolbarProps) {
       <HandsToolbarCommon
         mode={props.mode}
         onChangeMode={props.onChangeMode}
-        dbPath={props.dbPath}
-        onChangeDbPath={props.onChangeDbPath}
         canLoad={props.canLoad}
         onRefresh={props.onRefresh}
         auto={props.auto}

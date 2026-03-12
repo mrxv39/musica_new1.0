@@ -42,8 +42,9 @@ let mockFiltered = {
   rangeError: "",
 };
 
-vi.mock("../db", () => ({
-  DEFAULT_DB_PATH: "C:\\db\\default.db",
+const DEFAULT_DB_PATH_MOCK = "C:\\db\\default.db";
+vi.mock("../config", () => ({
+  getHandsDefaultDbPath: () => DEFAULT_DB_PATH_MOCK,
 }));
 
 vi.mock("../pages/hands/useHandsObs", () => ({
@@ -131,41 +132,34 @@ describe("useHandsPage integration", () => {
     };
   });
 
-  it("loads persisted mode/dbPath/auto from localStorage", () => {
+  it("loads persisted mode/auto from localStorage; dbPath is always default", () => {
     localStorage.setItem("hands.mode", "REAL");
-    localStorage.setItem("dbPath", "C:\\db\\saved.db");
     localStorage.setItem("autoRefresh", "false");
 
     const { result } = renderHook(() => useHandsPage());
 
     expect(result.current.mode).toBe("REAL");
-    expect(result.current.dbPath).toBe("C:\\db\\saved.db");
+    expect(result.current.dbPath).toBe(DEFAULT_DB_PATH_MOCK);
     expect(result.current.auto).toBe(false);
   });
 
-  it("persists mode/dbPath/auto when changed", async () => {
+  it("persists mode/auto when changed; dbPath is fixed by config", async () => {
     const { result } = renderHook(() => useHandsPage());
 
     await act(async () => {
       result.current.setMode("REAL");
-      result.current.setDbPath("C:\\db\\next.db");
       result.current.setAuto(false);
     });
 
     expect(localStorage.getItem("hands.mode")).toBe("REAL");
-    expect(localStorage.getItem("dbPath")).toBe("C:\\db\\next.db");
     expect(localStorage.getItem("autoRefresh")).toBe("false");
   });
 
-  it("calls obs.setDbPath when dbPath changes", async () => {
-    const { result } = renderHook(() => useHandsPage());
-
-    await act(async () => {
-      result.current.setDbPath("C:\\db\\newer.db");
-    });
+  it("calls obs.setDbPath once on mount with default path", () => {
+    renderHook(() => useHandsPage());
 
     expect(mockObsSetDbPath).toHaveBeenCalled();
-    expect(mockObsSetDbPath).toHaveBeenLastCalledWith("C:\\db\\newer.db");
+    expect(mockObsSetDbPath).toHaveBeenLastCalledWith(DEFAULT_DB_PATH_MOCK);
   });
 
   it("loadOnce delegates to obs in OBS mode", async () => {
@@ -257,13 +251,8 @@ describe("useHandsPage integration", () => {
     expect(localStorage.getItem("hands.rangeListText")).toBe("");
   });
 
-  it("canLoad is false when dbPath is blank", async () => {
+  it("canLoad is always true (DB path is fixed by config)", () => {
     const { result } = renderHook(() => useHandsPage());
-
-    await act(async () => {
-      result.current.setDbPath("   ");
-    });
-
-    expect(result.current.canLoad).toBe(false);
+    expect(result.current.canLoad).toBe(true);
   });
 });

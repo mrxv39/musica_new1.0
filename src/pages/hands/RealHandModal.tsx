@@ -214,7 +214,7 @@ export function RealHandModal({
               Hand {hand.gamecode} <span style={{ fontWeight: 400, opacity: 0.7 }}>({hand.room} / {hand.hero})</span>
             </div>
             <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
-              {hand.startdate || ""} | SB {hand.sb} / BB {hand.bb} | DB: {dbPath}
+              {hand.startdate || ""} | SB {hand.sb} / BB {hand.bb}
             </div>
           </div>
           <button

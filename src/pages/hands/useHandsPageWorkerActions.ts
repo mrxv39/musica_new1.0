@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 import {
   BATCH_FOLDER_PATH,
+  CHAMPION_HERO,
+  CHAMPION_XML_DIR,
   summarize,
 } from "./handsPagePaths";
 
@@ -99,6 +101,8 @@ export function useHandsPageWorkerActions({
         dbPath: p,
         outDir,
         intervalMs: 3000,
+        xmlDir: CHAMPION_XML_DIR,
+        hero: CHAMPION_HERO,
       });
 
       const m = String(msg || "");
@@ -149,3 +153,4 @@ export function useHandsPageWorkerActions({
     onWorkersTick,
   };
 }
+

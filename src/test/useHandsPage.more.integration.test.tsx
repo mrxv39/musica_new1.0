@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
+import { getHandsDefaultDbPath } from "../config";
 import { useHandsPage } from "../pages/hands/useHandsPage";
 
 const obsMock = {
@@ -131,31 +132,16 @@ describe("useHandsPage more integration", () => {
     expect(result.current.uiStatus).toBe("workers corriendo");
   });
 
-  it("canLoad es false si dbPath solo tiene espacios", () => {
-    localStorage.setItem("dbPath", "   ");
-
+  it("canLoad es siempre true (DB fija por config)", () => {
     const { result } = renderHook(() => useHandsPage());
-
-    expect(result.current.canLoad).toBe(false);
-  });
-
-  it("canLoad es true con dbPath no vacío", () => {
-    localStorage.setItem("dbPath", "C:\\db.sqlite");
-
-    const { result } = renderHook(() => useHandsPage());
-
     expect(result.current.canLoad).toBe(true);
   });
 
-  it("al cambiar dbPath llama obs.setDbPath", async () => {
-    const { result } = renderHook(() => useHandsPage());
-
-    act(() => {
-      result.current.setDbPath("C:\\nuevo.db");
-    });
+  it("al montar llama obs.setDbPath con la ruta por defecto", async () => {
+    renderHook(() => useHandsPage());
 
     await waitFor(() => {
-      expect(obsMock.setDbPath).toHaveBeenCalledWith("C:\\nuevo.db");
+      expect(obsMock.setDbPath).toHaveBeenCalledWith(getHandsDefaultDbPath());
     });
   });
 

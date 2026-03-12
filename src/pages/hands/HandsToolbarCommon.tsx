@@ -3,8 +3,6 @@ import type { HandsMode } from "./HandsToolbar";
 type HandsToolbarCommonProps = {
   mode: HandsMode;
   onChangeMode: (m: HandsMode) => void;
-  dbPath: string;
-  onChangeDbPath: (v: string) => void;
   canLoad: boolean;
   onRefresh: () => void;
   auto: boolean;
@@ -18,8 +16,6 @@ type HandsToolbarCommonProps = {
 export default function HandsToolbarCommon({
   mode,
   onChangeMode,
-  dbPath,
-  onChangeDbPath,
   canLoad,
   onRefresh,
   auto,
@@ -41,14 +37,6 @@ export default function HandsToolbarCommon({
         <option value="OBS">OCR (hands_obs)</option>
         <option value="REAL">XML (hands_real)</option>
       </select>
-
-      <label style={{ fontSize: 14 }}>DB:</label>
-      <input
-        style={{ width: 520, padding: "6px 8px", fontSize: 13 }}
-        value={dbPath}
-        onChange={(e) => onChangeDbPath(e.target.value)}
-        disabled={busy}
-      />
 
       <button disabled={!canLoad || busy} onClick={onRefresh}>
         Refresh

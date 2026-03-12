@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getHandsDefaultDbPath } from "../config";
 
 const invokeMock = vi.fn();
 const alertMock = vi.fn();
@@ -127,7 +128,7 @@ describe("HandsPage REAL mode integration", () => {
     });
   });
 
-  it("match images falls back to poker_boss.db when dbPath is empty", async () => {
+  it("match images falls back to default db path when dbPath is empty", async () => {
     invokeMock.mockResolvedValue("match ok");
     mockHandsPageState.dbPath = "";
 
@@ -137,7 +138,7 @@ describe("HandsPage REAL mode integration", () => {
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith("match_spots", {
-        dbPath: "poker_boss.db",
+        dbPath: getHandsDefaultDbPath(),
         spotsDir:
           SPOTS_OUT_BASE,
         windowMs: 60000,

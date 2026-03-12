@@ -1,6 +1,6 @@
 // C:\Users\Usuario\Desktop\proyectos\poker_boss\src-tauri\src\match_spots.rs
 
-use crate::python::run_python_with_env;
+use crate::python::{run_python_with_env, PY_SCRIPT_LINK_HANDS_OBS_TO_REAL};
 
 #[tauri::command]
 pub async fn match_spots(
@@ -9,11 +9,9 @@ pub async fn match_spots(
     _window_ms: i32,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let script = r".\modules\preflop\link_hands_obs_to_real.py";
-
         let out = run_python_with_env(
             &[
-                script,
+                PY_SCRIPT_LINK_HANDS_OBS_TO_REAL,
                 "--db",
                 &db_path,
             ],

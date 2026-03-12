@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import json
+import time
 import sqlite3
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -112,6 +113,41 @@ CREATE TABLE IF NOT EXISTS spots_real (
 );
 
 CREATE INDEX IF NOT EXISTS idx_spots_real_hand_street ON spots_real(hand_id, street, action_no);
+
+-- Spots XML real (v1 preflop only)
+CREATE TABLE IF NOT EXISTS spots_xml_real (
+    spot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hand_id INTEGER NOT NULL,
+    gamecode TEXT,
+    site TEXT,
+    hero_name TEXT,
+    street TEXT NOT NULL,
+    spot_index INTEGER NOT NULL,
+    action_index INTEGER,
+    hero_cards TEXT,
+    hero_position TEXT,
+    players_count INTEGER,
+    effective_stack_bb REAL,
+    pot_bb REAL,
+    to_call_bb REAL,
+    bets_state_json TEXT,
+    action_history_json TEXT,
+    spot_kind TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(hand_id) REFERENCES hands_real(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_spots_xml_real_hand_id
+ON spots_xml_real(hand_id);
+
+CREATE INDEX IF NOT EXISTS idx_spots_xml_real_gamecode
+ON spots_xml_real(gamecode);
+
+CREATE INDEX IF NOT EXISTS idx_spots_xml_real_hero_cards
+ON spots_xml_real(hero_cards);
+
+CREATE INDEX IF NOT EXISTS idx_spots_xml_real_street_spot_index
+ON spots_xml_real(street, spot_index);
 """
 
 
@@ -425,6 +461,123 @@ def _insert_spots(conn: sqlite3.Connection, hand_id: int, hand: ImportedHand) ->
     return len(spots)
 
 
+def _spot_kind_from_action_type(type_name: str) -> str:
+    t = (type_name or "").upper()
+    if t in {"POST_SB", "POST_BB", "ANTE"}:
+        return "forced_bet"
+    if t == "FOLD":
+        return "facing_decision_fold"
+    if t == "CHECK":
+        return "check_option"
+    if t == "CALL":
+        return "facing_call"
+    if t == "RAISE":
+        return "facing_raise_or_iso"
+    if t == "ALL_IN":
+        return "facing_all_in"
+    if t == "BET":
+        return "bet_decision"
+    return "unknown"
+
+
+def _extract_preflop_spots_xml_real(hand: ImportedHand) -> List[Dict[str, Any]]:
+    actions = sorted(hand.actions, key=lambda x: (x.round_no, x.action_no))
+    preflop_actions = [a for a in actions if a.round_no == 1]
+
+    players_count = len((hand.players_json or {}).get("players", []))
+    history: List[Dict[str, Any]] = []
+    spots: List[Dict[str, Any]] = []
+    spot_index = 0
+
+    for a in preflop_actions:
+        action_row = {
+            "player": a.player,
+            "type_id": a.type_id,
+            "type_name": a.type_name,
+            "sum_chips": a.sum_chips,
+            "sum_bb": a.sum_bb,
+            "round_no": a.round_no,
+            "action_no": a.action_no,
+        }
+
+        if a.player == hand.hero:
+            spot_index += 1
+            spots.append(
+                {
+                    "hand_id": None,  # se completa en insert
+                    "gamecode": hand.gamecode,
+                    "site": hand.room,
+                    "hero_name": hand.hero,
+                    "street": "preflop",
+                    "spot_index": spot_index,
+                    "action_index": a.action_no,
+                    "hero_cards": hand.hero_cards,
+                    "hero_position": None,
+                    "players_count": players_count,
+                    "effective_stack_bb": None,
+                    "pot_bb": None,
+                    "to_call_bb": None,
+                    "bets_state_json": json.dumps(
+                        {
+                            "hero_action_type": a.type_name,
+                            "hero_action_sum_bb": a.sum_bb,
+                            "hero_action_sum_chips": a.sum_chips,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "action_history_json": json.dumps(history, ensure_ascii=False),
+                    "spot_kind": _spot_kind_from_action_type(a.type_name),
+                    "created_at": int(time.time() * 1000),
+                }
+            )
+
+        history.append(action_row)
+
+    return spots
+
+
+def _insert_spots_xml_real(conn: sqlite3.Connection, hand_id: int, hand: ImportedHand) -> int:
+    cur = conn.cursor()
+    cur.execute("DELETE FROM spots_xml_real WHERE hand_id=?", (hand_id,))
+
+    spots = _extract_preflop_spots_xml_real(hand)
+    if not spots:
+        return 0
+
+    cur.executemany(
+        """
+        INSERT INTO spots_xml_real(
+            hand_id, gamecode, site, hero_name, street, spot_index, action_index,
+            hero_cards, hero_position, players_count, effective_stack_bb, pot_bb,
+            to_call_bb, bets_state_json, action_history_json, spot_kind, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                hand_id,
+                s["gamecode"],
+                s["site"],
+                s["hero_name"],
+                s["street"],
+                int(s["spot_index"]),
+                int(s["action_index"]),
+                s["hero_cards"],
+                s["hero_position"],
+                s["players_count"],
+                s["effective_stack_bb"],
+                s["pot_bb"],
+                s["to_call_bb"],
+                s["bets_state_json"],
+                s["action_history_json"],
+                s["spot_kind"],
+                int(s["created_at"]),
+            )
+            for s in spots
+        ],
+    )
+    return len(spots)
+
+
 def import_xml_folder(
     *,
     folder: str,
@@ -460,6 +613,7 @@ def import_xml_folder(
         total_files = len(xml_files)
         total_hands = 0
         total_spots = 0
+        total_spots_xml_real = 0
 
         for i, xp in enumerate(sorted(xml_files)):
             try:
@@ -473,6 +627,7 @@ def import_xml_folder(
                 hand_id = _insert_hand(conn, h)
                 _insert_actions(conn, hand_id, h)
                 total_spots += _insert_spots(conn, hand_id, h)
+                total_spots_xml_real += _insert_spots_xml_real(conn, hand_id, h)
                 total_hands += 1
 
             conn.commit()
@@ -489,6 +644,7 @@ def import_xml_folder(
             "xml_files": total_files,
             "hands_imported": total_hands,
             "hero_spots_imported": total_spots,
+            "spots_xml_real_imported": total_spots_xml_real,
         }
     finally:
         conn.close()

@@ -5,8 +5,8 @@ const mockSetWorkersRunningCommand = vi.fn();
 const mockRunWorkersTickCommand = vi.fn();
 const mockSetWorkersRunning = vi.fn();
 
-vi.mock("../db", () => ({
-  DEFAULT_DB_PATH: "C:\\db\\default.db",
+vi.mock("../config", () => ({
+  getHandsDefaultDbPath: () => "C:\\db\\default.db",
 }));
 
 vi.mock("../pages/hands/useHandsObs", () => ({
@@ -98,9 +98,12 @@ describe("useHandsPage workers", () => {
       dbPath: "C:\\db\\default.db",
       outDir: "C:\\tmp\\workers_out",
       intervalMs: 3000,
+      xmlDir: "C:\\xml",
+      hero: "hero",
     });
 
     expect(mockSetWorkersRunning).toHaveBeenCalledWith(true);
     expect(result.current.lastLog).toBe("workers started");
   });
 });
+

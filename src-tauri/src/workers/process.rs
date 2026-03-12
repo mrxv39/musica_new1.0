@@ -3,7 +3,7 @@
 use std::fs::OpenOptions;
 use std::process::{Command, Stdio};
 
-use crate::python::PROJECT_ROOT;
+use crate::python::{PROJECT_ROOT, PY_SCRIPT_RUN_WORKERS_LOOP};
 
 pub fn build_log_path(out_dir: &str) -> Result<String, String> {
     let log_dir = format!(r"{}\_logs", out_dir);
@@ -32,7 +32,7 @@ pub fn build_loop_command(
 
     let mut cmd = Command::new("python");
     cmd.current_dir(PROJECT_ROOT)
-        .arg(r".\modules\preflop\run_workers_loop.py")
+        .arg(PY_SCRIPT_RUN_WORKERS_LOOP)
         .arg("--out_dir")
         .arg(out_dir)
         .arg("--interval_ms")

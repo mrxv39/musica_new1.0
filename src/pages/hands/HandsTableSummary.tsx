@@ -1,7 +1,6 @@
 type Props = {
   shown: number;
   total: number;
-  dbPath?: string;
   rangeError?: string;
   batchFolderPath?: string;
   lastLog?: string;
@@ -10,7 +9,6 @@ type Props = {
 export default function HandsTableSummary({
   shown,
   total,
-  dbPath,
   rangeError,
   batchFolderPath,
   lastLog,
@@ -19,7 +17,6 @@ export default function HandsTableSummary({
     <>
       <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
         Rows: {shown} / {total}
-        {dbPath ? ` | DB actual: ${dbPath}` : ""}
       </div>
 
       {rangeError ? (

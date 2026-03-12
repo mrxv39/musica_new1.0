@@ -179,13 +179,12 @@ describe("RealHandsTable", () => {
     expect(props.rows).toEqual([rows[0]]);
   });
 
-  it("passes filtered rowsCount and dbPath to summary", () => {
+  it("passes filtered rowsCount to summary", () => {
     render(<RealHandsTable rows={rows as any} dbPath={dbPath} />);
 
     fireEvent.click(screen.getByRole("button", { name: "No OCR" }));
 
     const props = realHandsTableSummaryMock.mock.calls.at(-1)?.[0];
     expect(props.rowsCount).toBe(1);
-    expect(props.dbPath).toBe(dbPath);
   });
 });

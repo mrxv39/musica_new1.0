@@ -1,0 +1,19 @@
+me interesa tu opinion Si quieres, después te enseño una mejora de arquitectura muy importante para esta app que te ahorrará mucho trabajo cuando tenga más funcionalidades.
+Si quieres, después te puedo enseñar algo muy potente para trabajar con Codex:
+cómo hacer que el agente revise automáticamente su propio código antes de ejecutarlo para evitar errores.
+Cuando el proyecto esté creado, te voy a recomendar una mejora muy importante para esta app:
+
+usar SQLite local dentro de Tauri, que te permitirá tener miles de contactos sin perderlos cuando cierres la app.
+Cuando termine este paso, te voy a enseñar una mejora clave para tu app que casi nadie hace al empezar con Tauri y que te evitará tener que reescribir media aplicación cuando quieras:
+
+guardar contactos
+
+buscarlos rápido
+
+sincronizarlos con IA
+
+o integrarlos con WhatsApp / Line.
+
+
+Base de datos comun para todos los usuarios de la app.
+Cuando un usuario guarde un nuevo contacto y otro usuario ya lo tenga poder ver la informacion relacionada con ese contacto

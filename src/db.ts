@@ -1,7 +1,8 @@
 /// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\db.ts
 import Database from "@tauri-apps/plugin-sql";
+import { getHandsDefaultDbPath } from "./config";
 
-export const DEFAULT_DB_PATH = "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\poker_boss.db";
+export const DEFAULT_DB_PATH = getHandsDefaultDbPath();
 
 /** =========================
  * OCR / OBS

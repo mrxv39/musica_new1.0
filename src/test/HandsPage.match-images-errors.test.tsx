@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { getHandsDefaultDbPath } from "../config";
 import HandsPage from "../pages/HandsPage";
 import { SPOTS_OUT_BASE } from "../pages/hands/handsPagePaths";
 
@@ -145,7 +146,7 @@ describe("HandsPage match images errors", () => {
     expect(hp.loadOnce).toHaveBeenCalledTimes(1);
   });
 
-  it("usa poker_boss.db cuando dbPath está vacío", async () => {
+  it("usa la ruta por defecto de config cuando dbPath está vacío", async () => {
     const hp = makeHp({
       dbPath: "",
     });
@@ -161,14 +162,14 @@ describe("HandsPage match images errors", () => {
     });
 
     expect(invokeMock).toHaveBeenCalledWith("match_spots", {
-      dbPath: "poker_boss.db",
+      dbPath: getHandsDefaultDbPath(),
       spotsDir:
         SPOTS_OUT_BASE,
       windowMs: 60000,
     });
   });
 
-  it("usa poker_boss.db cuando dbPath es solo espacios", async () => {
+  it("usa la ruta por defecto de config cuando dbPath es solo espacios", async () => {
     const hp = makeHp({
       dbPath: "   ",
     });
@@ -184,7 +185,7 @@ describe("HandsPage match images errors", () => {
     });
 
     expect(invokeMock).toHaveBeenCalledWith("match_spots", {
-      dbPath: "poker_boss.db",
+      dbPath: getHandsDefaultDbPath(),
       spotsDir:
         SPOTS_OUT_BASE,
       windowMs: 60000,
