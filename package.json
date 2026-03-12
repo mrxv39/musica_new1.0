@@ -8,6 +8,8 @@
     "test:run": "npm run test:fast",
     "dev": "vite",
     "tauri": "tauri",
+    "report:strategy": "python scripts/report_strategy_coverage_from_db.py",
+    "report:ocr-effectiveness": "python scripts/report_ocr_effectiveness.py",
     "test:fast": "cross-env VITEST_MODE=fast vitest run",
     "build": "tsc -p tsconfig.build.json && vite build",
     "test:slow": "cross-env VITEST_MODE=slow vitest run",

@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS hands_obs (
     -- 🆕 denormalized bets (for UI sorting/filtering)
     p2bet REAL DEFAULT NULL,
     p3bet REAL DEFAULT NULL,
+    p1_se_bb REAL DEFAULT NULL,
 
     frame_ref TEXT DEFAULT '',
     created_at_ms INTEGER DEFAULT 0

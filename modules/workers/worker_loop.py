@@ -292,6 +292,7 @@ def process_one_image(
             ts=ts,
             mano_result=mano_result,
             preflop=preflop,
+            strategy=strategy,
             ocr_json=ocr_json,
             bets_result=bets_result,
             frame_ref=frame_ref,

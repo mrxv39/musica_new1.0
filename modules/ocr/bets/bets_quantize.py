@@ -25,14 +25,11 @@ def quantize_bet(label: str, v: float) -> float:
 
 def looks_like_wrong_integer_for_half(label: str, v: float, raw: str) -> bool:
     """
-    Heurística: p2 a veces lee "2" cuando era "0.5".
+    Heurística: p2 y a veces p1 pueden leer un entero cuando era "0.5".
     Disparar fallback solo si:
-    - label == p2
-    - raw no contiene decimal
-    - y valor parece entero >= 2
+    - p2: raw no contiene decimal y valor parece entero >= 2
+    - p1: raw no contiene decimal y valor parece 2 o 3
     """
-    if label != "p2":
-        return False
     t = (raw or "").strip()
     if "." in t or "," in t:
         return False
@@ -40,4 +37,8 @@ def looks_like_wrong_integer_for_half(label: str, v: float, raw: str) -> bool:
         iv = int(float(v))
     except Exception:
         return False
-    return iv >= 2
+    if label == "p2":
+        return iv >= 2
+    if label == "p1":
+        return iv in (2, 3)
+    return False

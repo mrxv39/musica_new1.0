@@ -23,7 +23,17 @@ class TestRunWorkersLoopIntegration(unittest.TestCase):
             env["PYTHONPATH"] = PROJECT_ROOT + os.pathsep + env.get("PYTHONPATH", "")
 
             p = subprocess.Popen(
-                [sys.executable, entry, "--out_dir", out_dir, "--interval_ms", "200", "--verbose"],
+                [
+                    sys.executable,
+                    entry,
+                    "--out_dir",
+                    out_dir,
+                    "--interval_ms",
+                    "200",
+                    "--max_ticks",
+                    "1",
+                    "--verbose",
+                ],
                 cwd=PROJECT_ROOT,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -31,13 +41,11 @@ class TestRunWorkersLoopIntegration(unittest.TestCase):
                 env=env,
             )
 
-            time.sleep(3.0)
-            p.terminate()
             try:
-                p.wait(timeout=3.0)
+                p.wait(timeout=10.0)
             except subprocess.TimeoutExpired:
                 p.kill()
-                p.wait(timeout=3.0)
+                p.wait(timeout=5.0)
 
             stdout = p.stdout.read() if p.stdout else ""
             stderr = p.stderr.read() if p.stderr else ""

@@ -64,6 +64,8 @@ def compute_strategy(
     se_derived = None
     se_used = None
     se_external_valid = False
+    se_derived_valid = False
+    se_method = "none"
     try:
         preflop_ok = bool(preflop.get("preflop_ok", False)) if isinstance(preflop, dict) else False
         mano_ok = bool(mano_result.get("valid", False)) if isinstance(mano_result, dict) else False
@@ -93,9 +95,18 @@ def compute_strategy(
             stacks=ocr_stacks if isinstance(ocr_stacks, dict) else {},
             bets=bets_result if isinstance(bets_result, dict) else {},
         )
+        se_derived_valid = in_range(se_derived)
 
         # Choose SE used for matching
-        se_used = se_external if se_external_valid else se_derived
+        if se_derived_valid:
+            se_used = float(se_derived)
+            se_method = "derived"
+        elif se_external_valid:
+            se_used = float(se_external)
+            se_method = "external"
+        else:
+            se_used = None
+            se_method = "none"
 
         if preflop_ok and mano_ok and pos_ok and bets_ok and stacks_ok and (se_used is not None) and (select_move is not None) and (MatchInput is not None):
             hero_pos = str(pos.get("p1", "") or "")
@@ -150,7 +161,7 @@ def compute_strategy(
                 "se_external": se_external,
                 "se_derived": se_derived,
                 "se_used": float(se_used) if se_used is not None else None,
-                "se_method": ("external" if se_external_valid else ("derived" if se_derived is not None else "none")),
+                "se_method": se_method,
             }
         else:
             strategy = {
@@ -167,7 +178,7 @@ def compute_strategy(
                 "se_external": se_external,
                 "se_derived": se_derived,
                 "se_used": float(se_used) if se_used is not None else None,
-                "se_method": ("external" if se_external_valid else ("derived" if se_derived is not None else "none")),
+                "se_method": se_method,
             }
 
     except Exception as e:
@@ -177,7 +188,7 @@ def compute_strategy(
             "se_external": se_external,
             "se_derived": se_derived,
             "se_used": float(se_used) if se_used is not None else None,
-            "se_method": ("external" if se_external_valid else ("derived" if se_derived is not None else "none")),
+            "se_method": se_method,
         }
 
     return strategy

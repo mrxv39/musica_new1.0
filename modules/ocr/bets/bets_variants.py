@@ -35,7 +35,7 @@ def iter_variants_limited(gray_crop: np.ndarray, label: str) -> Iterator[Tuple[s
         yield "otsu", otsu
 
 
-def iter_variants_adaptive(gray_crop: np.ndarray) -> Iterator[Tuple[str, np.ndarray]]:
+def iter_variants_adaptive(gray_crop: np.ndarray, label: str) -> Iterator[Tuple[str, np.ndarray]]:
     """
     Fallback caro: usar SOLO cuando sea imprescindible.
     """
@@ -47,3 +47,10 @@ def iter_variants_adaptive(gray_crop: np.ndarray) -> Iterator[Tuple[str, np.ndar
     )
     yield "adaptive", adapt
     yield "adaptive_inv", cv2.bitwise_not(adapt)
+    if label == "p1":
+        # Variante extra para p1: más escala y threshold más suave para intentar preservar el decimal de "0.5".
+        g_p1 = cv2.resize(gray_crop, None, fx=5, fy=5, interpolation=cv2.INTER_CUBIC)
+        g_p1 = cv2.GaussianBlur(g_p1, (3, 3), 0)
+        _, thr180 = cv2.threshold(g_p1, 180, 255, cv2.THRESH_BINARY)
+        yield "p1_decimal_thr180", thr180
+        yield "p1_decimal_thr180_inv", cv2.bitwise_not(thr180)

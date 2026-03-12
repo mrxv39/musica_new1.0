@@ -20,6 +20,7 @@ def insert_obs(
     ocr_json: str = "",
     p2bet: Optional[float] = None,
     p3bet: Optional[float] = None,
+    p1_se_bb: Optional[float] = None,
     frame_ref: str = "",
 ) -> Optional[int]:
     init_db()
@@ -29,8 +30,8 @@ def insert_obs(
             '''
             INSERT OR IGNORE INTO hands_obs
             (fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
-             preflop_ok, noboard_ok, ocr_json, p2bet, p3bet, frame_ref, created_at_ms)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             preflop_ok, noboard_ok, ocr_json, p2bet, p3bet, p1_se_bb, frame_ref, created_at_ms)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 fingerprint,
@@ -44,6 +45,7 @@ def insert_obs(
                 ocr_json or "",
                 p2bet,
                 p3bet,
+                p1_se_bb,
                 frame_ref or "",
                 now_ms(),
             ),

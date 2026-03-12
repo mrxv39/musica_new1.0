@@ -41,6 +41,7 @@ def persist_obs(
     ts: float,
     mano_result: Any,
     preflop: Any,
+    strategy: Any,
     ocr_json: str,
     bets_result: Optional[Dict[str, Any]] = None,
     frame_ref: str = "",
@@ -64,6 +65,10 @@ def persist_obs(
         p2bet = _to_float(bets_result.get("p2", None))
         p3bet = _to_float(bets_result.get("p3", None))
 
+    p1_se_bb = None
+    if isinstance(strategy, dict):
+        p1_se_bb = _to_float(strategy.get("se_used", None))
+
     dbmod.insert_obs(
         fingerprint=sig,
         table_id="",
@@ -76,5 +81,6 @@ def persist_obs(
         ocr_json=ocr_json,
         p2bet=p2bet,
         p3bet=p3bet,
+        p1_se_bb=p1_se_bb,
         frame_ref=frame_ref,
     )
