@@ -8,6 +8,7 @@ import { useVisibleColumns } from "./useVisibleColumns";
 import HandsTableHeader from "./HandsTableHeader";
 import HandsTableBody from "./HandsTableBody";
 import HandsTableSummary from "./HandsTableSummary";
+import { extractLocalImagePath } from "./handsUtils";
 
 type Props = {
   rows: HandsObsRow[];
@@ -42,26 +43,45 @@ export function HandsTable({
   rangeError,
   batchFolderPath,
 }: Props) {
-  const [previewPath, setPreviewPath] = React.useState<string>("");
-  const [previewRow, setPreviewRow] = React.useState<HandsObsRow | null>(null);
+  const navigableRows = React.useMemo(() => rows.filter((row) => Boolean(extractLocalImagePath(row))), [rows]);
+  const [previewIndex, setPreviewIndex] = React.useState<number | null>(null);
 
   const closePreview = () => {
-    setPreviewPath("");
-    setPreviewRow(null);
+    setPreviewIndex(null);
   };
+
+  const openPreview = React.useCallback(
+    (_path: string, row: HandsObsRow) => {
+      const directIndex = navigableRows.findIndex((candidate) => candidate === row);
+      if (directIndex >= 0) {
+        setPreviewIndex(directIndex);
+        return;
+      }
+
+      const rowId = (row as any).obs_id ?? (row as any).id;
+      const imagePath = extractLocalImagePath(row);
+      const fallbackIndex = navigableRows.findIndex((candidate) => {
+        const candidateId = (candidate as any).obs_id ?? (candidate as any).id;
+        return candidateId === rowId && extractLocalImagePath(candidate) === imagePath;
+      });
+
+      if (fallbackIndex >= 0) setPreviewIndex(fallbackIndex);
+    },
+    [navigableRows]
+  );
+
+  React.useEffect(() => {
+    if (previewIndex === null) return;
+    if (navigableRows.length === 0 || previewIndex >= navigableRows.length) {
+      setPreviewIndex(null);
+    }
+  }, [navigableRows, previewIndex]);
 
   const [configOpen, setConfigOpen] = React.useState<boolean>(false);
 
   const columns = React.useMemo(
-    () =>
-      makeHandsColumns(
-        (p, r) => {
-          setPreviewPath(p);
-          setPreviewRow(r);
-        },
-        rows?.[0] ?? null
-      ),
-    [rows]
+    () => makeHandsColumns(openPreview, rows?.[0] ?? null),
+    [openPreview, rows]
   );
 
   const { visibleIds, visibleColumns, onChangeVisibleIds } = useVisibleColumns(columns, VISIBLE_COLS_STORAGE_KEY);
@@ -71,12 +91,13 @@ export function HandsTable({
 
   return (
     <>
-      {previewPath ? (
+      {previewIndex !== null && navigableRows[previewIndex] ? (
         <ImagePreviewModal
-          path={previewPath}
-          row={previewRow}
+          rows={navigableRows}
+          currentIndex={previewIndex}
           canRunOne={canRunOne}
           onRunOneForImage={onRunOneForImage}
+          onSelectIndex={setPreviewIndex}
           onClose={closePreview}
         />
       ) : null}
