@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections import Counter
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import cv2
@@ -37,6 +38,13 @@ class GamecodeOCRResult:
     error: str = ""
 
 
+@dataclass(frozen=True)
+class _Candidate:
+    name: str
+    value: str
+    raw_text: str
+
+
 def _safe_crop(img: "np.ndarray", x: int, y: int, w: int, h: int) -> Optional["np.ndarray"]:
     if img is None:
         return None
@@ -55,25 +63,35 @@ def _preprocess_variants(gray: "np.ndarray") -> Dict[str, "np.ndarray"]:
 
     den = cv2.GaussianBlur(gray, (3, 3), 0)
     h, w = den.shape[:2]
-    up = cv2.resize(den, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
-
-    _, otsu = cv2.threshold(up, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    variants["otsu"] = otsu
-
-    adaptive = cv2.adaptiveThreshold(
-        up,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        31,
-        11,
+    scales = (
+        ("x1_5", 1.5),
+        ("x2", 2.0),
+        ("x3", 3.0),
     )
-    variants["adaptive"] = adaptive
-
-    _, inv_otsu = cv2.threshold(up, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    variants["otsu_inv"] = inv_otsu
-
     kernel = np.ones((2, 2), np.uint8)
+    for scale_name, scale in scales:
+        scaled = cv2.resize(
+            den,
+            (max(1, int(round(w * scale))), max(1, int(round(h * scale)))),
+            interpolation=cv2.INTER_CUBIC,
+        )
+
+        _, otsu = cv2.threshold(scaled, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        variants[f"{scale_name}_otsu"] = otsu
+
+        adaptive = cv2.adaptiveThreshold(
+            scaled,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            31,
+            11,
+        )
+        variants[f"{scale_name}_adaptive"] = adaptive
+
+        _, inv_otsu = cv2.threshold(scaled, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        variants[f"{scale_name}_otsu_inv"] = inv_otsu
+
     for key, value in list(variants.items()):
         variants[f"{key}_open"] = cv2.morphologyEx(value, cv2.MORPH_OPEN, kernel, iterations=1)
 
@@ -102,6 +120,52 @@ def _extract_gamecode(text: str) -> Optional[str]:
         return None
 
     return max(matches, key=len)
+
+
+def _numeric_subroi(img: "np.ndarray") -> "np.ndarray":
+    h, w = img.shape[:2]
+    left = int(round(w * 0.24))
+    right = int(round(w * 0.02))
+    top = int(round(h * 0.08))
+    bottom = int(round(h * 0.08))
+    x0 = min(max(left, 0), max(w - 1, 0))
+    x1 = max(x0 + 1, w - max(right, 0))
+    y0 = min(max(top, 0), max(h - 1, 0))
+    y1 = max(y0 + 1, h - max(bottom, 0))
+    return img[y0:y1, x0:x1]
+
+
+def _refine_digits_only(bin_img: "np.ndarray", fallback_value: str, fallback_text: str) -> Tuple[str, str]:
+    digits_roi = _numeric_subroi(bin_img)
+    if digits_roi.size == 0:
+        return fallback_value, fallback_text
+
+    digits_config = "--psm 8 -c tessedit_char_whitelist=0123456789"
+    try:
+        digits_text = pytesseract.image_to_string(digits_roi, config=digits_config)
+    except Exception:
+        return fallback_value, fallback_text
+
+    normalized = _normalize_text(digits_text)
+    refined = _extract_gamecode(normalized)
+    if refined:
+        return refined, normalized
+    return fallback_value, fallback_text
+
+
+def _choose_best_candidate(candidates: List[_Candidate]) -> _Candidate:
+    if len(candidates) == 1:
+        return candidates[0]
+
+    counts = Counter(candidate.value for candidate in candidates)
+    best_index = 0
+    best_key: Tuple[int, int, int] = (-1, -1, 0)
+    for index, candidate in enumerate(candidates):
+        key = (counts[candidate.value], len(candidate.value), -index)
+        if key > best_key:
+            best_key = key
+            best_index = index
+    return candidates[best_index]
 
 
 def read_gamecode(
@@ -182,9 +246,10 @@ def read_gamecode(
     config = "--psm 7 -c tessedit_char_whitelist=ID:id0123456789:;#-"
 
     variants = _preprocess_variants(gray)
-    raw_candidates = []
+    raw_candidates: List[str] = []
+    valid_candidates: List[_Candidate] = []
 
-    for _, bin_img in variants.items():
+    for name, bin_img in variants.items():
         try:
             txt = pytesseract.image_to_string(bin_img, config=config)
         except Exception:
@@ -193,12 +258,8 @@ def read_gamecode(
         raw_candidates.append(normalized)
         value = _extract_gamecode(normalized)
         if value:
-            return GamecodeOCRResult(
-                ok=True,
-                value=value,
-                raw_text=normalized,
-                roi=roi_abs,
-            ).__dict__
+            refined_value, refined_text = _refine_digits_only(bin_img, value, normalized)
+            valid_candidates.append(_Candidate(name=name, value=refined_value, raw_text=refined_text))
 
     try:
         gray_txt = pytesseract.image_to_string(gray, config=config)
@@ -209,10 +270,15 @@ def read_gamecode(
     raw_candidates.append(gray_normalized)
     value = _extract_gamecode(gray_normalized)
     if value:
+        refined_value, refined_text = _refine_digits_only(gray, value, gray_normalized)
+        valid_candidates.append(_Candidate(name="gray", value=refined_value, raw_text=refined_text))
+
+    if valid_candidates:
+        winner = _choose_best_candidate(valid_candidates)
         return GamecodeOCRResult(
             ok=True,
-            value=value,
-            raw_text=gray_normalized,
+            value=winner.value,
+            raw_text=winner.raw_text,
             roi=roi_abs,
         ).__dict__
 

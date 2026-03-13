@@ -110,6 +110,14 @@ function collectStrategyDetails(strategy: any): Array<{ label: string; value: st
     .map((entry) => ({ label: entry.label, value: stringifyValue(entry.raw) }));
 }
 
+function getStrategyDiagnosticSummary(scope: "db" | "worker"): string {
+  const base =
+    scope === "db"
+      ? "Detalle del fallo de estrategia (no afecta al enlace OBSREAL)."
+      : "Detalle del fallo de estrategia para esta imagen.";
+  return `${base} Nota: estos errores describen la busqueda de rango/estrategia; el enlace OBSREAL se diagnostica en el bloque 'Motivo por el cual no se pudo relacionar'.`;
+}
+
 function collectLinkDetails(row: HandsObsRow | null, rowOcrJson: any): Array<{ label: string; value: string }> {
   if (!row) return [];
 
@@ -472,8 +480,8 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
                 ) : null}
                 {!rowOk ? (
                   <FailureBlock
-                    title="Motivo por el cual no hay match de estrategia"
-                    summary="Error de estrategia almacenado en la fila OCR."
+                    title="Diagnóstico de estrategia (rangos preflop)"
+                    summary={getStrategyDiagnosticSummary("db")}
                     details={rowStrategyDetails}
                     rawText={rowStrategyErr}
                   />
@@ -487,8 +495,8 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
                 </div>
                 {!workerOk ? (
                   <FailureBlock
-                    title="Motivo por el cual no hay match de estrategia (1 hand)"
-                    summary="Resultado del reprocesado manual de esta imagen."
+                    title="Diagnóstico de estrategia (1 hand)"
+                    summary={getStrategyDiagnosticSummary("worker")}
                     details={workerStrategyDetails}
                     rawText={workerStrategyErr}
                   />

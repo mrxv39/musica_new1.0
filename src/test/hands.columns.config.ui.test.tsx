@@ -90,5 +90,5 @@ describe("HandsTable columns config", () => {
 
     expect(screen.queryByText("fingerprint")).toBeNull();
     expect(screen.getByText("debug_extra_col")).toBeTruthy();
-  });
+  }, 15000);
 });

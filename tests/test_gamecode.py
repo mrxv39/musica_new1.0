@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+import numpy as np
+
+from modules.ocr import gamecode
+
+
+def _write_dummy_image(tmp_path):
+    image_path = tmp_path / "gc.png"
+    image_path.write_bytes(b"fake")
+    return str(image_path)
+
+
+def test_read_gamecode_refina_solo_digitos_y_vota(tmp_path, monkeypatch):
+    image_path = _write_dummy_image(tmp_path)
+    img = np.zeros((80, 320, 3), dtype=np.uint8)
+    monkeypatch.setattr(gamecode.cv2, "imread", lambda _: img)
+
+    state = {"full_calls": 0, "digit_calls": 0}
+
+    def fake_ocr(ocr_img, config=""):
+        if "tessedit_char_whitelist=0123456789" in config:
+            state["digit_calls"] += 1
+            if state["digit_calls"] == 1:
+                return "12105027261"
+            return "12105027261"
+
+        state["full_calls"] += 1
+        if state["full_calls"] == 1:
+            return "ID: 12008077261"
+        if state["full_calls"] in (2, 3):
+            return "ID: 12105027261"
+        return ""
+
+    monkeypatch.setattr(gamecode.pytesseract, "image_to_string", fake_ocr)
+
+    result = gamecode.read_gamecode(image_path)
+
+    assert result["ok"] is True
+    assert result["value"] == "12105027261"
+    assert result["raw_text"] == "12105027261"
+
+
+def test_read_gamecode_usa_fallback_si_reocr_digitos_falla(tmp_path, monkeypatch):
+    image_path = _write_dummy_image(tmp_path)
+    img = np.zeros((80, 320, 3), dtype=np.uint8)
+    monkeypatch.setattr(gamecode.cv2, "imread", lambda _: img)
+
+    state = {"full_calls": 0}
+
+    def fake_ocr(ocr_img, config=""):
+        if "tessedit_char_whitelist=0123456789" in config:
+            return "abc"
+
+        state["full_calls"] += 1
+        if state["full_calls"] == 1:
+            return "ID: 12105027261"
+        return ""
+
+    monkeypatch.setattr(gamecode.pytesseract, "image_to_string", fake_ocr)
+
+    result = gamecode.read_gamecode(image_path)
+
+    assert result["ok"] is True
+    assert result["value"] == "12105027261"
+    assert result["raw_text"] == "ID: 12105027261"
+
+
+def test_read_gamecode_vota_valor_repetido_antes_que_primero_valido(tmp_path, monkeypatch):
+    image_path = _write_dummy_image(tmp_path)
+    img = np.zeros((80, 320, 3), dtype=np.uint8)
+    monkeypatch.setattr(gamecode.cv2, "imread", lambda _: img)
+
+    state = {"full_calls": 0}
+
+    def fake_ocr(ocr_img, config=""):
+        if "tessedit_char_whitelist=0123456789" in config:
+            return ""
+
+        state["full_calls"] += 1
+        if state["full_calls"] == 1:
+            return "ID: 12008077261"
+        if state["full_calls"] in (2, 3):
+            return "ID: 12105027261"
+        return ""
+
+    monkeypatch.setattr(gamecode.pytesseract, "image_to_string", fake_ocr)
+
+    result = gamecode.read_gamecode(image_path)
+
+    assert result["ok"] is True
+    assert result["value"] == "12105027261"
+    assert result["raw_text"] == "ID: 12105027261"

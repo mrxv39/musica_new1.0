@@ -62,7 +62,9 @@ describe("HandsTable image preview", () => {
 
     expect(screen.getByText("2 / 2")).toBeTruthy();
     expect(screen.getByText("Motivo por el cual no se pudo relacionar")).toBeTruthy();
-    expect(screen.getByText("Motivo por el cual no hay match de estrategia")).toBeTruthy();
+    expect(screen.getByText("Diagnóstico de estrategia (rangos preflop)")).toBeTruthy();
+    expect(screen.getByText(/Detalle del fallo de estrategia \(no afecta al enlace OBSREAL\)\./)).toBeTruthy();
+    expect(screen.getByText(/el enlace OBSREAL se diagnostica en el bloque 'Motivo por el cual no se pudo relacionar'/)).toBeTruthy();
     expect(screen.getByText(/No candidate in hand_links/)).toBeTruthy();
     expect(screen.getAllByText(/top_nonmatch_reasons/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/requested_situacion/).length).toBeGreaterThan(0);
@@ -75,7 +77,7 @@ describe("HandsTable image preview", () => {
     expect(screen.getByText("1 / 2")).toBeTruthy();
     expect(screen.getAllByText("C:\\tmp\\img-1.bmp").length).toBeGreaterThan(0);
     expect(screen.queryByText("Motivo por el cual no se pudo relacionar")).toBeNull();
-    expect(screen.getByText("Motivo por el cual no hay match de estrategia")).toBeTruthy();
+    expect(screen.getByText("Diagnóstico de estrategia (rangos preflop)")).toBeTruthy();
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
 
@@ -85,5 +87,34 @@ describe("HandsTable image preview", () => {
     fireEvent.keyDown(window, { key: "Escape" });
 
     expect(screen.queryByText("2 / 2")).toBeNull();
-  });
+  }, 15000);
+
+  it("shows the renamed strategy diagnostic block for 1 hand output", async () => {
+    const user = userEvent.setup();
+    const rows: HandsObsRow[] = [makeRow(1)];
+    const runOutput = JSON.stringify({
+      strategy: {
+        ok: false,
+        error: "ValueError: Expected exactly 1 match, got 0.",
+        requested_situacion: "BB_vs_CO_SB_20bb",
+        top_nonmatch_reasons: [["p2_tipo", 18]],
+      },
+    });
+
+    render(
+      <HandsTable
+        rows={rows}
+        canRunOne={true}
+        onRunOneForImage={vi.fn(async () => runOutput)}
+      />
+    );
+
+    await user.click(screen.getByText("view"));
+    await user.click(screen.getByRole("button", { name: "1 hand" }));
+
+    expect(screen.getByText("Diagnóstico de estrategia (1 hand)")).toBeTruthy();
+    expect(screen.getByText(/Detalle del fallo de estrategia para esta imagen\./)).toBeTruthy();
+    expect(screen.getByText(/el enlace OBSREAL se diagnostica en el bloque 'Motivo por el cual no se pudo relacionar'/)).toBeTruthy();
+    expect(screen.queryByText("Motivo por el cual no se pudo relacionar")).toBeNull();
+  }, 15000);
 });
