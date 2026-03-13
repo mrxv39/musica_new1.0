@@ -9,6 +9,7 @@ HANDS_OBS_COLUMNS = [
     ("p2bet", "REAL DEFAULT NULL"),
     ("p3bet", "REAL DEFAULT NULL"),
     ("p1_se_bb", "REAL DEFAULT NULL"),
+    ("captured_gamecode", "TEXT DEFAULT NULL"),
     ("frame_ref", "TEXT DEFAULT ''"),
 ]
 

@@ -15,6 +15,7 @@ from modules.ocr import (
     table_state,
     dealer,
     posiciones,
+    gamecode,
 )
 
 
@@ -30,6 +31,7 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         "table_state": {},
         "dealer": {},
         "posiciones": {},
+        "gamecode": {},
     }
 
     # Run base OCR modules
@@ -87,6 +89,12 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         out["errors"].append(f"posiciones:{e}")
         out["posiciones"] = {"ok": False, "errors": [str(e)]}
 
+    try:
+        out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1)
+    except Exception as e:
+        out["errors"].append(f"gamecode:{e}")
+        out["gamecode"] = {"ok": False, "errors": [str(e)]}
+
     # ok = True if any submodule ok is True
     oks = [
         out.get("stackefectivo", {}).get("ok"),
@@ -97,14 +105,29 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         out.get("table_state", {}).get("ok"),
         out.get("dealer", {}).get("ok"),
         out.get("posiciones", {}).get("ok"),
+        out.get("gamecode", {}).get("ok"),
     ]
     out["ok"] = any(bool(x) for x in oks)
 
     # Aggregate errors from submodules
-    for k in ("stackefectivo", "bets", "stacks", "names", "villano", "table_state", "dealer", "posiciones"):
+    for k in (
+        "stackefectivo",
+        "bets",
+        "stacks",
+        "names",
+        "villano",
+        "table_state",
+        "dealer",
+        "posiciones",
+        "gamecode",
+    ):
         errs = out.get(k, {}).get("errors")
         if errs:
             out["errors"].extend([f"{k}:{e}" for e in errs])
+        if k == "gamecode":
+            err = out.get(k, {}).get("error")
+            if err:
+                out["errors"].append(f"{k}:{err}")
 
     return out
 

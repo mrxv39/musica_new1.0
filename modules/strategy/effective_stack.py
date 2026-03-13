@@ -33,6 +33,7 @@ def compute_effective_stack_bb(
     posiciones: Any,
     stacks: Any,
     bets: Any,
+    bb: Optional[float] = None,
     lo: float = 0.01,
     hi: float = 75.0,
 ) -> Optional[float]:
@@ -42,8 +43,8 @@ def compute_effective_stack_bb(
     Assumptions (current project):
     - seats are p1(hero), p2, p3
     - posiciones maps p1/p2/p3 -> BTN/SB/BB
-    - stacks maps p1/p2/p3 -> stack in BB
-    - bets maps p1/p2/p3 -> bet in BB
+    - stacks maps p1/p2/p3 -> stack in BB, unless `bb` is provided
+    - bets maps p1/p2/p3 -> bet in BB, unless `bb` is provided
 
     Conservative, high-confidence rules:
     - Valid numeric outputs must be within [0.01, 75.00] BB.
@@ -73,7 +74,7 @@ def compute_effective_stack_bb(
         return tot
 
     hero_total = total_stack("p1")
-    if not _in_range(hero_total, lo, hi):
+    if hero_total is None:
         return None
 
     # Determine hero role + BTN seat for fold inference
@@ -92,7 +93,7 @@ def compute_effective_stack_bb(
         if seat in exclude:
             continue
         v = total_stack(seat)
-        if _in_range(v, lo, hi):
+        if v is not None:
             opp_totals.append(float(v))
 
     if not opp_totals:
@@ -101,7 +102,15 @@ def compute_effective_stack_bb(
     # Effective stack: min(hero_total, max(opponent_totals_remaining))
     # (matches examples where only opponents that continue matter; fold inference above reduces set)
     se = min(float(hero_total), max(opp_totals))
-    if not _in_range(se, lo, hi):
+    if bb is not None:
+        bb_value = _to_float(bb)
+        if bb_value is None or bb_value <= 0.0:
+            return None
+        se_bb = float(se) / float(bb_value)
+    else:
+        se_bb = float(se)
+
+    if not _in_range(se_bb, lo, hi):
         return None
-    return float(round(se, 2))
+    return float(round(se_bb, 2))
 

@@ -21,6 +21,7 @@ export type HandsObsRow = {
   ocr_json?: string;
   p2bet?: number | null;
   p3bet?: number | null;
+  captured_gamecode?: string | null;
   frame_ref?: string;
 
   // allow dynamic columns

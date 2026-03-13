@@ -17,6 +17,7 @@ pub const PY_SCRIPT_RUN_WORKERS_LOOP: &str = r".\modules\preflop\run_workers_loo
 pub fn run_python_with_env(args: &[&str], db_path_env: Option<&str>) -> Result<String, String> {
     let mut cmd = Command::new("python");
     cmd.args(args).current_dir(PROJECT_ROOT);
+    cmd.env("PYTHONPATH", PROJECT_ROOT);
 
     if let Some(p) = db_path_env {
         cmd.env("POKER_BOSS_DB_PATH", p);

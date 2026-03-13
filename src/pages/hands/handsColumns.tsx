@@ -98,6 +98,11 @@ export function makeHandsColumns(
 ): ColumnDef[] {
   const base: ColumnDef[] = [
     {
+      id: "gamecode",
+      label: "game code",
+      render: (r) => (r as any).captured_gamecode ?? "",
+    },
+    {
       id: "time",
       label: "time",
       sortableKey: "detected_at_ms",
@@ -111,10 +116,10 @@ export function makeHandsColumns(
     },
     {
       id: "stackef",
-      label: "stackef",
+      label: "SE derivado",
       sortableKey: "stackefectivo",
       render: (r) => {
-        const v = extractStackEfectivo((r as any).ocr_json);
+        const v = (r as any).p1_se_bb ?? extractStackEfectivo((r as any).ocr_json);
         const p = extractLocalImagePath(r);
         const canOpen = Boolean(p);
         return (

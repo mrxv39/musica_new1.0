@@ -9,6 +9,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def isolated_db_env(monkeypatch, tmp_path):
     db_path = tmp_path / "test_poker_boss.db"
+    monkeypatch.setenv("POKER_BOSS_DB_PATH", str(db_path))
     monkeypatch.setenv("MUSICA_DB_PATH", str(db_path))
 
     # Reset cached global connection/path if module already loaded

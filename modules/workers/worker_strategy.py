@@ -90,10 +90,18 @@ def compute_strategy(
                 return False
 
         se_external_valid = in_range(se_external)
+        p1_bet = _as_float(bets_result.get("p1", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0
+        p2_bet = _as_float(bets_result.get("p2", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0
+        p3_bet = _as_float(bets_result.get("p3", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0
+        bb_inferred = max(p1_bet, p2_bet, p3_bet)
+        if bb_inferred <= 0.0:
+            bb_inferred = 1.0
+
         se_derived = compute_effective_stack_bb(
             posiciones=pos if isinstance(pos, dict) else {},
             stacks=ocr_stacks if isinstance(ocr_stacks, dict) else {},
             bets=bets_result if isinstance(bets_result, dict) else {},
+            bb=bb_inferred,
         )
         se_derived_valid = in_range(se_derived)
 

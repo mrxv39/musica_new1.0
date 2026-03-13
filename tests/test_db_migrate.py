@@ -110,3 +110,14 @@ def test_init_db_crea_indices_de_workers_captures(temp_db_path):
         assert expected.issubset(idxs)
     finally:
         conn.close()
+
+
+def test_init_db_agrega_captured_gamecode_a_hands_obs(temp_db_path):
+    init_db()
+
+    conn = sqlite3.connect(str(temp_db_path))
+    try:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(hands_obs)").fetchall()]
+        assert "captured_gamecode" in cols
+    finally:
+        conn.close()

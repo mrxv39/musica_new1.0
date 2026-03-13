@@ -53,8 +53,9 @@ describe("HandsTable columns config", () => {
     expect(screen.getByRole("button", { name: /config/i })).toBeTruthy();
 
     // 2) Columnas base visibles (headers)
+    expect(screen.getByText("game code")).toBeTruthy();
     expect(screen.getByText("hand")).toBeTruthy();
-    expect(screen.getByText("stackef")).toBeTruthy();
+    expect(screen.getByText("SE derivado")).toBeTruthy();
     expect(screen.getByText("move")).toBeTruthy();
     expect(screen.getByText("betmin")).toBeTruthy();
     expect(screen.getByText("betmax")).toBeTruthy();

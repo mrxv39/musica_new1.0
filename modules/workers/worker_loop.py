@@ -241,6 +241,7 @@ def process_one_image(
     stackefectivo_result = ocr.get("stackefectivo", {}) if isinstance(ocr, dict) else {}
     names_result = ocr.get("names", {}) if isinstance(ocr, dict) else {}
     villano_result = ocr.get("villano", {}) if isinstance(ocr, dict) else {}
+    gamecode_result = ocr.get("gamecode", {}) if isinstance(ocr, dict) else {}
 
     fingerprint = get_fingerprint(cfg.worker_id, mode, image_ref)
 
@@ -295,6 +296,7 @@ def process_one_image(
             strategy=strategy,
             ocr_json=ocr_json,
             bets_result=bets_result,
+            gamecode_result=gamecode_result,
             frame_ref=frame_ref,
         )
         persisted = True
@@ -319,6 +321,7 @@ def process_one_image(
         "stackefectivo_result": stackefectivo_result,
         "names_result": names_result,
         "villano_result": villano_result,
+        "gamecode_result": gamecode_result,
         "errors": [],
         "fingerprint": fingerprint,
         "dedupe_skipped": dedupe_skipped,

@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS hands_obs (
     p2bet REAL DEFAULT NULL,
     p3bet REAL DEFAULT NULL,
     p1_se_bb REAL DEFAULT NULL,
+    captured_gamecode TEXT DEFAULT NULL,
 
     frame_ref TEXT DEFAULT '',
     created_at_ms INTEGER DEFAULT 0

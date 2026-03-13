@@ -135,3 +135,46 @@ def test_run_ocr_llama_posiciones_con_table_state_bets_y_dealer(monkeypatch):
     assert seen["table_state"] == table_state
     assert seen["bets"]["p2"] == 0.5
     assert seen["dealer"] == dealer
+
+
+def test_run_ocr_incluye_gamecode(monkeypatch):
+    monkeypatch.setattr(ocrmod.stackefectivo, "read_stackefectivo", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.bets, "read_bets", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.stacks, "read_stacks", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.names, "read_names", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.villano, "classify_villano", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.table_state, "compute_table_state", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.dealer, "read_dealer", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.posiciones, "read_posiciones", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(
+        ocrmod.gamecode,
+        "read_gamecode",
+        lambda *a, **k: {"ok": True, "value": "12104995598", "raw_text": "ID: 12104995598", "roi": (10, 20, 220, 32), "error": ""},
+    )
+
+    out = ocrmod.run_ocr("fake.bmp")
+
+    assert "gamecode" in out
+    assert out["gamecode"]["ok"] is True
+    assert out["gamecode"]["value"] == "12104995598"
+    assert out["gamecode"]["error"] == ""
+
+
+def test_run_ocr_agrega_gamecode_error_singular(monkeypatch):
+    monkeypatch.setattr(ocrmod.stackefectivo, "read_stackefectivo", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.bets, "read_bets", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.stacks, "read_stacks", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.names, "read_names", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.villano, "classify_villano", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.table_state, "compute_table_state", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.dealer, "read_dealer", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(ocrmod.posiciones, "read_posiciones", lambda *a, **k: {"ok": False, "errors": []})
+    monkeypatch.setattr(
+        ocrmod.gamecode,
+        "read_gamecode",
+        lambda *a, **k: {"ok": False, "value": None, "raw_text": "", "roi": (10, 20, 220, 32), "error": "gamecode_not_found"},
+    )
+
+    out = ocrmod.run_ocr("fake.bmp")
+
+    assert "gamecode:gamecode_not_found" in out["errors"]
