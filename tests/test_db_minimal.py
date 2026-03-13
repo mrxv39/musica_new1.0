@@ -12,13 +12,22 @@ from modules.db import db
 class TestDBMinimal(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
-        self.db_path = os.path.join(self.tmpdir.name, "test_musica_new.db")
-        os.environ["MUSICA_DB_PATH"] = self.db_path
+        self.db_path = os.path.join(self.tmpdir.name, "test_poker_boss.db")
+        os.environ["POKER_BOSS_DB_PATH"] = self.db_path
+        import modules.db.db as dbmod
+
+        try:
+            if getattr(dbmod, "_DB_CONN", None) is not None:
+                dbmod._DB_CONN.close()
+        except Exception:
+            pass
+        dbmod._DB_CONN = None
+        dbmod._DB_PATH_ACTIVE = None
         db.init_db()
 
     def tearDown(self):
         try:
-            del os.environ["MUSICA_DB_PATH"]
+            del os.environ["POKER_BOSS_DB_PATH"]
         except KeyError:
             pass
         self.tmpdir.cleanup()

@@ -5,6 +5,7 @@ import sqlite3
 
 import pytest
 
+import modules.db.db as dbmod
 from modules.strategy.substrategy_selector import MatchInput, select_move
 
 
@@ -79,7 +80,10 @@ def test_select_move_unique_match(monkeypatch, tmp_path):
     conn.commit()
     conn.close()
 
+    monkeypatch.setenv("POKER_BOSS_DB_PATH", str(db_path))
     monkeypatch.setenv("MUSICA_DB_PATH", str(db_path))
+    dbmod._DB_CONN = None
+    dbmod._DB_PATH_ACTIVE = None
 
     inp = MatchInput(
         situacion="TEST_SIT",
@@ -154,7 +158,10 @@ def test_select_move_default_fold_when_not_in_any_or_range(monkeypatch, tmp_path
     conn.commit()
     conn.close()
 
+    monkeypatch.setenv("POKER_BOSS_DB_PATH", str(db_path))
     monkeypatch.setenv("MUSICA_DB_PATH", str(db_path))
+    dbmod._DB_CONN = None
+    dbmod._DB_PATH_ACTIVE = None
 
     inp = MatchInput(
         situacion="TEST_SIT",
