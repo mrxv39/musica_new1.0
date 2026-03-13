@@ -29,6 +29,7 @@ export default function HandsToolbarCommon({
     <>
       <label style={{ fontSize: 14 }}>Modo:</label>
       <select
+        aria-label="Modo"
         value={mode}
         onChange={(e) => onChangeMode(e.target.value as HandsMode)}
         disabled={busy}

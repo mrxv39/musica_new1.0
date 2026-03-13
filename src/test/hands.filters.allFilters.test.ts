@@ -83,4 +83,24 @@ describe("filterHandsByAllFilters()", () => {
     expect(res.rows.map((r) => r.id)).toEqual([1]);
     expect(Boolean(res.rangeError)).toBe(true);
   });
+
+  test("linkFilter=linked includes only rows with linked_gamecode", () => {
+    const rows = [
+      { ...mkRow(1, "A9O", 30, 2, 3), linked_gamecode: null },
+      { ...mkRow(2, "A9O", 30, 2, 3), linked_gamecode: "G-123" },
+    ];
+
+    const res = filterHandsByAllFilters(rows, null, null, "", "linked");
+    expect(res.rows.map((r) => r.id)).toEqual([2]);
+  });
+
+  test("linkFilter=unlinked includes only rows without linked_gamecode", () => {
+    const rows = [
+      { ...mkRow(1, "A9O", 30, 2, 3), linked_gamecode: null },
+      { ...mkRow(2, "A9O", 30, 2, 3), linked_gamecode: "G-123" },
+    ];
+
+    const res = filterHandsByAllFilters(rows, null, null, "", "unlinked");
+    expect(res.rows.map((r) => r.id)).toEqual([1]);
+  });
 });

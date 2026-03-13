@@ -89,6 +89,8 @@ export default function HandsPage() {
         onChangeBetRangeText={hp.setBetRangeText}
         rangeListText={hp.rangeListText}
         onChangeRangeListText={hp.setRangeListText}
+        linkFilter={hp.linkFilter}
+        onChangeLinkFilter={hp.setLinkFilter}
         onClearFilters={hp.onClearFilters}
       />
 

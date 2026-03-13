@@ -25,7 +25,7 @@ describe("UI Import XML", () => {
 
     render(<HandsPage />);
 
-    const modeSelect = screen.getByRole("combobox");
+    const modeSelect = screen.getByRole("combobox", { name: /modo/i });
     fireEvent.change(modeSelect, { target: { value: "REAL" } });
 
     const btn = await screen.findByRole("button", { name: /import xml/i });

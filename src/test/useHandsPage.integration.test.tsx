@@ -226,10 +226,11 @@ describe("useHandsPage integration", () => {
     expect(result.current.obsFooterText).toBe("bad range");
   });
 
-  it("onClearFilters clears state and persists empty strings", async () => {
+  it("onClearFilters clears state and resets persisted filters", async () => {
     localStorage.setItem("hands.stackEfRangeText", "20-40");
     localStorage.setItem("hands.betRangeText", "2-3");
     localStorage.setItem("hands.rangeListText", "AK,QQ");
+    localStorage.setItem("hands.linkFilter", "linked");
 
     const { result } = renderHook(() => useHandsPage());
 
@@ -237,6 +238,7 @@ describe("useHandsPage integration", () => {
       result.current.setStackEfRangeText("20-40");
       result.current.setBetRangeText("2-3");
       result.current.setRangeListText("AK,QQ");
+      result.current.setLinkFilter("linked");
     });
 
     await act(async () => {
@@ -246,9 +248,24 @@ describe("useHandsPage integration", () => {
     expect(result.current.stackEfRangeText).toBe("");
     expect(result.current.betRangeText).toBe("");
     expect(result.current.rangeListText).toBe("");
+    expect(result.current.linkFilter).toBe("all");
     expect(localStorage.getItem("hands.stackEfRangeText")).toBe("");
     expect(localStorage.getItem("hands.betRangeText")).toBe("");
     expect(localStorage.getItem("hands.rangeListText")).toBe("");
+    expect(localStorage.getItem("hands.linkFilter")).toBe("all");
+  });
+
+  it("hydrates and persists linkFilter", async () => {
+    localStorage.setItem("hands.linkFilter", "unlinked");
+
+    const { result } = renderHook(() => useHandsPage());
+    expect(result.current.linkFilter).toBe("unlinked");
+
+    await act(async () => {
+      result.current.setLinkFilter("linked");
+    });
+
+    expect(localStorage.getItem("hands.linkFilter")).toBe("linked");
   });
 
   it("canLoad is always true (DB path is fixed by config)", () => {

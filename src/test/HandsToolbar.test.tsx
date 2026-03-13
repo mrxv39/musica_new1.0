@@ -40,6 +40,8 @@ describe("HandsToolbar", () => {
     onChangeBetRangeText: vi.fn(),
     rangeListText: "AA,KK",
     onChangeRangeListText: vi.fn(),
+    linkFilter: "all" as const,
+    onChangeLinkFilter: vi.fn(),
     onClearFilters: vi.fn(),
   };
 
@@ -83,6 +85,7 @@ describe("HandsToolbar", () => {
     expect(props.stackEfRangeText).toBe("20-40");
     expect(props.betRangeText).toBe("2-3");
     expect(props.rangeListText).toBe("AA,KK");
+    expect(props.linkFilter).toBe("all");
   });
 
   it("does not render HandsToolbarObs in REAL mode", () => {

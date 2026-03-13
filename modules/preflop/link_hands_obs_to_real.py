@@ -4,6 +4,7 @@ import os
 import sqlite3
 import time
 from datetime import datetime
+from typing import Any, Dict, Iterable, Optional
 
 from modules.db.migrate import init_db
 
@@ -283,18 +284,34 @@ def _compute_bet_distance(cur, actions_by_hand_id, obs_bet_profile, real):
     return bet_distance_total(obs_bet_profile, real_bet_profile)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default=DEFAULT_DB)
-    ap.add_argument("--stack_bb_tolerance", type=float, default=4.0)
-    ap.add_argument("--bet_bb_tolerance", type=float, default=2.0)
-    ap.add_argument("--report", action="store_true", help="Only print diagnostic report for unlinked obs, no write links")
-    args = ap.parse_args()
+def _obs_query(obs_ids: Optional[Iterable[int]]) -> tuple[str, tuple[Any, ...]]:
+    base_sql = (
+        "SELECT obs_id, mano_raw, detected_at_ms, ocr_json, captured_gamecode "
+        "FROM hands_obs WHERE preflop_ok=1"
+    )
+    params: tuple[Any, ...] = ()
+    if obs_ids is not None:
+        ids = [int(obs_id) for obs_id in obs_ids]
+        if not ids:
+            return base_sql + " AND 1=0 ORDER BY obs_id ASC", ()
+        placeholders = ",".join("?" for _ in ids)
+        base_sql += f" AND obs_id IN ({placeholders})"
+        params = tuple(ids)
+    return base_sql + " ORDER BY obs_id ASC", params
 
+
+def link_hands_obs_to_real(
+    *,
+    db_path: str,
+    stack_bb_tolerance: float = 4.0,
+    bet_bb_tolerance: float = 2.0,
+    report: bool = False,
+    obs_ids: Optional[Iterable[int]] = None,
+) -> Dict[str, Any]:
     prev_db_path = os.environ.get("POKER_BOSS_DB_PATH")
     prev_legacy_db_path = os.environ.get("MUSICA_DB_PATH")
-    os.environ["POKER_BOSS_DB_PATH"] = args.db
-    os.environ["MUSICA_DB_PATH"] = args.db
+    os.environ["POKER_BOSS_DB_PATH"] = db_path
+    os.environ["MUSICA_DB_PATH"] = db_path
 
     con = None
     links = []
@@ -308,14 +325,12 @@ def main():
     try:
         init_db()
 
-        con = sqlite3.connect(args.db)
+        con = sqlite3.connect(db_path)
         con.row_factory = sqlite3.Row
         cur = con.cursor()
 
-        obs_rows = cur.execute(
-            "SELECT obs_id, mano_raw, detected_at_ms, ocr_json, captured_gamecode FROM hands_obs "
-            "WHERE preflop_ok=1 ORDER BY obs_id ASC"
-        ).fetchall()
+        obs_sql, obs_params = _obs_query(obs_ids)
+        obs_rows = cur.execute(obs_sql, obs_params).fetchall()
 
         real_rows = cur.execute(
             "SELECT id, gamecode, hero_cards, startdate, hero, bb, players_json FROM hands_real ORDER BY startdate ASC"
@@ -346,7 +361,6 @@ def main():
 
         used_gamecodes = set()
         linked_obs_ids = set()
-        debug_first_ambiguous_printed = False
 
         for obs in obs_rows:
             obs_id = obs["obs_id"]
@@ -374,7 +388,6 @@ def main():
                 )
             )
 
-        # FASE 1: rank only + uniqueness (sin usar tiempo para decidir)
         for obs in obs_rows:
             obs_id = obs["obs_id"]
             if obs_id in linked_obs_ids:
@@ -396,7 +409,7 @@ def main():
 
             if not candidates_rank:
                 skipped_no_candidate += 1
-                if args.report:
+                if report:
                     report_rows.append(
                         {
                             "obs_id": obs_id,
@@ -421,22 +434,9 @@ def main():
                         int(time.time() * 1000),
                     )
                 )
-
                 continue
 
             obs_stack_profile = extract_obs_stack_profile(obs["ocr_json"])
-            if not debug_first_ambiguous_printed:
-                print(f"DEBUG first ambiguous obs_id={obs_id} ocr_stacks_p1_p2_p3={obs_stack_profile}")
-                first_real = candidates_rank[0]
-                first_real_profile = extract_real_stack_profile(
-                    first_real.get("hero"), first_real.get("bb"), first_real.get("players_json")
-                )
-                print(
-                    "DEBUG first real candidate "
-                    f"gamecode={first_real['gamecode']} bb={first_real.get('bb')} "
-                    f"parsed_stacks_bb={first_real_profile}"
-                )
-                debug_first_ambiguous_printed = True
 
             candidates_stacks = []
             min_stack_distance = None
@@ -449,7 +449,7 @@ def main():
                     continue
                 if min_stack_distance is None or distance_total < min_stack_distance:
                     min_stack_distance = distance_total
-                if distance_total <= args.stack_bb_tolerance:
+                if distance_total <= stack_bb_tolerance:
                     candidates_stacks.append(real)
 
             if len(candidates_stacks) == 1:
@@ -470,7 +470,7 @@ def main():
 
             obs_bet_profile = extract_obs_bet_profile(obs["ocr_json"])
             min_bet_distance = None
-            if args.report:
+            if report:
                 for real in candidates_rank:
                     distance_bets = _compute_bet_distance(cur, actions_by_hand_id, obs_bet_profile, real)
                     if distance_bets is None:
@@ -485,7 +485,7 @@ def main():
                 distance_bets = _compute_bet_distance(cur, actions_by_hand_id, obs_bet_profile, real)
                 if distance_bets is None:
                     continue
-                if distance_bets <= args.bet_bb_tolerance:
+                if distance_bets <= bet_bb_tolerance:
                     candidates_bets.append(real)
 
             if len(candidates_bets) == 1:
@@ -504,7 +504,7 @@ def main():
                 )
             else:
                 ambiguous_rank_only += 1
-                if args.report:
+                if report:
                     report_rows.append(
                         {
                             "obs_id": obs_id,
@@ -515,7 +515,7 @@ def main():
                         }
                     )
 
-        if not args.report:
+        if not report and links:
             cur.executemany(
                 """
                 INSERT OR REPLACE INTO hand_links
@@ -525,6 +525,18 @@ def main():
                 links,
             )
             con.commit()
+
+        return {
+            "links_created": len(links),
+            "skipped": {
+                "ambiguous_rank_only": ambiguous_rank_only,
+                "no_candidate": skipped_no_candidate,
+                "no_rank": skipped_no_rank,
+                "rank_ambiguous_bets_resolved": rank_ambiguous_bets_resolved,
+                "rank_ambiguous_stacks_resolved": rank_ambiguous_stacks_resolved,
+            },
+            "report_rows": report_rows,
+        }
     finally:
         if con is not None:
             con.close()
@@ -539,19 +551,26 @@ def main():
         else:
             os.environ["MUSICA_DB_PATH"] = prev_legacy_db_path
 
-    print("links created:", len(links))
-    print(
-        "skipped:",
-        {
-            "ambiguous_rank_only": ambiguous_rank_only,
-            "no_candidate": skipped_no_candidate,
-            "no_rank": skipped_no_rank,
-            "rank_ambiguous_bets_resolved": rank_ambiguous_bets_resolved,
-            "rank_ambiguous_stacks_resolved": rank_ambiguous_stacks_resolved,
-        },
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--db", default=DEFAULT_DB)
+    ap.add_argument("--stack_bb_tolerance", type=float, default=4.0)
+    ap.add_argument("--bet_bb_tolerance", type=float, default=2.0)
+    ap.add_argument("--report", action="store_true", help="Only print diagnostic report for unlinked obs, no write links")
+    args = ap.parse_args()
+
+    result = link_hands_obs_to_real(
+        db_path=args.db,
+        stack_bb_tolerance=args.stack_bb_tolerance,
+        bet_bb_tolerance=args.bet_bb_tolerance,
+        report=args.report,
     )
+
+    print("links created:", result["links_created"])
+    print("skipped:", result["skipped"])
     if args.report:
-        for row in report_rows:
+        for row in result["report_rows"]:
             min_stack_dist = "-" if row["min_stack_dist"] is None else f"{row['min_stack_dist']:.3f}"
             min_bet_dist = "-" if row["min_bet_dist"] is None else f"{row['min_bet_dist']:.3f}"
             print(

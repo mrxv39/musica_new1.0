@@ -3,6 +3,7 @@ import type { HandsObsRow } from "../../db";
 import { extractBetMax, extractBetMin, extractStackEfectivo } from "../../db";
 
 export type NumericRange = { min: number; max: number };
+export type LinkFilter = "all" | "linked" | "unlinked";
 
 export function parseNumericRange(text: string): NumericRange | null {
   const t = String(text || "").trim();
@@ -252,13 +253,17 @@ export function filterHandsByAllFilters(
   rows: HandsObsRow[],
   stackEfRange: NumericRange | null,
   betRange: NumericRange | null,
-  rangeListText: string
+  rangeListText: string,
+  linkFilter: LinkFilter = "all"
 ): { rows: HandsObsRow[]; rangeError?: string } {
   const hasRangeFilter = String(rangeListText || "").trim().length > 0;
   const compiled = hasRangeFilter ? compileRangeList(rangeListText) : ({ ok: true, match: () => true } as CompileOk);
 
   const out: HandsObsRow[] = [];
   for (const r of rows || []) {
+    if (linkFilter === "linked" && !r.linked_gamecode) continue;
+    if (linkFilter === "unlinked" && r.linked_gamecode) continue;
+
     const se = extractStackEfectivo(r.ocr_json);
     if (!inRange(se, stackEfRange)) continue;
 

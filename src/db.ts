@@ -22,6 +22,7 @@ export type HandsObsRow = {
   p2bet?: number | null;
   p3bet?: number | null;
   captured_gamecode?: string | null;
+  linked_gamecode?: string | null;
   frame_ref?: string;
 
   // allow dynamic columns
@@ -140,8 +141,12 @@ export async function dbExec(sql: string, params: any[] = [], dbPath?: string): 
 export async function fetchLatestHandsObs(dbPath: string, limit = 50): Promise<HandsObsRow[]> {
   const db = await openDb(dbPath);
   const rows = await (db as any).select(
-    `SELECT *
-     FROM hands_obs
+    `SELECT
+       ho.*,
+       l.gamecode AS linked_gamecode
+     FROM hands_obs ho
+     LEFT JOIN hand_links l
+       ON l.obs_id = ho.obs_id
      ORDER BY detected_at_ms DESC
      LIMIT ?1`,
     [limit]

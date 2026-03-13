@@ -10,6 +10,8 @@ type HandsToolbarObsProps = {
   onChangeBetRangeText: (v: string) => void;
   rangeListText: string;
   onChangeRangeListText: (v: string) => void;
+  linkFilter: "all" | "linked" | "unlinked";
+  onChangeLinkFilter: (v: "all" | "linked" | "unlinked") => void;
   onClearFilters: () => void;
 };
 
@@ -25,6 +27,8 @@ export default function HandsToolbarObs({
   onChangeBetRangeText,
   rangeListText,
   onChangeRangeListText,
+  linkFilter,
+  onChangeLinkFilter,
   onClearFilters,
 }: HandsToolbarObsProps) {
   return (
@@ -70,7 +74,19 @@ export default function HandsToolbarObs({
         disabled={busy}
       />
 
-      <button onClick={onClearFilters} disabled={busy} title="Limpia filtros (StackEf, Bet y Rango)">
+      <label style={{ fontSize: 13, opacity: 0.9 }}>Enlace:</label>
+      <select
+        style={{ width: 140, padding: "6px 8px", fontSize: 13 }}
+        value={linkFilter}
+        onChange={(e) => onChangeLinkFilter(e.target.value as "all" | "linked" | "unlinked")}
+        disabled={busy}
+      >
+        <option value="all">Todas</option>
+        <option value="linked">Enlazadas</option>
+        <option value="unlinked">No enlazadas</option>
+      </select>
+
+      <button onClick={onClearFilters} disabled={busy} title="Limpia filtros (StackEf, Bet, Rango y Enlace)">
         Clear filters
       </button>
     </>

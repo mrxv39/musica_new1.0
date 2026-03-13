@@ -27,6 +27,8 @@ type HandsToolbarProps = {
 
   rangeListText: string;
   onChangeRangeListText: (v: string) => void;
+  linkFilter: "all" | "linked" | "unlinked";
+  onChangeLinkFilter: (v: "all" | "linked" | "unlinked") => void;
 
   onClearFilters: () => void;
 };
@@ -62,6 +64,8 @@ export default function HandsToolbar(props: HandsToolbarProps) {
           onChangeBetRangeText={props.onChangeBetRangeText}
           rangeListText={props.rangeListText}
           onChangeRangeListText={props.onChangeRangeListText}
+          linkFilter={props.linkFilter}
+          onChangeLinkFilter={props.onChangeLinkFilter}
           onClearFilters={props.onClearFilters}
         />
       ) : null}

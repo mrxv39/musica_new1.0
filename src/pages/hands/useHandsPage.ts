@@ -10,6 +10,7 @@ import { useHandsReal } from "./useHandsReal";
 import { sortHands } from "./sortHands";
 import { useHandsSort } from "./useHandsSort";
 import { filterHandsByAllFilters, parseNumericRange } from "./handsFilters";
+import type { LinkFilter } from "./handsFilters";
 
 import { useWorkersPolling } from "./useWorkersPolling";
 import { useHandsPageActions } from "./useHandsPageActions";
@@ -112,6 +113,10 @@ export function useHandsPage() {
   const [rangeListText, setRangeListText] = useState<string>(
     () => localStorage.getItem("hands.rangeListText") || ""
   );
+  const [linkFilter, setLinkFilter] = useState<LinkFilter>(() => {
+    const saved = localStorage.getItem("hands.linkFilter");
+    return saved === "linked" || saved === "unlinked" ? saved : "all";
+  });
 
   useEffect(() => {
     localStorage.setItem("hands.stackEfRangeText", stackEfRangeText);
@@ -125,12 +130,16 @@ export function useHandsPage() {
     localStorage.setItem("hands.rangeListText", rangeListText);
   }, [rangeListText]);
 
+  useEffect(() => {
+    localStorage.setItem("hands.linkFilter", linkFilter);
+  }, [linkFilter]);
+
   const stackEfRange = useMemo(() => parseNumericRange(stackEfRangeText), [stackEfRangeText]);
   const betRange = useMemo(() => parseNumericRange(betRangeText), [betRangeText]);
 
   const filtered = useMemo(
-    () => filterHandsByAllFilters(obs.rows as HandsObsRow[], stackEfRange, betRange, rangeListText),
-    [obs.rows, stackEfRange, betRange, rangeListText]
+    () => filterHandsByAllFilters(obs.rows as HandsObsRow[], stackEfRange, betRange, rangeListText, linkFilter),
+    [obs.rows, stackEfRange, betRange, rangeListText, linkFilter]
   );
 
   const sortedObsRows = useMemo(
@@ -163,9 +172,11 @@ export function useHandsPage() {
     setStackEfRangeText("");
     setBetRangeText("");
     setRangeListText("");
+    setLinkFilter("all");
     localStorage.removeItem("hands.stackEfRangeText");
     localStorage.removeItem("hands.betRangeText");
     localStorage.removeItem("hands.rangeListText");
+    localStorage.removeItem("hands.linkFilter");
   };
 
   const obsFooterText = useMemo(() => {
@@ -215,6 +226,8 @@ export function useHandsPage() {
     setBetRangeText,
     rangeListText,
     setRangeListText,
+    linkFilter,
+    setLinkFilter,
     onClearFilters,
     obsFooterText,
     sortedObsRows,
