@@ -2,7 +2,6 @@ import modules.ocr.ocr as ocrmod
 
 
 def test_run_ocr_agrega_submodulos_correctamente(monkeypatch):
-    monkeypatch.setattr(ocrmod.stackefectivo, "read_stackefectivo", lambda *a, **k: {"ok": True, "value": 15.0, "errors": []})
     monkeypatch.setattr(ocrmod.bets, "read_bets", lambda *a, **k: {"ok": True, "p1": 0.0, "p2": 0.5, "p3": 1.0, "errors": []})
     monkeypatch.setattr(ocrmod.stacks, "read_stacks", lambda *a, **k: {"ok": True, "p1": 10.0, "p2": 20.0, "p3": 30.0, "errors": []})
     monkeypatch.setattr(ocrmod.names, "read_names", lambda *a, **k: {"ok": True, "p2_name": "N1", "p3_name": "N2", "errors": []})
@@ -14,7 +13,7 @@ def test_run_ocr_agrega_submodulos_correctamente(monkeypatch):
     out = ocrmod.run_ocr("fake.bmp")
 
     assert out["ok"] is True
-    assert out["stackefectivo"]["value"] == 15.0
+    assert out["stackefectivo"] == {}
     assert out["bets"]["p2"] == 0.5
     assert out["stacks"]["p3"] == 30.0
     assert out["names"]["p2_name"] == "N1"
@@ -24,7 +23,6 @@ def test_run_ocr_agrega_submodulos_correctamente(monkeypatch):
 
 
 def test_run_ocr_ok_true_si_cualquier_submodulo_ok(monkeypatch):
-    monkeypatch.setattr(ocrmod.stackefectivo, "read_stackefectivo", lambda *a, **k: {"ok": False, "errors": ["x"]})
     monkeypatch.setattr(ocrmod.bets, "read_bets", lambda *a, **k: {"ok": False, "errors": ["x"]})
     monkeypatch.setattr(ocrmod.stacks, "read_stacks", lambda *a, **k: {"ok": False, "errors": ["x"]})
     monkeypatch.setattr(ocrmod.names, "read_names", lambda *a, **k: {"ok": True, "p2_name": "SoloUno", "p3_name": "", "errors": []})
@@ -38,7 +36,6 @@ def test_run_ocr_ok_true_si_cualquier_submodulo_ok(monkeypatch):
 
 
 def test_run_ocr_agrega_errors_de_submodulos(monkeypatch):
-    monkeypatch.setattr(ocrmod.stackefectivo, "read_stackefectivo", lambda *a, **k: {"ok": False, "errors": ["parse_failed"]})
     monkeypatch.setattr(ocrmod.bets, "read_bets", lambda *a, **k: {"ok": False, "errors": ["ocr_failed"]})
     monkeypatch.setattr(ocrmod.stacks, "read_stacks", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.names, "read_names", lambda *a, **k: {"ok": False, "errors": ["no_valid_names"]})
@@ -49,7 +46,7 @@ def test_run_ocr_agrega_errors_de_submodulos(monkeypatch):
 
     out = ocrmod.run_ocr("fake.bmp")
 
-    assert "stackefectivo:parse_failed" in out["errors"]
+    assert out["stackefectivo"] == {}
     assert "bets:ocr_failed" in out["errors"]
     assert "names:no_valid_names" in out["errors"]
     assert "table_state:unknown_players_count" in out["errors"]
@@ -58,7 +55,6 @@ def test_run_ocr_agrega_errors_de_submodulos(monkeypatch):
 
 
 def test_run_ocr_pasa_names_a_villano(monkeypatch):
-    monkeypatch.setattr(ocrmod.stackefectivo, "read_stackefectivo", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.bets, "read_bets", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.stacks, "read_stacks", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.names, "read_names", lambda *a, **k: {"ok": True, "p2_name": "Alpha", "p3_name": "Beta", "errors": []})
@@ -83,7 +79,6 @@ def test_run_ocr_pasa_names_a_villano(monkeypatch):
 
 
 def test_run_ocr_pasa_active_seats_a_dealer(monkeypatch):
-    monkeypatch.setattr(ocrmod.stackefectivo, "read_stackefectivo", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.bets, "read_bets", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.stacks, "read_stacks", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.names, "read_names", lambda *a, **k: {"ok": False, "errors": []})
@@ -108,7 +103,6 @@ def test_run_ocr_pasa_active_seats_a_dealer(monkeypatch):
 
 
 def test_run_ocr_llama_posiciones_con_table_state_bets_y_dealer(monkeypatch):
-    monkeypatch.setattr(ocrmod.stackefectivo, "read_stackefectivo", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.bets, "read_bets", lambda *a, **k: {"ok": True, "p1": 0.0, "p2": 0.5, "p3": 1.0, "errors": []})
     monkeypatch.setattr(ocrmod.stacks, "read_stacks", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.names, "read_names", lambda *a, **k: {"ok": False, "errors": []})
@@ -138,7 +132,6 @@ def test_run_ocr_llama_posiciones_con_table_state_bets_y_dealer(monkeypatch):
 
 
 def test_run_ocr_incluye_gamecode(monkeypatch):
-    monkeypatch.setattr(ocrmod.stackefectivo, "read_stackefectivo", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.bets, "read_bets", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.stacks, "read_stacks", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.names, "read_names", lambda *a, **k: {"ok": False, "errors": []})
@@ -161,7 +154,6 @@ def test_run_ocr_incluye_gamecode(monkeypatch):
 
 
 def test_run_ocr_agrega_gamecode_error_singular(monkeypatch):
-    monkeypatch.setattr(ocrmod.stackefectivo, "read_stackefectivo", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.bets, "read_bets", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.stacks, "read_stacks", lambda *a, **k: {"ok": False, "errors": []})
     monkeypatch.setattr(ocrmod.names, "read_names", lambda *a, **k: {"ok": False, "errors": []})

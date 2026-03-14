@@ -87,6 +87,17 @@ def persist_preflop_obs(
     if p3bet is None:
         p3bet = _to_float(mano.get("p3bet", None))
 
+    p1_se_bb = None
+    if isinstance(strategy, dict):
+        p1_se_bb = _to_float(strategy.get("se_used", None))
+
+    gamecode_result = ocr.get("gamecode", {}) if isinstance(ocr, dict) else {}
+    captured_gamecode = None
+    if isinstance(gamecode_result, dict) and gamecode_result.get("ok") is True:
+        raw_gamecode = gamecode_result.get("value", None)
+        if raw_gamecode is not None and str(raw_gamecode).strip() != "":
+            captured_gamecode = str(raw_gamecode).strip()
+
     payload = {
         "mano": mano_result if isinstance(mano_result, dict) else {},
         "stacks_preflop": stacks_result if isinstance(stacks_result, dict) else {},
@@ -110,5 +121,7 @@ def persist_preflop_obs(
         ocr_json=ocr_json,
         p2bet=p2bet,
         p3bet=p3bet,
+        p1_se_bb=p1_se_bb,
+        captured_gamecode=captured_gamecode,
         frame_ref=os.path.abspath(img_path),
     )

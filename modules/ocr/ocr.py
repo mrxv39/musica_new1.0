@@ -7,7 +7,6 @@ import json
 from typing import Dict, Any
 
 from modules.ocr import (
-    stackefectivo,
     bets,
     stacks,
     names,
@@ -35,11 +34,6 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
     }
 
     # Run base OCR modules
-    try:
-        out["stackefectivo"] = stackefectivo.read_stackefectivo(image_path, x1=x1, y1=y1)
-    except Exception as e:
-        out["errors"].append(f"stackefectivo:{e}")
-
     try:
         out["bets"] = bets.read_bets(image_path, x1=x1, y1=y1)
     except Exception as e:

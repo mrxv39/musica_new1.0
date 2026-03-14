@@ -25,7 +25,7 @@ from .worker_mesa_preflop import (
     write_preflop_fail_debug,
 )
 
-RECENT_CAPTURE_WINDOW_MS = int(os.environ.get("POKER_BOSS_CAPTURE_DEDUPE_WINDOW_MS", "3000"))
+RECENT_CAPTURE_WINDOW_MS = int(os.environ.get("POKER_BOSS_CAPTURE_DEDUPE_WINDOW_MS", "15000"))
 
 # Cache en memoria por mesa para cortar frames idénticos antes del pipeline pesado.
 _LAST_CAPTURE_FP_BY_MESA: Dict[int, Optional[str]] = {}

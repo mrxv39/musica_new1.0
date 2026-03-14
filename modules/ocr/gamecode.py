@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover
     pytesseract = None  # type: ignore
 
 
-ROI_DEFAULT: Tuple[int, int, int, int] = (10, 20, 220, 32)
+ROI_DEFAULT: Tuple[int, int, int, int] = (132, 28, 74, 30)
 
 _ID_AFTER_LABEL_RE = re.compile(r"\bID\b\s*[:;#-]?\s*(\d{10,14})", re.IGNORECASE)
 _LONG_DIGITS_RE = re.compile(r"(\d{10,14})")
@@ -43,6 +43,15 @@ class _Candidate:
     name: str
     value: str
     raw_text: str
+
+
+@dataclass(frozen=True)
+class _OCRConfig:
+    roi_rel: Tuple[int, int, int, int]
+    full_psm: int
+    refine_psm: int
+    full_whitelist: str = "ID:id0123456789:;#-"
+    refine_whitelist: str = "0123456789"
 
 
 def _safe_crop(img: "np.ndarray", x: int, y: int, w: int, h: int) -> Optional["np.ndarray"]:
@@ -98,6 +107,11 @@ def _preprocess_variants(gray: "np.ndarray") -> Dict[str, "np.ndarray"]:
     return variants
 
 
+def _to_black_on_white(gray: "np.ndarray", threshold: int = 200) -> "np.ndarray":
+    _, binary = cv2.threshold(gray, int(threshold), 255, cv2.THRESH_BINARY)
+    return 255 - binary
+
+
 def _normalize_text(text: str) -> str:
     if not text:
         return ""
@@ -122,6 +136,38 @@ def _extract_gamecode(text: str) -> Optional[str]:
     return max(matches, key=len)
 
 
+def _normalize_twister_gamecode(raw: str) -> Optional[str]:
+    digits = re.sub(r"\D+", "", str(raw or ""))
+    if not digits:
+        return None
+
+    if len(digits) == 11 and digits.startswith("12109"):
+        return digits
+
+    if len(digits) == 12 and digits.startswith("12109"):
+        return digits[:11]
+
+    if len(digits) == 12 and digits.startswith("127"):
+        candidate = "121" + digits[3:11]
+        if len(candidate) == 11 and candidate.startswith("12109"):
+            return candidate
+
+    if len(digits) >= 13:
+        pivot = digits.find("12109")
+        if pivot >= 0 and pivot + 11 <= len(digits):
+            candidate = digits[pivot : pivot + 11]
+            if len(candidate) == 11 and candidate.startswith("12109"):
+                return candidate
+
+    if len(digits) > 11:
+        for index in range(0, len(digits) - 10):
+            candidate = digits[index : index + 11]
+            if candidate.startswith("12109"):
+                return candidate
+
+    return None
+
+
 def _numeric_subroi(img: "np.ndarray") -> "np.ndarray":
     h, w = img.shape[:2]
     left = int(round(w * 0.24))
@@ -135,49 +181,73 @@ def _numeric_subroi(img: "np.ndarray") -> "np.ndarray":
     return img[y0:y1, x0:x1]
 
 
-def _refine_digits_only(bin_img: "np.ndarray", fallback_value: str, fallback_text: str) -> Tuple[str, str]:
+def _refine_digits_only(
+    bin_img: "np.ndarray",
+    fallback_value: str,
+    fallback_text: str,
+    *,
+    refine_psm: int = 8,
+    whitelist: str = "0123456789",
+) -> Tuple[str, str]:
     digits_roi = _numeric_subroi(bin_img)
     if digits_roi.size == 0:
         return fallback_value, fallback_text
 
-    digits_config = "--psm 8 -c tessedit_char_whitelist=0123456789"
+    digits_config = f"--psm {int(refine_psm)} -c tessedit_char_whitelist={whitelist}"
     try:
         digits_text = pytesseract.image_to_string(digits_roi, config=digits_config)
     except Exception:
         return fallback_value, fallback_text
 
     normalized = _normalize_text(digits_text)
-    refined = _extract_gamecode(normalized)
+    refined = _normalize_twister_gamecode(normalized) or _extract_gamecode(normalized)
     if refined:
         return refined, normalized
     return fallback_value, fallback_text
 
 
+def _candidate_rank(candidate: _Candidate, count: int, index: int) -> Tuple[int, int, int, int]:
+    normalized = _normalize_twister_gamecode(candidate.value)
+    is_valid = int(bool(normalized))
+    normalized_len = len(normalized or "")
+    raw_len = len(candidate.value)
+    return (is_valid, count, normalized_len, raw_len, -index)
+
+
 def _choose_best_candidate(candidates: List[_Candidate]) -> _Candidate:
     if len(candidates) == 1:
-        return candidates[0]
+        candidate = candidates[0]
+        normalized = _normalize_twister_gamecode(candidate.value)
+        if normalized:
+            return _Candidate(name=candidate.name, value=normalized, raw_text=candidate.raw_text)
+        return candidate
 
     counts = Counter(candidate.value for candidate in candidates)
     best_index = 0
-    best_key: Tuple[int, int, int] = (-1, -1, 0)
+    best_key: Tuple[int, int, int, int, int] = (-1, -1, -1, -1, 0)
     for index, candidate in enumerate(candidates):
-        key = (counts[candidate.value], len(candidate.value), -index)
+        key = _candidate_rank(candidate, counts[candidate.value], index)
         if key > best_key:
             best_key = key
             best_index = index
-    return candidates[best_index]
+    winner = candidates[best_index]
+    normalized = _normalize_twister_gamecode(winner.value)
+    if normalized:
+        return _Candidate(name=winner.name, value=normalized, raw_text=winner.raw_text)
+    return winner
 
 
-def read_gamecode(
+def _read_gamecode_impl(
     image_path: str,
-    x1: int = 0,
-    y1: int = 0,
-    roi_rel: Tuple[int, int, int, int] = ROI_DEFAULT,
+    x1: int,
+    y1: int,
+    config_obj: _OCRConfig,
 ) -> Dict[str, Any]:
-    dx, dy, w, h = roi_rel
+    dx, dy, w, h = config_obj.roi_rel
     x = int(x1 + dx)
     y = int(y1 + dy)
     roi_abs = (x, y, int(w), int(h))
+
 
     if cv2 is None:
         return GamecodeOCRResult(
@@ -236,6 +306,7 @@ def read_gamecode(
         ).__dict__
 
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    gray = _to_black_on_white(gray)
 
     if os.environ.get("OCR_DEBUG_GAMECODE", "0") == "1":
         try:
@@ -243,7 +314,7 @@ def read_gamecode(
         except Exception:
             pass
 
-    config = "--psm 7 -c tessedit_char_whitelist=ID:id0123456789:;#-"
+    config = f"--psm {int(config_obj.full_psm)} -c tessedit_char_whitelist={config_obj.full_whitelist}"
 
     variants = _preprocess_variants(gray)
     raw_candidates: List[str] = []
@@ -256,9 +327,15 @@ def read_gamecode(
             continue
         normalized = _normalize_text(txt)
         raw_candidates.append(normalized)
-        value = _extract_gamecode(normalized)
+        value = _normalize_twister_gamecode(normalized) or _extract_gamecode(normalized)
         if value:
-            refined_value, refined_text = _refine_digits_only(bin_img, value, normalized)
+            refined_value, refined_text = _refine_digits_only(
+                bin_img,
+                value,
+                normalized,
+                refine_psm=config_obj.refine_psm,
+                whitelist=config_obj.refine_whitelist,
+            )
             valid_candidates.append(_Candidate(name=name, value=refined_value, raw_text=refined_text))
 
     try:
@@ -268,9 +345,15 @@ def read_gamecode(
 
     gray_normalized = _normalize_text(gray_txt)
     raw_candidates.append(gray_normalized)
-    value = _extract_gamecode(gray_normalized)
+    value = _normalize_twister_gamecode(gray_normalized) or _extract_gamecode(gray_normalized)
     if value:
-        refined_value, refined_text = _refine_digits_only(gray, value, gray_normalized)
+        refined_value, refined_text = _refine_digits_only(
+            gray,
+            value,
+            gray_normalized,
+            refine_psm=config_obj.refine_psm,
+            whitelist=config_obj.refine_whitelist,
+        )
         valid_candidates.append(_Candidate(name="gray", value=refined_value, raw_text=refined_text))
 
     if valid_candidates:
@@ -290,6 +373,23 @@ def read_gamecode(
         roi=roi_abs,
         error="gamecode_not_found",
     ).__dict__
+
+
+def read_gamecode(
+    image_path: str,
+    x1: int = 0,
+    y1: int = 0,
+    roi_rel: Tuple[int, int, int, int] = ROI_DEFAULT,
+    *,
+    full_psm: int = 8,
+    refine_psm: int = 8,
+) -> Dict[str, Any]:
+    config_obj = _OCRConfig(
+        roi_rel=roi_rel,
+        full_psm=full_psm,
+        refine_psm=refine_psm,
+    )
+    return _read_gamecode_impl(image_path, x1, y1, config_obj)
 
 
 if __name__ == "__main__":

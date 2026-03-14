@@ -75,11 +75,6 @@ def compute_strategy(
 
         bets_ok = bool(bets_result.get("ok", False)) if isinstance(bets_result, dict) else False
         stacks_ok = bool(ocr_stacks.get("ok", False)) if isinstance(ocr_stacks, dict) else False
-        try:
-            se_external = float(stackefectivo_result.get("value")) if isinstance(stackefectivo_result, dict) else None
-        except Exception:
-            se_external = None
-
         def in_range(x: Any) -> bool:
             try:
                 if x is None:
@@ -89,7 +84,7 @@ def compute_strategy(
             except Exception:
                 return False
 
-        se_external_valid = in_range(se_external)
+        se_external_valid = False
         p1_bet = _as_float(bets_result.get("p1", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0
         p2_bet = _as_float(bets_result.get("p2", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0
         p3_bet = _as_float(bets_result.get("p3", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0
@@ -109,9 +104,6 @@ def compute_strategy(
         if se_derived_valid:
             se_used = float(se_derived)
             se_method = "derived"
-        elif se_external_valid:
-            se_used = float(se_external)
-            se_method = "external"
         else:
             se_used = None
             se_method = "none"
