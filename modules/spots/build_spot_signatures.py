@@ -35,9 +35,11 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
 
 def _iter_spots(conn: sqlite3.Connection, limit: int = 0) -> Iterable[sqlite3.Row]:
     sql = "SELECT * FROM spots_real"
+    params: tuple[int, ...] = ()
     if limit and limit > 0:
-        sql += f" LIMIT {int(limit)}"
-    cur = conn.execute(sql)
+        sql += " LIMIT ?"
+        params = (int(limit),)
+    cur = conn.execute(sql, params)
     for row in cur.fetchall():
         yield row
 

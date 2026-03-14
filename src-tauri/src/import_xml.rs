@@ -21,6 +21,7 @@ pub async fn import_champion_xml(
 ) -> Result<String, String> {
     let dbp = db_path;
     let xmld = xml_dir;
+    // archive_dir is reserved for future importer/archive handling and is not passed yet.
     let _archd = archive_dir; // por ahora no lo pasamos al script para no romper flags
     let hero_name = hero;
 

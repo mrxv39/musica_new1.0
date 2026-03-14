@@ -3,6 +3,7 @@ import React from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { ActionRealRow, HandRealRow, HandRealSpotFrame } from "../../db";
 import { fetchActionsRealForHand } from "../../db";
+import { formatCardsString } from "./realHandsFormatters";
 
 function streetLabel(roundNo: number) {
   if (roundNo === 1) return "PREFLOP";
@@ -10,40 +11,6 @@ function streetLabel(roundNo: number) {
   if (roundNo === 3) return "TURN";
   if (roundNo === 4) return "RIVER";
   return "ROUND " + String(roundNo);
-}
-
-function suitLower(s: string) {
-  const u = (s || "").toUpperCase();
-  if (u === "C") return "c";
-  if (u === "D") return "d";
-  if (u === "H") return "h";
-  if (u === "S") return "s";
-  return "?";
-}
-
-function rankPoker(r: string) {
-  const u = (r || "").toUpperCase();
-  if (u === "10") return "T";
-  return u;
-}
-
-function formatCardToken(tok: string): string {
-  const t = (tok || "").trim();
-  if (!t) return "";
-  const u = t.toUpperCase();
-  if (u === "X" || u === "XX") return "X";
-
-  const suit = u.slice(0, 1);
-  const rank = u.slice(1);
-  if (!rank) return t;
-
-  return `${rankPoker(rank)}${suitLower(suit)}`;
-}
-
-function formatCardsString(s: string): string {
-  const parts = (s || "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "-";
-  return parts.map(formatCardToken).join(" ");
 }
 
 function formatBoardPretty(hand: HandRealRow) {

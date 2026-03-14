@@ -1,3 +1,4 @@
+use crate::python::PROJECT_ROOT;
 use tauri;
 
 #[tauri::command]
@@ -14,9 +15,11 @@ con.commit(); \
 print('hands_real, hand_links, actions_real, spots_real, spots_xml_real y spot_links vaciadas correctamente')";
 
         let output = std::process::Command::new("python")
+            .current_dir(PROJECT_ROOT)
             .arg("-c")
             .arg(code)
             .arg(&db_path)
+            .env("PYTHONPATH", PROJECT_ROOT)
             .output()
             .map_err(|e| e.to_string())?;
 

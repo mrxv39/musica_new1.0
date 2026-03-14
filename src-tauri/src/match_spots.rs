@@ -9,7 +9,9 @@ use crate::python::{
 #[tauri::command]
 pub async fn match_spots(
     db_path: String,
+    // Reserved for future folder-based filtering of spot matching.
     _spots_dir: String,
+    // Reserved for future time-window filtering during matching.
     _window_ms: i32,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {

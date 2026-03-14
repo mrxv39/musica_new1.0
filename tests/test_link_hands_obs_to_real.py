@@ -143,3 +143,81 @@ def test_link_hands_obs_to_real_uses_each_gamecode_only_once(initialized_db, tem
         conn.close()
 
     assert count == 1
+
+
+def test_link_hands_obs_to_real_no_match_when_no_candidate(initialized_db, temp_db_path):
+    conn = sqlite3.connect(str(temp_db_path))
+    try:
+        _create_hands_real_table(conn)
+        _insert_obs(conn, fingerprint="obs-no-match-1", mano_raw="9c8h", captured_gamecode="")
+        _insert_real(conn, hand_id=1, gamecode="GCX", hero_cards="HA HK")
+        conn.commit()
+    finally:
+        conn.close()
+
+    result = link_hands_obs_to_real(db_path=str(temp_db_path), obs_ids=None)
+
+    assert result["links_created"] == 0
+    assert result["skipped"]["no_candidate"] == 1
+
+    conn = sqlite3.connect(str(temp_db_path))
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM hand_links").fetchone()[0]
+    finally:
+        conn.close()
+
+    assert count == 0
+
+
+def test_link_hands_obs_to_real_multiple_gamecodes_links_both(initialized_db, temp_db_path):
+    conn = sqlite3.connect(str(temp_db_path))
+    try:
+        _create_hands_real_table(conn)
+        obs_id_1 = _insert_obs(conn, fingerprint="obs-gc-multi-1", mano_raw="AhKh", captured_gamecode="GC1")
+        obs_id_2 = _insert_obs(conn, fingerprint="obs-gc-multi-2", mano_raw="AhKh", captured_gamecode="GC2")
+        _insert_real(conn, hand_id=1, gamecode="GC1", hero_cards="HA HK")
+        _insert_real(conn, hand_id=2, gamecode="GC2", hero_cards="HA HK")
+        conn.commit()
+    finally:
+        conn.close()
+
+    result = link_hands_obs_to_real(db_path=str(temp_db_path), obs_ids=None)
+
+    assert result["links_created"] == 2
+
+    conn = sqlite3.connect(str(temp_db_path))
+    try:
+        rows = conn.execute(
+            "SELECT obs_id, gamecode FROM hand_links ORDER BY obs_id ASC"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    assert rows == [(obs_id_1, "GC1"), (obs_id_2, "GC2")]
+
+
+def test_link_hands_obs_to_real_obs_ids_filter_only_links_requested(initialized_db, temp_db_path):
+    conn = sqlite3.connect(str(temp_db_path))
+    try:
+        _create_hands_real_table(conn)
+        obs_id_1 = _insert_obs(conn, fingerprint="obs-filter-1", mano_raw="AhKh", captured_gamecode="GC1")
+        _insert_obs(conn, fingerprint="obs-filter-2", mano_raw="AhKh", captured_gamecode="GC2")
+        _insert_real(conn, hand_id=1, gamecode="GC1", hero_cards="HA HK")
+        _insert_real(conn, hand_id=2, gamecode="GC2", hero_cards="HA HK")
+        conn.commit()
+    finally:
+        conn.close()
+
+    result = link_hands_obs_to_real(db_path=str(temp_db_path), obs_ids=[obs_id_1])
+
+    assert result["links_created"] == 1
+
+    conn = sqlite3.connect(str(temp_db_path))
+    try:
+        rows = conn.execute(
+            "SELECT obs_id, gamecode FROM hand_links ORDER BY obs_id ASC"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    assert rows == [(obs_id_1, "GC1")]
