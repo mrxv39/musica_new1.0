@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from modules.ocr import gamecode
+from modules.ocr.gamecode import _normalize_twister_gamecode
 
 
 def _write_dummy_image(tmp_path):
@@ -91,3 +92,26 @@ def test_read_gamecode_vota_valor_repetido_antes_que_primero_valido(tmp_path, mo
     assert result["ok"] is True
     assert result["value"] == "12105027261"
     assert result["raw_text"] == "ID: 12105027261"
+
+
+def test_normalize_twister_gamecode_keeps_valid_11_digit_code():
+    assert _normalize_twister_gamecode("12109035134") == "12109035134"
+
+
+def test_normalize_twister_gamecode_trims_valid_12_digit_code():
+    assert _normalize_twister_gamecode("121090351341") == "12109035134"
+
+
+def test_normalize_twister_gamecode_fixes_127_ocr_prefix():
+    assert _normalize_twister_gamecode("127090351341") == "12109035134"
+
+
+def test_normalize_twister_gamecode_extracts_valid_code_from_longer_string():
+    assert _normalize_twister_gamecode("991210903513477") == "12109035134"
+
+
+def test_normalize_twister_gamecode_returns_none_for_invalid_inputs():
+    assert _normalize_twister_gamecode("55555555555") is None
+    assert _normalize_twister_gamecode("127123456789") is None
+    assert _normalize_twister_gamecode("") is None
+    assert _normalize_twister_gamecode("abcxyz") is None
