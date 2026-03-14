@@ -54,18 +54,18 @@ class TestRunWorkersLoopIntegration(unittest.TestCase):
             self.assertNotIn("ModuleNotFoundError: No module named 'modules'", combined)
 
             ok_dir = os.path.join(out_dir, "ok")
-            err_dir = os.path.join(out_dir, "errors")
-            del_dir = os.path.join(out_dir, "borrar")
+            err_dir = os.path.join(out_dir, "no ok")
+            del_dir = os.path.join(out_dir, "no ok")
             tmp_dir = os.path.join(out_dir, "_tmp")
             log_dir = os.path.join(out_dir, "_logs")
 
             for _ in range(20):
-                if all(os.path.isdir(p) for p in [ok_dir, err_dir, del_dir, tmp_dir, log_dir]):
+                if all(os.path.isdir(p) for p in [ok_dir, err_dir, tmp_dir, log_dir]):
                     break
                 time.sleep(0.2)
             self.assertTrue(os.path.isdir(ok_dir), f"ok dir not created | combined={combined!r}")
-            self.assertTrue(os.path.isdir(err_dir), f"errors dir not created | combined={combined!r}")
-            self.assertTrue(os.path.isdir(del_dir), f"borrar dir not created | combined={combined!r}")
+            self.assertTrue(os.path.isdir(err_dir), f"no ok dir not created | combined={combined!r}")
+            self.assertTrue(os.path.isdir(del_dir), f"no ok dir not created | combined={combined!r}")
             self.assertTrue(os.path.isdir(tmp_dir), f"_tmp dir not created | combined={combined!r}")
             self.assertTrue(os.path.isdir(log_dir), f"_logs dir not created | combined={combined!r}")
 

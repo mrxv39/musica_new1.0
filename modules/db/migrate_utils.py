@@ -15,6 +15,15 @@ def table_columns(conn: sqlite3.Connection, table: str) -> Sequence[str]:
     return [r[1] for r in cur.fetchall()]
 
 
+def table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (table,),
+    )
+    return cur.fetchone() is not None
+
+
 def add_column_if_missing(conn: sqlite3.Connection, table: str, col_name: str, col_def: str) -> None:
     cols = table_columns(conn, table)
     if col_name not in cols:

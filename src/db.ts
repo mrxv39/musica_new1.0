@@ -34,9 +34,12 @@ export type HandsObsRow = {
  * ========================= */
 export type HandRealRow = {
   id: number;
+  tournament_id?: number | null;
   room: string;
   hero: string;
   tournament_path: string;
+  tournament_name?: string | null;
+  tournament_code?: string | null;
   source_file: string;
   gamecode: string;
   startdate: string;
@@ -338,6 +341,8 @@ export async function fetchLatestHandsReal(dbPath: string, limit = 200): Promise
   const rows = await (db as any).select(
     `SELECT
        hr.*,
+       t.tournamentname AS tournament_name,
+       t.tournamentcode AS tournament_code,
        l.obs_id AS linked_obs_id,
        l.match_score AS ocr_match_score,
        l.match_method AS ocr_match_method,
@@ -358,6 +363,8 @@ export async function fetchLatestHandsReal(dbPath: string, limit = 200): Promise
        wc.table_state_ok AS table_state_ok,
        wc.table_state_errors_json AS table_state_errors_json
      FROM hands_real hr
+     LEFT JOIN tournaments t
+       ON t.id = hr.tournament_id
      LEFT JOIN hand_links l
        ON l.gamecode = hr.gamecode
      LEFT JOIN hands_obs h

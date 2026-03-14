@@ -21,6 +21,15 @@ function auditColors(status?: HandRealRow["ocr_audit_status"]) {
   return { bg: "#f4f4f4", border: "#dddddd", fg: "#666666" };
 }
 
+function tournamentLabel(h: HandRealRow): string {
+  const name = String(h.tournament_name || "").trim();
+  const code = String(h.tournament_code || "").trim();
+  if (name && code) return `${name} (${code})`;
+  if (name) return name;
+  if (code) return code;
+  return "";
+}
+
 export default function RealHandsTableBody({
   rows,
   getSpotPng,
@@ -33,6 +42,7 @@ export default function RealHandsTableBody({
         const spotPng = getSpotPng(h);
         const audit = h.ocr_audit_summary || "NO OCR";
         const colors = auditColors(h.ocr_audit_status);
+        const tournament = tournamentLabel(h);
 
         const auditTitle = [
           `audit=${audit}`,
@@ -109,6 +119,10 @@ export default function RealHandsTableBody({
               >
                 {audit}
               </span>
+            </td>
+
+            <td style={{ padding: "6px 8px", whiteSpace: "nowrap", opacity: tournament ? 0.9 : 0.5 }}>
+              {tournament}
             </td>
 
             <td style={{ padding: "6px 8px", whiteSpace: "nowrap", opacity: 0.8 }}>

@@ -27,6 +27,9 @@ def _ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
+NO_OK_DIR_NAME = "no ok"
+
+
 def _is_preflop_fail(preflop: Any) -> bool:
     """
     True if preflop failed due to:
@@ -137,8 +140,8 @@ def _route_replay_dir_image(
     Nota: persisted NO decide la ruta; sólo sirve para actualizar frame_ref en DB si se movió.
     """
     ok_dir = os.path.join(images_dir, "ok")
-    err_dir = os.path.join(images_dir, "errors")
-    del_dir = os.path.join(images_dir, "borrar")
+    err_dir = os.path.join(images_dir, NO_OK_DIR_NAME)
+    del_dir = os.path.join(images_dir, NO_OK_DIR_NAME)
 
     # 1) Preflop fail -> borrar/
     if _is_preflop_fail(preflop):
@@ -379,8 +382,7 @@ def run_loop(args: Any) -> None:
         dir_state.files = list_images_in_dir(cfg.images_dir)
 
         _ensure_dir(os.path.join(cfg.images_dir, "ok"))
-        _ensure_dir(os.path.join(cfg.images_dir, "errors"))
-        _ensure_dir(os.path.join(cfg.images_dir, "borrar"))
+        _ensure_dir(os.path.join(cfg.images_dir, NO_OK_DIR_NAME))
 
     last_hand_sig: Optional[str] = None
     tick = 0

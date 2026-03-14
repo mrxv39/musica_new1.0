@@ -229,6 +229,8 @@ describe("RealHandModal", () => {
           flop: "C2 D9 ST",
           turn: "HJ",
           river: "SQ",
+          tournament_name: "Sunday Special",
+          tournament_code: "T123",
           players_json: '{"players":[{"name":"hero1"},{"name":"villain"}]}',
           ocr_audit_summary: "CARDS DIFF | WARN stacks",
           ocr_cards_match: false,
@@ -257,6 +259,8 @@ describe("RealHandModal", () => {
 
     expect(screen.getByText("Hero cards")).toBeTruthy();
     expect(screen.getByText("Board")).toBeTruthy();
+    expect(screen.getByText(/Tournament:/)).toBeTruthy();
+    expect(screen.getByText(/Sunday Special \(T123\)/)).toBeTruthy();
     expect(screen.getByText(/Flop:/)).toBeTruthy();
     expect(screen.getByText(/Turn:/)).toBeTruthy();
     expect(screen.getByText(/River:/)).toBeTruthy();

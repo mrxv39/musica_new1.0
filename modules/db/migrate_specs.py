@@ -13,6 +13,45 @@ HANDS_OBS_COLUMNS = [
     ("frame_ref", "TEXT DEFAULT ''"),
 ]
 
+TOURNAMENTS_COLUMNS = [
+    ("room", "TEXT NOT NULL DEFAULT ''"),
+    ("hero", "TEXT NOT NULL DEFAULT ''"),
+    ("tournament_path", "TEXT NOT NULL DEFAULT ''"),
+    ("source_file", "TEXT NOT NULL DEFAULT ''"),
+    ("client_version", "TEXT NOT NULL DEFAULT ''"),
+    ("mode", "TEXT NOT NULL DEFAULT ''"),
+    ("gametype", "TEXT NOT NULL DEFAULT ''"),
+    ("tablename", "TEXT NOT NULL DEFAULT ''"),
+    ("tournament_currency", "TEXT NOT NULL DEFAULT ''"),
+    ("duration", "TEXT NOT NULL DEFAULT ''"),
+    ("game_count", "TEXT NOT NULL DEFAULT ''"),
+    ("startdate", "TEXT NOT NULL DEFAULT ''"),
+    ("currency", "TEXT NOT NULL DEFAULT ''"),
+    ("nickname", "TEXT NOT NULL DEFAULT ''"),
+    ("bets", "TEXT NOT NULL DEFAULT ''"),
+    ("wins", "TEXT NOT NULL DEFAULT ''"),
+    ("chipsin", "TEXT NOT NULL DEFAULT ''"),
+    ("chipsout", "TEXT NOT NULL DEFAULT ''"),
+    ("statuspoints", "TEXT NOT NULL DEFAULT ''"),
+    ("awardpoints", "TEXT NOT NULL DEFAULT ''"),
+    ("ipoints", "TEXT NOT NULL DEFAULT ''"),
+    ("tablesize", "TEXT NOT NULL DEFAULT ''"),
+    ("tournamentcode", "TEXT NOT NULL DEFAULT ''"),
+    ("tournamentname", "TEXT NOT NULL DEFAULT ''"),
+    ("rewarddrawn", "TEXT NOT NULL DEFAULT ''"),
+    ("place", "TEXT NOT NULL DEFAULT ''"),
+    ("buyin", "TEXT NOT NULL DEFAULT ''"),
+    ("totalbuyin", "TEXT NOT NULL DEFAULT ''"),
+    ("win", "TEXT NOT NULL DEFAULT ''"),
+    ("smallblind", "TEXT NOT NULL DEFAULT ''"),
+    ("bigblind", "TEXT NOT NULL DEFAULT ''"),
+    ("created_at", "TEXT DEFAULT (datetime('now'))"),
+]
+
+HANDS_REAL_COLUMNS = [
+    ("tournament_id", "INTEGER REFERENCES tournaments(id)"),
+]
+
 WORKERS_CAPTURES_COLUMNS = [
     # base
     ("mesa", "INTEGER NOT NULL DEFAULT 0"),
@@ -122,6 +161,7 @@ INDEX_SQLS = [
     "CREATE INDEX IF NOT EXISTS idx_hands_obs_table_time ON hands_obs(table_id, detected_at_ms DESC)",
     "CREATE INDEX IF NOT EXISTS idx_hands_xml_session_startdate ON hands_xml(sessioncode, startdate)",
     "CREATE INDEX IF NOT EXISTS idx_hand_links_gamecode ON hand_links(gamecode)",
+    "CREATE INDEX IF NOT EXISTS idx_tournaments_source_file ON tournaments(source_file)",
     "CREATE INDEX IF NOT EXISTS idx_workers_captures_fp_time ON workers_captures(image_fingerprint, created_at_ms DESC)",
     "CREATE INDEX IF NOT EXISTS idx_workers_captures_mesa_time ON workers_captures(mesa, created_at_ms DESC)",
     "CREATE INDEX IF NOT EXISTS idx_workers_captures_status_time ON workers_captures(status, created_at_ms DESC)",

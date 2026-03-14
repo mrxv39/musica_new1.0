@@ -376,7 +376,7 @@ Seguro:
 
 NO CONFIRMADO:
 - si toda la app debe apuntar siempre a `poker_boss.db`
-- o si parte histórica del proyecto aún mezcla `musica_new.db` en zonas antiguas/tests/scripts
+- o si parte histórica del proyecto aún mezcla una DB legacy en zonas antiguas/tests/scripts
 
 Hay evidencia en el repo de ambos nombres, pero no afirmo más sin revisar código fuente concreto de todas las entradas.
 

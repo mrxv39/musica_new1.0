@@ -10,13 +10,12 @@ def _make_dirs(tmp_path):
     base = tmp_path
     tmp_dir = base / "_tmp"
     ok_dir = base / "ok"
-    err_dir = base / "errors"
-    del_dir = base / "borrar"
+    err_dir = base / "no ok"
+    del_dir = base / "no ok"
 
     tmp_dir.mkdir(parents=True, exist_ok=True)
     ok_dir.mkdir(parents=True, exist_ok=True)
     err_dir.mkdir(parents=True, exist_ok=True)
-    del_dir.mkdir(parents=True, exist_ok=True)
 
     return SimpleNamespace(
         tmp_dir=str(tmp_dir),

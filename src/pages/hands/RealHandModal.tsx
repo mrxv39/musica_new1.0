@@ -44,6 +44,15 @@ function valueText(v: unknown, fallback = "-") {
   return s ? s : fallback;
 }
 
+function tournamentLabel(hand: HandRealRow) {
+  const name = String(hand.tournament_name || "").trim();
+  const code = String(hand.tournament_code || "").trim();
+  if (name && code) return `${name} (${code})`;
+  if (name) return name;
+  if (code) return code;
+  return "-";
+}
+
 function auditColors(status?: HandRealRow["ocr_audit_status"]) {
   if (status === "ok") return { bg: "#eefaf0", border: "#cfe9d5", fg: "#1d6b35" };
   if (status === "warn") return { bg: "#fff7e8", border: "#f0ddb3", fg: "#8a6116" };
@@ -200,6 +209,9 @@ export function RealHandModal({
             </div>
             <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
               {hand.startdate || ""} | SB {hand.sb} / BB {hand.bb}
+            </div>
+            <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
+              Tournament: {tournamentLabel(hand)}
             </div>
           </div>
           <button

@@ -121,3 +121,49 @@ def test_init_db_agrega_captured_gamecode_a_hands_obs(temp_db_path):
         assert "captured_gamecode" in cols
     finally:
         conn.close()
+
+
+def test_init_db_crea_tabla_tournaments(temp_db_path):
+    init_db()
+
+    conn = sqlite3.connect(str(temp_db_path))
+    try:
+        tables = {
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
+        assert "tournaments" in tables
+
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(tournaments)").fetchall()]
+        assert "source_file" in cols
+        assert "tournamentcode" in cols
+        assert "tournamentname" in cols
+    finally:
+        conn.close()
+
+
+def test_init_db_migra_hands_real_con_tournament_id_si_existe(temp_db_path):
+    conn = sqlite3.connect(str(temp_db_path))
+    try:
+        conn.execute(
+            """
+            CREATE TABLE hands_real (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room TEXT NOT NULL,
+                hero TEXT NOT NULL,
+                gamecode TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    init_db()
+
+    conn = sqlite3.connect(str(temp_db_path))
+    try:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(hands_real)").fetchall()]
+        assert "tournament_id" in cols
+    finally:
+        conn.close()

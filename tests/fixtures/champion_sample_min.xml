@@ -1,7 +1,31 @@
 <session>
   <game gamecode="G1">
     <general>
+      <client_version>1.2.3</client_version>
+      <mode>MTT</mode>
+      <gametype>NLH</gametype>
+      <tablename>Table 9</tablename>
+      <tournament_currency>EUR</tournament_currency>
+      <duration>3600</duration>
+      <game_count>22</game_count>
       <startdate>2026-03-05 00:00:00</startdate>
+      <currency>EUR</currency>
+      <nickname>hero</nickname>
+      <bets>120</bets>
+      <wins>80</wins>
+      <chipsin>1500</chipsin>
+      <chipsout>1900</chipsout>
+      <statuspoints>4</statuspoints>
+      <awardpoints>2</awardpoints>
+      <ipoints>1</ipoints>
+      <tablesize>9</tablesize>
+      <tournamentcode>T123</tournamentcode>
+      <tournamentname>Sunday Special</tournamentname>
+      <rewarddrawn>0</rewarddrawn>
+      <place>3</place>
+      <buyin>10</buyin>
+      <totalbuyin>11</totalbuyin>
+      <win>25</win>
       <smallblind>20</smallblind>
       <bigblind>40</bigblind>
       <players>

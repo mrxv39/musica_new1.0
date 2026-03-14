@@ -9,6 +9,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+from modules.db.migrate_utils import add_column_if_missing, table_exists
+
 
 # -------------------------
 # Action type mapping (inferred from your XML)
@@ -56,12 +58,92 @@ class ImportedHand:
     actions: List[ImportedAction]
 
 
+@dataclass(frozen=True)
+class ImportedTournament:
+    room: str
+    hero: str
+    tournament_path: str
+    source_file: str
+    general: Dict[str, str]
+
+
+TOURNAMENT_GENERAL_FIELDS: Tuple[str, ...] = (
+    "client_version",
+    "mode",
+    "gametype",
+    "tablename",
+    "tournament_currency",
+    "duration",
+    "game_count",
+    "startdate",
+    "currency",
+    "nickname",
+    "bets",
+    "wins",
+    "chipsin",
+    "chipsout",
+    "statuspoints",
+    "awardpoints",
+    "ipoints",
+    "tablesize",
+    "tournamentcode",
+    "tournamentname",
+    "rewarddrawn",
+    "place",
+    "buyin",
+    "totalbuyin",
+    "win",
+    "smallblind",
+    "bigblind",
+)
+
+
 # -------------------------
 # SQLite schema (v1)
 # -------------------------
 SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS tournaments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room TEXT NOT NULL DEFAULT '',
+    hero TEXT NOT NULL DEFAULT '',
+    tournament_path TEXT NOT NULL DEFAULT '',
+    source_file TEXT NOT NULL DEFAULT '',
+    client_version TEXT NOT NULL DEFAULT '',
+    mode TEXT NOT NULL DEFAULT '',
+    gametype TEXT NOT NULL DEFAULT '',
+    tablename TEXT NOT NULL DEFAULT '',
+    tournament_currency TEXT NOT NULL DEFAULT '',
+    duration TEXT NOT NULL DEFAULT '',
+    game_count TEXT NOT NULL DEFAULT '',
+    startdate TEXT NOT NULL DEFAULT '',
+    currency TEXT NOT NULL DEFAULT '',
+    nickname TEXT NOT NULL DEFAULT '',
+    bets TEXT NOT NULL DEFAULT '',
+    wins TEXT NOT NULL DEFAULT '',
+    chipsin TEXT NOT NULL DEFAULT '',
+    chipsout TEXT NOT NULL DEFAULT '',
+    statuspoints TEXT NOT NULL DEFAULT '',
+    awardpoints TEXT NOT NULL DEFAULT '',
+    ipoints TEXT NOT NULL DEFAULT '',
+    tablesize TEXT NOT NULL DEFAULT '',
+    tournamentcode TEXT NOT NULL DEFAULT '',
+    tournamentname TEXT NOT NULL DEFAULT '',
+    rewarddrawn TEXT NOT NULL DEFAULT '',
+    place TEXT NOT NULL DEFAULT '',
+    buyin TEXT NOT NULL DEFAULT '',
+    totalbuyin TEXT NOT NULL DEFAULT '',
+    win TEXT NOT NULL DEFAULT '',
+    smallblind TEXT NOT NULL DEFAULT '',
+    bigblind TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(room, hero, source_file)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tournaments_source_file ON tournaments(source_file);
+
 CREATE TABLE IF NOT EXISTS hands_real (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tournament_id INTEGER DEFAULT NULL,
     room TEXT NOT NULL,
     hero TEXT NOT NULL,
     tournament_path TEXT NOT NULL DEFAULT '',
@@ -75,10 +157,12 @@ CREATE TABLE IF NOT EXISTS hands_real (
     turn TEXT NOT NULL DEFAULT '',
     river TEXT NOT NULL DEFAULT '',
     players_json TEXT NOT NULL DEFAULT '{}',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(tournament_id) REFERENCES tournaments(id) ON DELETE SET NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_hands_real_unique ON hands_real(room, hero, gamecode);
+CREATE INDEX IF NOT EXISTS idx_hands_real_tournament_id ON hands_real(tournament_id);
 
 CREATE TABLE IF NOT EXISTS actions_real (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -153,6 +237,8 @@ ON spots_xml_real(street, spot_index);
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_SQL)
+    if table_exists(conn, "hands_real"):
+        add_column_if_missing(conn, "hands_real", "tournament_id", "INTEGER REFERENCES tournaments(id)")
     conn.commit()
 
 
@@ -206,6 +292,24 @@ def _round_to_street(round_no: int) -> str:
     if round_no == 3:
         return "TURN"
     return "RIVER"
+
+
+def _parse_tournament(xml_path: str, *, room: str, hero: str, tournament_path: str = "") -> ImportedTournament:
+    root = ET.parse(xml_path).getroot()
+    general = root.find("game/general")
+
+    general_values = {field: "" for field in TOURNAMENT_GENERAL_FIELDS}
+    if general is not None:
+        for field in TOURNAMENT_GENERAL_FIELDS:
+            general_values[field] = _txt(general.find(field))
+
+    return ImportedTournament(
+        room=room,
+        hero=hero,
+        tournament_path=tournament_path,
+        source_file=os.path.abspath(xml_path),
+        general=general_values,
+    )
 
 
 def parse_one_xml_file(
@@ -334,17 +438,63 @@ def parse_one_xml_file(
     return hands
 
 
-def _insert_hand(conn: sqlite3.Connection, hand: ImportedHand) -> int:
+def _upsert_tournament(conn: sqlite3.Connection, tournament: ImportedTournament) -> int:
+    cur = conn.cursor()
+    field_names = ", ".join(TOURNAMENT_GENERAL_FIELDS)
+    placeholders = ", ".join("?" for _ in TOURNAMENT_GENERAL_FIELDS)
+    update_assignments = ", ".join(f"{field}=excluded.{field}" for field in TOURNAMENT_GENERAL_FIELDS)
+
+    cur.execute(
+        f"""
+        INSERT INTO tournaments(
+            room, hero, tournament_path, source_file, {field_names}
+        ) VALUES (?, ?, ?, ?, {placeholders})
+        ON CONFLICT(room, hero, source_file) DO UPDATE SET
+            tournament_path=excluded.tournament_path,
+            {update_assignments}
+        """,
+        (
+            tournament.room,
+            tournament.hero,
+            tournament.tournament_path,
+            tournament.source_file,
+            *(tournament.general[field] for field in TOURNAMENT_GENERAL_FIELDS),
+        ),
+    )
+    cur.execute(
+        "SELECT id FROM tournaments WHERE room=? AND hero=? AND source_file=?",
+        (tournament.room, tournament.hero, tournament.source_file),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise RuntimeError("Failed to insert/fetch tournament row")
+    return int(row[0])
+
+
+def _insert_hand(conn: sqlite3.Connection, hand: ImportedHand, tournament_id: Optional[int]) -> int:
     cur = conn.cursor()
 
     cur.execute(
         """
-        INSERT OR IGNORE INTO hands_real(
-            room, hero, tournament_path, source_file, gamecode, startdate,
+        INSERT INTO hands_real(
+            tournament_id, room, hero, tournament_path, source_file, gamecode, startdate,
             sb, bb, hero_cards, flop, turn, river, players_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(room, hero, gamecode) DO UPDATE SET
+            tournament_id=excluded.tournament_id,
+            tournament_path=excluded.tournament_path,
+            source_file=excluded.source_file,
+            startdate=excluded.startdate,
+            sb=excluded.sb,
+            bb=excluded.bb,
+            hero_cards=excluded.hero_cards,
+            flop=excluded.flop,
+            turn=excluded.turn,
+            river=excluded.river,
+            players_json=excluded.players_json
         """,
         (
+            tournament_id,
             hand.room,
             hand.hero,
             hand.tournament_path,
@@ -617,14 +767,16 @@ def import_xml_folder(
 
         for i, xp in enumerate(sorted(xml_files)):
             try:
+                tournament = _parse_tournament(xp, room=room, hero=hero, tournament_path=tournament_path)
                 hands = parse_one_xml_file(xp, room=room, hero=hero, tournament_path=tournament_path)
             except Exception as e:
                 if verbose:
                     print(f"[IMPORT] file {i+1}/{total_files} FAIL: {xp} -> {type(e).__name__}: {e}")
                 continue
 
+            tournament_id = _upsert_tournament(conn, tournament)
             for h in hands:
-                hand_id = _insert_hand(conn, h)
+                hand_id = _insert_hand(conn, h, tournament_id)
                 _insert_actions(conn, hand_id, h)
                 total_spots += _insert_spots(conn, hand_id, h)
                 total_spots_xml_real += _insert_spots_xml_real(conn, hand_id, h)

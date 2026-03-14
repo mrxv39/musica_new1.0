@@ -133,6 +133,8 @@ describe("RealHandsTableBody", () => {
       river: "SQ",
       room: "Winamax",
       hero: "pollo",
+      tournament_name: "Sunday Special",
+      tournament_code: "T123",
     });
 
     render(
@@ -147,6 +149,7 @@ describe("RealHandsTableBody", () => {
     );
 
     expect(screen.getByText(/Winamax \/ pollo/)).toBeTruthy();
+    expect(screen.getByText(/Sunday Special \(T123\)/)).toBeTruthy();
     expect(screen.getByText(/Ah Kd/i)).toBeTruthy();
   });
 });

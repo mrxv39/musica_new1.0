@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TextIO
 
+NO_OK_DIR_NAME = "no ok"
+
 
 @dataclass(frozen=True)
 class LoopDirs:
@@ -18,14 +20,13 @@ class LoopDirs:
 
 def ensure_dirs(base_dir: str) -> LoopDirs:
     ok_dir = os.path.join(base_dir, "ok")
-    err_dir = os.path.join(base_dir, "errors")
-    del_dir = os.path.join(base_dir, "borrar")
+    err_dir = os.path.join(base_dir, NO_OK_DIR_NAME)
+    del_dir = os.path.join(base_dir, NO_OK_DIR_NAME)
     tmp_dir = os.path.join(base_dir, "_tmp")
     log_dir = os.path.join(base_dir, "_logs")
 
     os.makedirs(ok_dir, exist_ok=True)
     os.makedirs(err_dir, exist_ok=True)
-    os.makedirs(del_dir, exist_ok=True)
     os.makedirs(tmp_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
 

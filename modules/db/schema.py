@@ -78,6 +78,43 @@ CREATE TABLE IF NOT EXISTS hands_xml (
     created_at_ms INTEGER DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS tournaments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room TEXT NOT NULL DEFAULT '',
+    hero TEXT NOT NULL DEFAULT '',
+    tournament_path TEXT NOT NULL DEFAULT '',
+    source_file TEXT NOT NULL DEFAULT '',
+    client_version TEXT NOT NULL DEFAULT '',
+    mode TEXT NOT NULL DEFAULT '',
+    gametype TEXT NOT NULL DEFAULT '',
+    tablename TEXT NOT NULL DEFAULT '',
+    tournament_currency TEXT NOT NULL DEFAULT '',
+    duration TEXT NOT NULL DEFAULT '',
+    game_count TEXT NOT NULL DEFAULT '',
+    startdate TEXT NOT NULL DEFAULT '',
+    currency TEXT NOT NULL DEFAULT '',
+    nickname TEXT NOT NULL DEFAULT '',
+    bets TEXT NOT NULL DEFAULT '',
+    wins TEXT NOT NULL DEFAULT '',
+    chipsin TEXT NOT NULL DEFAULT '',
+    chipsout TEXT NOT NULL DEFAULT '',
+    statuspoints TEXT NOT NULL DEFAULT '',
+    awardpoints TEXT NOT NULL DEFAULT '',
+    ipoints TEXT NOT NULL DEFAULT '',
+    tablesize TEXT NOT NULL DEFAULT '',
+    tournamentcode TEXT NOT NULL DEFAULT '',
+    tournamentname TEXT NOT NULL DEFAULT '',
+    rewarddrawn TEXT NOT NULL DEFAULT '',
+    place TEXT NOT NULL DEFAULT '',
+    buyin TEXT NOT NULL DEFAULT '',
+    totalbuyin TEXT NOT NULL DEFAULT '',
+    win TEXT NOT NULL DEFAULT '',
+    smallblind TEXT NOT NULL DEFAULT '',
+    bigblind TEXT NOT NULL DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(room, hero, source_file)
+);
+
 CREATE TABLE IF NOT EXISTS hand_links (
     link_id INTEGER PRIMARY KEY AUTOINCREMENT,
     obs_id INTEGER NOT NULL,

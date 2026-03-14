@@ -30,8 +30,26 @@ def test_importer_creates_tables_and_imports_one_fixture():
         conn = sqlite3.connect(db_path)
         try:
             c = conn.cursor()
+            c.execute("SELECT COUNT(*) FROM tournaments")
+            assert c.fetchone()[0] == 1
+
             c.execute("SELECT COUNT(*) FROM hands_real")
             assert c.fetchone()[0] >= 1
+
+            c.execute(
+                """
+                SELECT hr.tournament_id, t.tournamentname, t.tournamentcode, t.buyin
+                FROM hands_real hr
+                JOIN tournaments t ON t.id = hr.tournament_id
+                LIMIT 1
+                """
+            )
+            row = c.fetchone()
+            assert row is not None
+            assert row[0] is not None
+            assert row[1] == "Sunday Special"
+            assert row[2] == "T123"
+            assert row[3] == "10"
 
             c.execute("SELECT COUNT(*) FROM actions_real")
             assert c.fetchone()[0] >= 1

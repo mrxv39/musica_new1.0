@@ -22,6 +22,9 @@ describe("fetchLatestHandsReal spot_links contract", () => {
       .mockResolvedValueOnce([
         {
           id: 77,
+          tournament_id: 500,
+          tournament_name: "Sunday Special",
+          tournament_code: "T123",
           gamecode: "G-77",
           hero_cards: "HA DK",
           linked_obs_id: 10,
@@ -65,6 +68,9 @@ describe("fetchLatestHandsReal spot_links contract", () => {
 
     const [baseSql, baseParams] = selectMock.mock.calls[0];
     expect(String(baseSql)).toContain("FROM hands_real hr");
+    expect(String(baseSql)).toContain("LEFT JOIN tournaments t");
+    expect(String(baseSql)).toContain("t.tournamentname AS tournament_name");
+    expect(String(baseSql)).toContain("t.tournamentcode AS tournament_code");
     expect(String(baseSql)).toContain("LEFT JOIN hand_links l");
     expect(baseParams).toEqual([25]);
 
@@ -75,6 +81,8 @@ describe("fetchLatestHandsReal spot_links contract", () => {
     expect(spotParams).toEqual([77]);
 
     expect(rows[0].spot_frames).toHaveLength(2);
+    expect(rows[0].tournament_name).toBe("Sunday Special");
+    expect(rows[0].tournament_code).toBe("T123");
     expect(rows[0].spot_frames?.[0]).toEqual(
       expect.objectContaining({
         hand_id: 77,

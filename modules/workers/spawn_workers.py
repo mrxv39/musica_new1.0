@@ -1,4 +1,4 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\workers\spawn_workers.py
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\workers\spawn_workers.py
 import sys
 import os
 import argparse

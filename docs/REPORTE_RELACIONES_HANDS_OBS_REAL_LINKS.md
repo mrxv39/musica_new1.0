@@ -1,6 +1,6 @@
 # Reporte de relaciones entre `hands_obs`, `hands_real`, `hand_links` y `hands_xml`
 
-Alcance: este documento describe exclusivamente la base de datos de estrategia `poker_boss`, es decir la DB resuelta por `POKER_BOSS_DB_PATH` o, si no existe override, `data/poker_boss.db`. No cubre `musica_new.db` ni otras bases del repositorio.
+Alcance: este documento describe exclusivamente la base de datos de estrategia `poker_boss`, es decir la DB resuelta por `POKER_BOSS_DB_PATH` o, si no existe override, `data/poker_boss.db`. No cubre bases legacy ni otras bases del repositorio.
 
 Fecha de revisión: 2026-03-13.
 

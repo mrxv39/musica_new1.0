@@ -147,6 +147,7 @@ export function RealHandsTable({
             <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Hero cards</th>
             <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Board</th>
             <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>OCR Audit</th>
+            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Tournament</th>
             <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Room/Hero</th>
           </tr>
         </thead>

@@ -16,9 +16,9 @@ class TestPreflop(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.img_path = os.path.join(self.tmpdir, 'synthetic_preflop.png')
-        # Compose image for noboard_ok True, time_ok True, mano likely False (unless templates present)
+        # Compose image for board_state preflop, time_ok True, mano likely False (unless templates present)
         img = Image.fromarray(np.full((500, 500), 100, dtype=np.uint8))
-        # noboard: black patch
+        # board_state: black patch where board cards should be absent
         img.paste(Image.fromarray(np.zeros((ROI_NB[3], ROI_NB[2]), dtype=np.uint8)), (ROI_NB[0], ROI_NB[1]))
         # time: white patch (to avoid false positives, but time.py expects template match, so may be False)
         img.paste(Image.fromarray(np.full((ROI_TIME[3], ROI_TIME[2]), 255, dtype=np.uint8)), (ROI_TIME[0], ROI_TIME[1]))
@@ -50,11 +50,11 @@ class TestPreflop(unittest.TestCase):
         self.assertIsInstance(data['modules']['time'], dict)
         self.assertIsInstance(data['modules']['board_state'], dict)
         self.assertTrue(len(data['fingerprint']) > 0)
-        # preflop_ok must be AND of ok flags
+        # preflop_ok must be mano_ok AND time_ok AND board_state.street_state == "preflop"
         mano_ok = bool(data['modules']['mano'].get('hand_class', '') and data['modules']['mano'].get('mano_raw', ''))
         time_ok = bool(data['modules']['time'].get('time_ok', False))
-        noboard_ok = bool(data['modules']['board_state'].get('noboard_ok', False))
-        self.assertEqual(data['preflop_ok'], mano_ok and time_ok and noboard_ok)
+        board_preflop_ok = (str(data['modules']['board_state'].get('street_state', '')).strip().lower() == 'preflop')
+        self.assertEqual(data['preflop_ok'], mano_ok and time_ok and board_preflop_ok)
 
 if __name__ == '__main__':
     unittest.main()

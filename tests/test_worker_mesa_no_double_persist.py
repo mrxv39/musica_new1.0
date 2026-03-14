@@ -30,13 +30,12 @@ def test_run_worker_mesa_once_calls_process_one_image_with_persist_to_db_false(t
 
     dirs = SimpleNamespace(
         ok_dir=str(tmp_path / "ok"),
-        err_dir=str(tmp_path / "errors"),
-        del_dir=str(tmp_path / "borrar"),
+        err_dir=str(tmp_path / "no ok"),
+        del_dir=str(tmp_path / "no ok"),
         tmp_dir=str(tmp_path / "_tmp"),
     )
     Path(dirs.ok_dir).mkdir(parents=True, exist_ok=True)
     Path(dirs.err_dir).mkdir(parents=True, exist_ok=True)
-    Path(dirs.del_dir).mkdir(parents=True, exist_ok=True)
     Path(dirs.tmp_dir).mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(wmod, "get_file_fingerprint", lambda _p: "image_fp_test")

@@ -2,7 +2,7 @@
 
 ## Strategy coverage gate (Vitest)
 - Estado actual:
-  - pages/strategy min lines: 63 (temporal)
+  - pages/strategy min lines: 65 (temporal)
   - strategy min lines: 55
 
 ## Objetivos
