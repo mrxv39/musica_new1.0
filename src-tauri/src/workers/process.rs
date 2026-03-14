@@ -17,6 +17,8 @@ pub fn build_loop_command(
     out_dir: &str,
     interval_ms: u64,
     log_path: &str,
+    xml_dir: Option<&str>,
+    hero: Option<&str>,
 ) -> Result<Command, String> {
     let log_file = OpenOptions::new()
         .create(true)
@@ -47,6 +49,18 @@ pub fn build_loop_command(
     if let Ok(v) = std::env::var("POKER_BOSS_WORKERS_LOOP_DEBUG") {
         if !v.trim().is_empty() {
             cmd.env("POKER_BOSS_WORKERS_LOOP_DEBUG", v);
+        }
+    }
+
+    if let Some(v) = xml_dir {
+        if !v.trim().is_empty() {
+            cmd.env("POKER_BOSS_XML_DIR", v);
+        }
+    }
+
+    if let Some(v) = hero {
+        if !v.trim().is_empty() {
+            cmd.env("POKER_BOSS_HERO", v);
         }
     }
 
@@ -88,6 +102,8 @@ mod tests {
             &out_dir,
             3000,
             &log_path,
+            Some(r"C:\xml"),
+            Some("Hero"),
         )
         .expect("build_loop_command");
 
@@ -112,5 +128,7 @@ mod tests {
 
         assert!(envs.iter().any(|(k, v)| k == "POKER_BOSS_DB_PATH" && v == r"C:\db\poker_boss.db"));
         assert!(envs.iter().any(|(k, v)| k == "MUSICA_DB_PATH" && v == r"C:\db\poker_boss.db"));
+        assert!(envs.iter().any(|(k, v)| k == "POKER_BOSS_XML_DIR" && v == r"C:\xml"));
+        assert!(envs.iter().any(|(k, v)| k == "POKER_BOSS_HERO" && v == "Hero"));
     }
 }

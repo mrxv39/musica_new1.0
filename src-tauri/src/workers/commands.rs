@@ -28,7 +28,14 @@ pub async fn set_workers_running(
             }
 
             let log_path = build_log_path(&out_dir)?;
-            let mut cmd = build_loop_command(&db_path, &out_dir, interval_ms, &log_path)?;
+            let mut cmd = build_loop_command(
+                &db_path,
+                &out_dir,
+                interval_ms,
+                &log_path,
+                xml_dir.as_deref(),
+                hero.as_deref(),
+            )?;
             let child = cmd
                 .spawn()
                 .map_err(|e| format!("failed to spawn run_workers_loop.py: {e}"))?;
@@ -175,5 +182,4 @@ pub async fn run_workers_tick(args: RunWorkersTickArgs) -> Result<String, String
     .await
     .map_err(|e| format!("spawn_blocking error: {e}"))?
 }
-
 

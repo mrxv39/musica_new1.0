@@ -16,6 +16,9 @@ type AuditFilter =
   | "warn_table";
 
 function getSpotPng(h: HandRealRow): string {
+  const frames = (h as any).spot_frames as { image_path?: string | null }[] | undefined;
+  const fromSpotLinks = frames?.find((frame) => String(frame?.image_path || "").trim())?.image_path;
+  if (fromSpotLinks) return String(fromSpotLinks);
   return ((h as any).spot_png as string) || "";
 }
 

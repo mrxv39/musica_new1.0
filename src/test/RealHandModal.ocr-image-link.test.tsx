@@ -105,4 +105,59 @@ describe("RealHandModal OCR linked image", () => {
       ).toBeTruthy();
     });
   });
+
+  it("muestra N imágenes enlazadas por spot_links y no usa get_hand_obs_image", async () => {
+    render(
+      <RealHandModal
+        open={true}
+        dbPath="C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\poker_boss.db"
+        hand={{
+          id: 9,
+          gamecode: "12098328818",
+          hero_cards: "C8 C2",
+          startdate: "2026-03-09 07:28:57",
+          spot_frames: [
+            {
+              hand_id: 9,
+              gamecode: "12098328818",
+              spot_id: 101,
+              spot_index: 1,
+              street: "preflop",
+              obs_id: 201,
+              image_path: "C:\\spots\\frame_1.bmp",
+              hand_class: "82o",
+              match_method: "v1",
+              match_score: 111,
+            },
+            {
+              hand_id: 9,
+              gamecode: "12098328818",
+              spot_id: 102,
+              spot_index: 2,
+              street: "preflop",
+              obs_id: 202,
+              image_path: "C:\\spots\\frame_2.bmp",
+              hand_class: "82o",
+              match_method: "v1",
+              match_score: 109,
+            },
+          ],
+        } as any}
+        onClose={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Spot 1/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Spot 2/i).length).toBeGreaterThan(0);
+    });
+
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "get_hand_obs_image",
+      expect.anything()
+    );
+    expect(convertFileSrcMock).toHaveBeenCalledWith("C:\\spots\\frame_1.bmp");
+    expect(convertFileSrcMock).toHaveBeenCalledWith("C:\\spots\\frame_2.bmp");
+    expect(screen.queryByText(/No hay imagen OCR enlazada para esta mano/i)).toBeNull();
+  });
 });

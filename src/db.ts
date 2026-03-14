@@ -85,6 +85,21 @@ export type HandRealRow = {
   ocr_warn_table?: boolean;
   ocr_audit_status?: "no_ocr" | "ok" | "warn" | "diff";
   ocr_audit_summary?: string;
+  spot_frames?: HandRealSpotFrame[];
+};
+
+export type HandRealSpotFrame = {
+  hand_id: number;
+  gamecode: string;
+  spot_id: number;
+  spot_index: number;
+  street: string;
+  obs_id: number;
+  image_path: string;
+  mano_raw?: string | null;
+  hand_class?: string | null;
+  match_score?: number | null;
+  match_method?: string | null;
 };
 
 export type ActionRealRow = {
@@ -267,6 +282,57 @@ function buildHandRealAudit(row: HandRealRow): HandRealRow {
   };
 }
 
+async function fetchSpotFramesMap(db: SqlDb, handIds: number[]): Promise<Map<number, HandRealSpotFrame[]>> {
+  const out = new Map<number, HandRealSpotFrame[]>();
+  if (handIds.length === 0) return out;
+
+  const placeholders = handIds.map((_, idx) => `?${idx + 1}`).join(", ");
+  const rows = await db.select<any[]>(
+    `SELECT
+       sx.hand_id AS hand_id,
+       sx.gamecode AS gamecode,
+       sx.spot_id AS spot_id,
+       sx.spot_index AS spot_index,
+       sx.street AS street,
+       sl.obs_id AS obs_id,
+       h.frame_ref AS image_path,
+       h.mano_raw AS mano_raw,
+       h.hand_class AS hand_class,
+       sl.match_score AS match_score,
+       sl.match_method AS match_method
+     FROM spot_links sl
+     JOIN spots_xml_real sx
+       ON sx.spot_id = sl.spot_id
+     JOIN hands_obs h
+       ON h.obs_id = sl.obs_id
+     WHERE sx.hand_id IN (${placeholders})
+       AND NULLIF(h.frame_ref, '') IS NOT NULL
+     ORDER BY sx.hand_id ASC, sx.spot_index ASC, sl.obs_id ASC`,
+    handIds
+  );
+
+  for (const row of rows) {
+    const handId = Number(row.hand_id ?? 0);
+    if (!handId) continue;
+    if (!out.has(handId)) out.set(handId, []);
+    out.get(handId)!.push({
+      hand_id: handId,
+      gamecode: String(row.gamecode || ""),
+      spot_id: Number(row.spot_id ?? 0),
+      spot_index: Number(row.spot_index ?? 0),
+      street: String(row.street || ""),
+      obs_id: Number(row.obs_id ?? 0),
+      image_path: String(row.image_path || ""),
+      mano_raw: row.mano_raw ?? null,
+      hand_class: row.hand_class ?? null,
+      match_score: row.match_score ?? null,
+      match_method: row.match_method ?? null,
+    });
+  }
+
+  return out;
+}
+
 export async function fetchLatestHandsReal(dbPath: string, limit = 200): Promise<HandRealRow[]> {
   const db = await openDb(dbPath);
   const rows = await (db as any).select(
@@ -303,7 +369,15 @@ export async function fetchLatestHandsReal(dbPath: string, limit = 200): Promise
     [limit]
   );
 
-  return (rows as HandRealRow[]).map(buildHandRealAudit);
+  const baseRows = rows as HandRealRow[];
+  const spotFramesMap = await fetchSpotFramesMap(db as any, baseRows.map((row) => row.id));
+
+  return baseRows.map((row) =>
+    buildHandRealAudit({
+      ...row,
+      spot_frames: spotFramesMap.get(row.id) || [],
+    })
+  );
 }
 
 export async function fetchActionsRealForHand(dbPath: string, handId: number): Promise<ActionRealRow[]> {

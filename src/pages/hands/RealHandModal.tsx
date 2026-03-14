@@ -1,7 +1,7 @@
 /// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\hands\RealHandModal.tsx
 import React from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import type { ActionRealRow, HandRealRow } from "../../db";
+import type { ActionRealRow, HandRealRow, HandRealSpotFrame } from "../../db";
 import { fetchActionsRealForHand } from "../../db";
 
 function streetLabel(roundNo: number) {
@@ -84,6 +84,17 @@ function auditColors(status?: HandRealRow["ocr_audit_status"]) {
   return { bg: "#f4f4f4", border: "#dddddd", fg: "#666666" };
 }
 
+function buildSpotFrameTitle(frame: HandRealSpotFrame): string {
+  const parts = [
+    `spot ${frame.spot_index || frame.spot_id}`,
+    frame.street || "",
+    frame.match_method || "",
+    frame.match_score != null ? `score=${frame.match_score}` : "",
+    frame.hand_class || "",
+  ].filter(Boolean);
+  return parts.join(" | ");
+}
+
 export function RealHandModal({
   open,
   dbPath,
@@ -132,6 +143,12 @@ export function RealHandModal({
         return;
       }
 
+      if ((hand.spot_frames || []).length > 0) {
+        setObsImagePath(null);
+        setObsImageStatus("spot_links");
+        return;
+      }
+
       setObsImageStatus("loading...");
       try {
         const path = await invoke<string | null>("get_hand_obs_image", {
@@ -174,6 +191,7 @@ export function RealHandModal({
   const streets = [1, 2, 3, 4].filter((n) => (byStreet.get(n) || []).length > 0);
   const board = formatBoardPretty(hand);
   const obsImageUrl = obsImagePath ? convertFileSrc(obsImagePath) : null;
+  const spotFrames = (hand.spot_frames || []).filter((frame) => String(frame.image_path || "").trim());
 
   const auditColorsNow = auditColors(hand.ocr_audit_status);
   const cardsResult =
@@ -287,7 +305,40 @@ export function RealHandModal({
               </div>
             </div>
 
-            {obsImageUrl ? (
+            {spotFrames.length > 0 ? (
+              <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
+                {spotFrames.map((frame) => (
+                  <div
+                    key={`${frame.spot_id}-${frame.obs_id}`}
+                    style={{ border: "1px solid #eee", borderRadius: 8, padding: 8, background: "#fafafa" }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+                      Spot {frame.spot_index || frame.spot_id}
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>
+                      {buildSpotFrameTitle(frame)}
+                    </div>
+                    <img
+                      src={convertFileSrc(frame.image_path)}
+                      alt={`Spot ${frame.spot_index || frame.spot_id} ${hand.gamecode}`}
+                      title={buildSpotFrameTitle(frame)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        maxHeight: 260,
+                        objectFit: "contain",
+                        borderRadius: 8,
+                        border: "1px solid #eee",
+                        background: "#fff",
+                      }}
+                    />
+                    <div style={{ marginTop: 6, fontSize: 11, opacity: 0.65, wordBreak: "break-all" }}>
+                      {frame.image_path}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : obsImageUrl ? (
               <div style={{ marginTop: 8 }}>
                 <img
                   src={obsImageUrl}

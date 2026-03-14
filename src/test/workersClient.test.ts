@@ -43,6 +43,30 @@ describe("workersClient", () => {
     });
   });
 
+  it("setWorkersRunningCommand forwards xmlDir and hero when provided", async () => {
+    invokeMock.mockResolvedValue("workers started");
+
+    const out = await setWorkersRunningCommand({
+      running: true,
+      dbPath: "C:\\db\\poker_boss.db",
+      outDir: "C:\\tmp\\workers_out",
+      intervalMs: 3000,
+      xmlDir: "C:\\xml\\folder",
+      hero: "MyHero",
+    });
+
+    expect(out).toBe("workers started");
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).toHaveBeenCalledWith("set_workers_running", {
+      running: true,
+      dbPath: "C:\\db\\poker_boss.db",
+      outDir: "C:\\tmp\\workers_out",
+      intervalMs: 3000,
+      xmlDir: "C:\\xml\\folder",
+      hero: "MyHero",
+    });
+  });
+
   it("runWorkersTickCommand calls invoke(run_workers_tick, ...)", async () => {
     invokeMock.mockResolvedValue("tick ok");
 

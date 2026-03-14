@@ -152,6 +152,28 @@ describe("RealHandsTable", () => {
     expect(String(lastCall.title)).toContain("g1");
   });
 
+  it("uses first spot_frames image when present", () => {
+    const rowsWithSpotFrames = [
+      {
+        ...rows[0],
+        spot_png: "",
+        spot_frames: [
+          { image_path: "C:\\spots\\frame_spot_1.png" },
+          { image_path: "C:\\spots\\frame_spot_2.png" },
+        ],
+      },
+      rows[1],
+    ] as any;
+
+    render(<RealHandsTable rows={rowsWithSpotFrames} dbPath={dbPath} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open image" }));
+
+    const lastCall = realHandsImageModalMock.mock.calls.at(-1)?.[0];
+    expect(lastCall.open).toBe(true);
+    expect(lastCall.imagePath).toBe("C:\\spots\\frame_spot_1.png");
+  });
+
   it("does not open RealHandsImageModal when spot_png is empty", () => {
     render(<RealHandsTable rows={rows as any} dbPath={dbPath} />);
 
