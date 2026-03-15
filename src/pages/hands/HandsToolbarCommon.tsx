@@ -14,8 +14,8 @@ type HandsToolbarCommonProps = {
 };
 
 export default function HandsToolbarCommon({
-  mode,
-  onChangeMode,
+  mode: _mode,
+  onChangeMode: _onChangeMode,
   canLoad,
   onRefresh,
   auto,
@@ -27,18 +27,6 @@ export default function HandsToolbarCommon({
 }: HandsToolbarCommonProps) {
   return (
     <>
-      <label style={{ fontSize: 14 }}>Modo:</label>
-      <select
-        aria-label="Modo"
-        value={mode}
-        onChange={(e) => onChangeMode(e.target.value as HandsMode)}
-        disabled={busy}
-        style={{ padding: "6px 8px", fontSize: 13 }}
-      >
-        <option value="OBS">OCR (hands_obs)</option>
-        <option value="REAL">XML (hands_real)</option>
-      </select>
-
       <button disabled={!canLoad || busy} onClick={onRefresh}>
         Refresh
       </button>

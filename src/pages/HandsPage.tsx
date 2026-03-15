@@ -8,16 +8,8 @@ import {
   PlayersTableBlock,
 } from "./hands/HandsFourTables";
 
-import { getHandsDefaultDbPath } from "../config";
 import { useHandsPage } from "./hands/useHandsPage";
-import { CHAMPION_XML_DIR, XML_ARCHIVE_DIR, SPOTS_OUT_BASE } from "./hands/handsPagePaths";
-
-const ensureDbPath = (p: string | undefined | null) => {
-  if (!p || p.trim() === "") {
-    return getHandsDefaultDbPath();
-  }
-  return p;
-};
+import { CHAMPION_XML_DIR, XML_ARCHIVE_DIR } from "./hands/handsPagePaths";
 
 const canUseTauriInvoke = () => {
   try {
@@ -49,26 +41,6 @@ export default function HandsPage() {
       }
     } catch (e) {
       console.error("overlay toggle failed", e);
-    }
-  };
-
-  const runMatchImages = async () => {
-    const spotsDir = SPOTS_OUT_BASE;
-
-    try {
-      const res = await invoke<string>("match_spots", {
-        dbPath: ensureDbPath(hp.dbPath),
-        spotsDir,
-        windowMs: 60000,
-      });
-
-      console.log(res);
-      alert(String(res || "Match Images OK"));
-
-      await hp.loadOnce();
-    } catch (e: any) {
-      console.error(e);
-      alert(String(e?.message || e || "Match Images error"));
     }
   };
 
@@ -105,14 +77,6 @@ export default function HandsPage() {
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <button disabled={!hp.canLoad} onClick={handleToggleWorkers} title="Lanza 4 instancias del worker">
               {hp.workersRunning ? "Stop workers" : "Run workers (loop, 4 instances)"}
-            </button>
-
-            <button disabled={!hp.canLoad || hp.busy} onClick={hp.onImportXml}>
-              Import XML
-            </button>
-
-            <button disabled={!hp.canLoad || hp.busy} onClick={runMatchImages}>
-              Match Images
             </button>
 
             <span style={{ fontSize: 12, opacity: 0.75 }}>

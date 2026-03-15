@@ -86,8 +86,6 @@ describe("HandsPage OBS mode integration", () => {
 
     expect(screen.getByTestId("hands-table")).toBeTruthy();
     expect(screen.queryByTestId("real-hands-table")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Import XML" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Match Images" })).toBeNull();
   });
 
   it("passes canRunOne=true to HandsTable when OBS + canLoad + not busy", () => {

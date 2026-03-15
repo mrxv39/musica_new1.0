@@ -1,13 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getHandsDefaultDbPath } from "../config";
 
-const invokeMock = vi.fn();
-const alertMock = vi.fn();
-
-const mockLoadOnce = vi.fn();
 const mockOnToggleWorkers = vi.fn();
-const mockOnImportXml = vi.fn();
 
 let mockHandsPageState: any;
 
@@ -37,7 +31,6 @@ vi.mock("../pages/hands/RealHandsTable", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubGlobal("alert", alertMock);
 
   mockHandsPageState = {
     mode: "REAL",
@@ -69,26 +62,23 @@ beforeEach(() => {
     tournaments: [],
     spotsReal: [],
     players: [],
-    loadOnce: mockLoadOnce,
+    loadOnce: vi.fn(),
     loadAllFourTables: vi.fn(),
     onReset: vi.fn(),
     onRunBatch: vi.fn(),
     onRunOneForImage: vi.fn(),
-    onImportXml: mockOnImportXml,
+    onImportXml: vi.fn(),
     onWorkersTick: vi.fn(),
   };
 });
 
 import HandsPage from "../pages/HandsPage";
-import { SPOTS_OUT_BASE } from "../pages/hands/handsPagePaths";
 
 describe("HandsPage REAL mode integration", () => {
   it("renders REAL controls and real table", () => {
     render(<HandsPage />);
 
     expect(screen.getByRole("button", { name: /Run workers \(loop/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import XML" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Match Images" })).toBeTruthy();
     expect(screen.getByTestId("real-hands-table")).toBeTruthy();
   });
 
@@ -99,55 +89,6 @@ describe("HandsPage REAL mode integration", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Stop workers/ }));
     expect(mockOnToggleWorkers).toHaveBeenCalledTimes(1);
-  });
-
-  it("clicking Import XML calls onImportXml", () => {
-    render(<HandsPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Import XML" }));
-    expect(mockOnImportXml).toHaveBeenCalledTimes(1);
-  });
-
-  it("clicking Match Images calls invoke and then loadOnce", async () => {
-    invokeMock.mockResolvedValue("match ok");
-
-    render(<HandsPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Match Images" }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledTimes(1);
-    });
-
-    expect(invokeMock).toHaveBeenCalledWith("match_spots", {
-      dbPath: "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\poker_boss.db",
-      spotsDir:
-        SPOTS_OUT_BASE,
-      windowMs: 60000,
-    });
-
-    await waitFor(() => {
-      expect(mockLoadOnce).toHaveBeenCalledTimes(1);
-      expect(alertMock).toHaveBeenCalled();
-    });
-  });
-
-  it("match images falls back to default db path when dbPath is empty", async () => {
-    invokeMock.mockResolvedValue("match ok");
-    mockHandsPageState.dbPath = "";
-
-    render(<HandsPage />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Match Images" }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith("match_spots", {
-        dbPath: getHandsDefaultDbPath(),
-        spotsDir:
-          SPOTS_OUT_BASE,
-        windowMs: 60000,
-      });
-    });
   });
 });
 
