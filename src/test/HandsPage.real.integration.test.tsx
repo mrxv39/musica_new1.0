@@ -66,7 +66,11 @@ beforeEach(() => {
     obsFooterText: "",
     sortedObsRows: [],
     sortedRealRows: [{ id: 1 }, { id: 2 }],
+    tournaments: [],
+    spotsReal: [],
+    players: [],
     loadOnce: mockLoadOnce,
+    loadAllFourTables: vi.fn(),
     onReset: vi.fn(),
     onRunBatch: vi.fn(),
     onRunOneForImage: vi.fn(),
@@ -82,7 +86,7 @@ describe("HandsPage REAL mode integration", () => {
   it("renders REAL controls and real table", () => {
     render(<HandsPage />);
 
-    expect(screen.getByRole("button", { name: "Run workers (loop)" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Run workers \(loop/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Import XML" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Match Images" })).toBeTruthy();
     expect(screen.getByTestId("real-hands-table")).toBeTruthy();
@@ -93,7 +97,7 @@ describe("HandsPage REAL mode integration", () => {
 
     render(<HandsPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Stop workers" }));
+    fireEvent.click(screen.getByRole("button", { name: /Stop workers/ }));
     expect(mockOnToggleWorkers).toHaveBeenCalledTimes(1);
   });
 

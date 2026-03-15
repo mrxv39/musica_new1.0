@@ -63,6 +63,10 @@ function makeHp(overrides: Record<string, any> = {}) {
 
     sortedRealRows: [],
     sortedObsRows: [],
+    tournaments: [],
+    spotsReal: [],
+    players: [],
+    loadAllFourTables: vi.fn(),
     onSort: vi.fn(),
     sortKey: "id",
     sortAsc: true,

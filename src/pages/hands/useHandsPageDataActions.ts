@@ -19,6 +19,8 @@ type UseHandsPageDataActionsArgs = {
   setLastLog: (v: string) => void;
   loadObsOnce: LoadOnceFn;
   loadRealOnce: LoadOnceFn;
+  /** When set, Reset button calls reset_four_tables and then this to reload all 4 tables. */
+  loadAllFourTables?: LoadOnceFn;
 };
 
 export function useHandsPageDataActions({
@@ -29,6 +31,7 @@ export function useHandsPageDataActions({
   setLastLog,
   loadObsOnce,
   loadRealOnce,
+  loadAllFourTables,
 }: UseHandsPageDataActionsArgs) {
   const onReset = async () => {
     const p = safeDbPath;
@@ -38,16 +41,28 @@ export function useHandsPageDataActions({
     setLastLog("");
 
     try {
-      const cmd = mode === "REAL" ? "reset_hands_real" : "reset_hands_obs";
-      const msg = await invoke<string>(cmd, { dbPath: p });
-      const m = String(msg || "");
-      setLastLog(m);
-      setActionStatus("reset: " + (summarize(m) || "ok"));
-
-      if (mode === "REAL") {
-        await loadRealOnce();
+      if (loadAllFourTables) {
+        if (!window.confirm("¿Vaciar las 4 tablas (tournaments, hands, spots, players)? Esta acción no se puede deshacer.")) {
+          setBusy(false);
+          return;
+        }
+        const msg = await invoke<string>("reset_four_tables", { dbPath: p });
+        const m = String(msg || "");
+        setLastLog(m);
+        setActionStatus("reset: " + (summarize(m) || "ok"));
+        await loadAllFourTables();
       } else {
-        await loadObsOnce();
+        const cmd = mode === "REAL" ? "reset_hands_real" : "reset_hands_obs";
+        const msg = await invoke<string>(cmd, { dbPath: p });
+        const m = String(msg || "");
+        setLastLog(m);
+        setActionStatus("reset: " + (summarize(m) || "ok"));
+
+        if (mode === "REAL") {
+          await loadRealOnce();
+        } else {
+          await loadObsOnce();
+        }
       }
     } catch (e: unknown) {
       const m = "ERROR: " + getErrorMessage(e);

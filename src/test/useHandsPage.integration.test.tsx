@@ -42,9 +42,9 @@ let mockFiltered = {
   rangeError: "",
 };
 
-const DEFAULT_DB_PATH_MOCK = "C:\\db\\default.db";
 vi.mock("../config", () => ({
-  getHandsDefaultDbPath: () => DEFAULT_DB_PATH_MOCK,
+  getHandsDefaultDbPath: () => "C:\\db\\default.db",
+  getPlayersDbUrl: () => "sqlite:C:/db/default.db",
 }));
 
 vi.mock("../pages/hands/useHandsObs", () => ({
@@ -139,7 +139,7 @@ describe("useHandsPage integration", () => {
     const { result } = renderHook(() => useHandsPage());
 
     expect(result.current.mode).toBe("REAL");
-    expect(result.current.dbPath).toBe(DEFAULT_DB_PATH_MOCK);
+    expect(result.current.dbPath).toBe("C:\\db\\default.db");
     expect(result.current.auto).toBe(false);
   });
 
@@ -159,7 +159,7 @@ describe("useHandsPage integration", () => {
     renderHook(() => useHandsPage());
 
     expect(mockObsSetDbPath).toHaveBeenCalled();
-    expect(mockObsSetDbPath).toHaveBeenLastCalledWith(DEFAULT_DB_PATH_MOCK);
+    expect(mockObsSetDbPath).toHaveBeenLastCalledWith("C:\\db\\default.db");
   });
 
   it("loadOnce delegates to obs in OBS mode", async () => {

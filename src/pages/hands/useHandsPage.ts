@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { HandsMode } from "./HandsToolbar";
-import type { HandsObsRow } from "../../db";
+import type { HandsObsRow, TournamentRow, SpotRealRow } from "../../db";
+import { fetchTournaments, fetchSpotsReal } from "../../db";
+import { listPlayers, type PlayerRow } from "../../db/players";
 
 import { getHandsDefaultDbPath } from "../../config";
 import { useHandsObs } from "./useHandsObs";
@@ -56,6 +58,10 @@ export function useHandsPage() {
   }, []);
 
   const real = useHandsReal(dbPath, auto);
+
+  const [tournaments, setTournaments] = useState<TournamentRow[]>([]);
+  const [spotsReal, setSpotsReal] = useState<SpotRealRow[]>([]);
+  const [players, setPlayers] = useState<PlayerRow[]>([]);
 
   const [busy, setBusy] = useState<boolean>(false);
   const [actionStatus, setActionStatus] = useState<string>("");
@@ -160,6 +166,45 @@ export function useHandsPage() {
 
   const safeDbPath = dbPath;
 
+  const loadTournamentsOnce = async () => {
+    try {
+      const rows = await fetchTournaments(dbPath);
+      setTournaments(rows);
+    } catch (e) {
+      console.error("load tournaments failed", e);
+      setTournaments([]);
+    }
+  };
+
+  const loadSpotsRealOnce = async () => {
+    try {
+      const rows = await fetchSpotsReal(dbPath);
+      setSpotsReal(rows);
+    } catch (e) {
+      console.error("load spots_real failed", e);
+      setSpotsReal([]);
+    }
+  };
+
+  const loadPlayersOnce = async () => {
+    try {
+      const rows = await listPlayers();
+      setPlayers(rows);
+    } catch (e) {
+      console.error("load players failed", e);
+      setPlayers([]);
+    }
+  };
+
+  const loadAllFourTables = async () => {
+    await Promise.all([
+      loadTournamentsOnce(),
+      mode === "REAL" ? real.loadOnce() : obs.loadOnce(),
+      loadSpotsRealOnce(),
+      loadPlayersOnce(),
+    ]);
+  };
+
   const loadOnce = async () => {
     if (mode === "REAL") {
       await real.loadOnce();
@@ -167,6 +212,13 @@ export function useHandsPage() {
       await obs.loadOnce();
     }
   };
+
+  useEffect(() => {
+    loadTournamentsOnce();
+    loadSpotsRealOnce();
+    loadPlayersOnce();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbPath]);
 
   const onClearFilters = () => {
     setStackEfRangeText("");
@@ -200,6 +252,7 @@ export function useHandsPage() {
     setLastLog,
     loadObsOnce: obs.loadOnce,
     loadRealOnce: real.loadOnce,
+    loadAllFourTables,
   });
 
   return {
@@ -232,7 +285,11 @@ export function useHandsPage() {
     obsFooterText,
     sortedObsRows,
     sortedRealRows,
+    tournaments,
+    spotsReal,
+    players,
     loadOnce,
+    loadAllFourTables,
     onReset,
     onRunBatch,
     onRunOneForImage,

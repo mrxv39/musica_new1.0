@@ -31,7 +31,11 @@ vi.mock("../pages/hands/useHandsPage", () => ({
     obsFooterText: "",
     sortedObsRows: [],
     sortedRealRows: [],
+    tournaments: [],
+    spotsReal: [],
+    players: [],
     loadOnce: vi.fn(),
+    loadAllFourTables: vi.fn(),
     onReset: vi.fn(),
     onRunBatch: vi.fn(),
     onRunOneForImage: vi.fn(),
@@ -59,10 +63,10 @@ describe("HandsPage workers button", () => {
     mockOnToggleWorkers.mockReset();
   });
 
-  it("clicking Run workers (loop) calls onToggleWorkers", () => {
+  it("clicking Run workers (loop, 4 instances) calls onToggleWorkers", () => {
     render(<HandsPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Run workers (loop)" }));
+    fireEvent.click(screen.getByRole("button", { name: /Run workers \(loop/ }));
 
     expect(mockOnToggleWorkers).toHaveBeenCalledTimes(1);
   });

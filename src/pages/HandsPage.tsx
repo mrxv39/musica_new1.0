@@ -1,8 +1,12 @@
 // C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\HandsPage.tsx
 import { invoke } from "@tauri-apps/api/core";
 import HandsToolbar from "./hands/HandsToolbar";
-import HandsTable from "./hands/HandsTable";
-import RealHandsTable from "./hands/RealHandsTable";
+import {
+  TournamentsTable,
+  HandsTableBlock,
+  SpotsRealTable,
+  PlayersTableBlock,
+} from "./hands/HandsFourTables";
 
 import { getHandsDefaultDbPath } from "../config";
 import { useHandsPage } from "./hands/useHandsPage";
@@ -96,11 +100,11 @@ export default function HandsPage() {
 
       <div style={{ height: 10 }} />
 
-      {hp.mode === "REAL" ? (
+      {hp.mode === "REAL" && (
         <>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button disabled={!hp.canLoad} onClick={handleToggleWorkers}>
-              {hp.workersRunning ? "Stop workers" : "Run workers (loop)"}
+            <button disabled={!hp.canLoad} onClick={handleToggleWorkers} title="Lanza 4 instancias del worker">
+              {hp.workersRunning ? "Stop workers" : "Run workers (loop, 4 instances)"}
             </button>
 
             <button disabled={!hp.canLoad || hp.busy} onClick={hp.onImportXml}>
@@ -117,27 +121,37 @@ export default function HandsPage() {
           </div>
 
           <div style={{ height: 10 }} />
-
-          <RealHandsTable rows={hp.sortedRealRows} dbPath={hp.dbPath} />
-        </>
-      ) : (
-        <>
-          <HandsTable
-            rows={hp.sortedObsRows}
-            onSort={hp.onSort}
-            sortKey={hp.sortKey}
-            sortAsc={hp.sortAsc}
-            canRunOne={canRunOne}
-            onRunOneForImage={hp.onRunOneForImage}
-            lastLog={hp.lastLog}
-            dbPath={hp.dbPath}
-          />
-
-          {hp.obsFooterText ? (
-            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>{hp.obsFooterText}</div>
-          ) : null}
         </>
       )}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 16,
+          alignItems: "start",
+        }}
+      >
+        <TournamentsTable rows={hp.tournaments ?? []} />
+        <HandsTableBlock
+          mode={hp.mode}
+          realRows={hp.sortedRealRows}
+          obsRows={hp.sortedObsRows}
+          dbPath={hp.dbPath}
+          sortKey={hp.sortKey}
+          sortAsc={hp.sortAsc}
+          onSort={hp.onSort}
+          canRunOne={canRunOne}
+          onRunOneForImage={hp.onRunOneForImage}
+          lastLog={hp.lastLog}
+        />
+        <SpotsRealTable rows={hp.spotsReal ?? []} />
+        <PlayersTableBlock rows={hp.players ?? []} />
+      </div>
+
+      {hp.obsFooterText ? (
+        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>{hp.obsFooterText}</div>
+      ) : null}
 
       <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
         {hp.actionStatus ? <div>{hp.actionStatus}</div> : null}

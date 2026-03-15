@@ -119,6 +119,34 @@ export type ActionRealRow = {
   created_at: string;
 };
 
+/** Tournaments table (XML import). */
+export type TournamentRow = {
+  id: number;
+  room: string;
+  hero: string;
+  tournament_path: string;
+  source_file: string;
+  tournamentcode: string;
+  tournamentname: string;
+  startdate: string;
+  created_at: string;
+  [k: string]: unknown;
+};
+
+/** spots_real: hero decision points per hand. */
+export type SpotRealRow = {
+  id: number;
+  hand_id: number;
+  gamecode: string;
+  hero: string;
+  street: string;
+  round_no: number;
+  action_no: number;
+  to_act_player: string;
+  created_at: string;
+  [k: string]: unknown;
+};
+
 type SqlDb = {
   execute: (sql: string, bindValues?: any[]) => Promise<any>;
   select: <T = any>(sql: string, bindValues?: any[]) => Promise<T>;
@@ -397,6 +425,32 @@ export async function fetchActionsRealForHand(dbPath: string, handId: number): P
     [handId]
   );
   return rows as ActionRealRow[];
+}
+
+/** List tournaments for the Hands section (same DB). */
+export async function fetchTournaments(dbPath: string, limit = 200): Promise<TournamentRow[]> {
+  const db = await openDb(dbPath);
+  const rows = await (db as any).select(
+    `SELECT id, room, hero, tournament_path, source_file, tournamentcode, tournamentname, startdate, created_at
+     FROM tournaments
+     ORDER BY created_at DESC
+     LIMIT ?1`,
+    [limit]
+  );
+  return rows as TournamentRow[];
+}
+
+/** List spots_real for the Hands section (same DB). */
+export async function fetchSpotsReal(dbPath: string, limit = 500): Promise<SpotRealRow[]> {
+  const db = await openDb(dbPath);
+  const rows = await (db as any).select(
+    `SELECT id, hand_id, gamecode, hero, street, round_no, action_no, to_act_player, created_at
+     FROM spots_real
+     ORDER BY hand_id DESC, round_no ASC, action_no ASC
+     LIMIT ?1`,
+    [limit]
+  );
+  return rows as SpotRealRow[];
 }
 
 /** ========== Existing extractors used by UI ========== */

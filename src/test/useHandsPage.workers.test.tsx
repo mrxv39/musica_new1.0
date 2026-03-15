@@ -7,6 +7,7 @@ const mockSetWorkersRunning = vi.fn();
 
 vi.mock("../config", () => ({
   getHandsDefaultDbPath: () => "C:\\db\\default.db",
+  getPlayersDbUrl: () => "sqlite:C:/db/default.db",
 }));
 
 vi.mock("../pages/hands/useHandsObs", () => ({

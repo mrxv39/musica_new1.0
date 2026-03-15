@@ -136,6 +136,7 @@ fn main() {
 
             // REAL reset
             reset_real::reset_hands_real,
+            reset_real::reset_four_tables,
 
             // workers loop/tick
             workers::commands::set_workers_running,

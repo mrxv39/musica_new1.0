@@ -15,12 +15,23 @@ vi.mock("../pages/hands/HandsToolbar", () => ({
   default: () => <div data-testid="hands-toolbar" />,
 }));
 
-vi.mock("../pages/hands/HandsTable", () => ({
-  default: ({ canRunOne, dbPath }: { canRunOne: boolean; dbPath: string }) => (
-    <div data-testid="hands-table">
-      canRunOne={String(canRunOne)}|db={dbPath}
+vi.mock("../pages/hands/HandsFourTables", () => ({
+  TournamentsTable: () => <div data-testid="tournaments-table" />,
+  HandsTableBlock: ({ mode, canRunOne }: { mode: string; canRunOne?: boolean }) => (
+    <div
+      data-testid={mode === "REAL" ? "real-hands-table" : "hands-table"}
+      data-canrunone={String(canRunOne)}
+    >
+      {mode}
     </div>
   ),
+  SpotsRealTable: () => <div data-testid="spots-real-table" />,
+  PlayersTableBlock: () => <div data-testid="players-table" />,
+}));
+
+vi.mock("../pages/hands/HandsTable", () => ({
+  HandsTable: () => null,
+  default: () => null,
 }));
 
 vi.mock("../pages/hands/RealHandsTable", () => ({
@@ -64,6 +75,9 @@ describe("HandsPage OBS mode integration", () => {
       onRunOneForImage: vi.fn(),
       onImportXml: vi.fn(),
       onWorkersTick: vi.fn(),
+      tournaments: [],
+      spotsReal: [],
+      players: [],
     };
   });
 
@@ -78,8 +92,8 @@ describe("HandsPage OBS mode integration", () => {
 
   it("passes canRunOne=true to HandsTable when OBS + canLoad + not busy", () => {
     render(<HandsPage />);
-
-    expect(screen.getByTestId("hands-table").textContent).toContain("canRunOne=true");
+    const handsBlock = screen.getByTestId("hands-table");
+    expect(handsBlock.getAttribute("data-canrunone")).toBe("true");
   });
 
   it("shows obsFooterText when present", () => {
@@ -92,7 +106,7 @@ describe("HandsPage OBS mode integration", () => {
     mockHandsPageState.busy = true;
 
     render(<HandsPage />);
-
-    expect(screen.getByTestId("hands-table").textContent).toContain("canRunOne=false");
+    const handsBlock = screen.getByTestId("hands-table");
+    expect(handsBlock.getAttribute("data-canrunone")).toBe("false");
   });
 });

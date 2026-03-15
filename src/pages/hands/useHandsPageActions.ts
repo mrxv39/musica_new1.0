@@ -13,6 +13,7 @@ type UseHandsPageActionsArgs = {
   setLastLog: (v: string) => void;
   loadObsOnce: LoadOnceFn;
   loadRealOnce: LoadOnceFn;
+  loadAllFourTables?: LoadOnceFn;
 };
 
 export function useHandsPageActions({
@@ -25,6 +26,7 @@ export function useHandsPageActions({
   setLastLog,
   loadObsOnce,
   loadRealOnce,
+  loadAllFourTables,
 }: UseHandsPageActionsArgs) {
   const dataActions = useHandsPageDataActions({
     mode,
@@ -34,6 +36,7 @@ export function useHandsPageActions({
     setLastLog,
     loadObsOnce,
     loadRealOnce,
+    loadAllFourTables,
   });
 
   const workerActions = useHandsPageWorkerActions({

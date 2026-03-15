@@ -37,7 +37,7 @@ export function HandsTable({
   canRunOne,
   onRunOneForImage,
   lastLog,
-  dbPath,
+  dbPath: _dbPath,
   totalRows,
   shownRows,
   rangeError,
