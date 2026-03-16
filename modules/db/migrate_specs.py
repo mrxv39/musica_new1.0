@@ -54,6 +54,7 @@ HANDS_REAL_COLUMNS = [
 
 SPOTS_COLUMNS = [
     ("time", "REAL DEFAULT NULL"),
+    ("spot_fingerprint", "TEXT DEFAULT ''"),
 ]
 
 WORKER_PROFILE_COLUMNS = [

@@ -161,6 +161,7 @@ CREATE TABLE IF NOT EXISTS spots (
     tipo_p3 TEXT DEFAULT '',
     raw_json TEXT DEFAULT '{}',
     time REAL DEFAULT NULL,
+    spot_fingerprint TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
 );
 

@@ -287,6 +287,32 @@ def run_worker_mesa_once(
     # Introducir todos los datos en la tabla spots.
     t_insert_spot0 = time.perf_counter() if profile_enabled else 0.0
     try:
+        # #region agent log
+        try:
+            import json as _json, time as _time
+
+            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "65a7d6",
+                            "runId": "pre-fix",
+                            "hypothesisId": "H3",
+                            "location": "worker_mesa.run_worker_mesa_once:before_insert_spot",
+                            "message": "About to insert spot",
+                            "data": {
+                                "mesa": mesa,
+                                "ts": ts,
+                                "image_fp": image_fp,
+                            },
+                            "timestamp": int(_time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion agent log
         spot_id = dbmod.insert_spot_capture_from_data(
             mesa=mesa,
             image_path=dest_capture_path,
@@ -296,6 +322,7 @@ def run_worker_mesa_once(
             preflop=preflop,
             mano_result=mano_result,
             time_sec=time_sec,
+            spot_fingerprint=image_fp or "",
         )
         if spot_id and (dbg or verbose):
             log(fp, f"[mesa {mesa}] spots persisted -> id={spot_id}")
