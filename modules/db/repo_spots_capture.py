@@ -24,63 +24,27 @@ def insert_spot_capture(
 ) -> Optional[int]:
     """Inserta un spot preflop detectado por captura (time + mano + noboard ok).
 
-    Si ya existe un spot con el mismo spot_fingerprint, no inserta una fila nueva y
-    devuelve el id existente.
+    Si ya existe un spot con el mismo spot_fingerprint creado en los últimos
+    10 segundos, no inserta una fila nueva y devuelve el id existente.
     """
     init_db()
     with connect() as conn:
         cur = conn.cursor()
         if spot_fingerprint:
-            # #region agent log
-            try:
-                import json as _json, time as _time
-
-                with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
-                    _f.write(
-                        _json.dumps(
-                            {
-                                "sessionId": "65a7d6",
-                                "runId": "pre-fix",
-                                "hypothesisId": "H1",
-                                "location": "repo_spots_capture.insert_spot_capture:before_select",
-                                "message": "Checking existing spot by fingerprint",
-                                "data": {"spot_fingerprint": spot_fingerprint},
-                                "timestamp": int(_time.time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion agent log
+            # Heurística de deduplicación: mismo fingerprint (mesa + P1 stack) y
+            # fila creada en los últimos 10 segundos.
             cur.execute(
-                "SELECT id FROM spots WHERE spot_fingerprint = ? LIMIT 1",
+                """
+                SELECT id
+                FROM spots
+                WHERE spot_fingerprint = ?
+                  AND created_at >= datetime('now', '-10 seconds')
+                LIMIT 1
+                """,
                 (spot_fingerprint,),
             )
             row = cur.fetchone()
             if row and row[0]:
-                # #region agent log
-                try:
-                    import json as _json, time as _time
-
-                    with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
-                        _f.write(
-                            _json.dumps(
-                                {
-                                    "sessionId": "65a7d6",
-                                    "runId": "pre-fix",
-                                    "hypothesisId": "H2",
-                                    "location": "repo_spots_capture.insert_spot_capture:hit_existing",
-                                    "message": "Existing spot found, reusing id",
-                                    "data": {"spot_fingerprint": spot_fingerprint, "existing_id": int(row[0])},
-                                    "timestamp": int(_time.time() * 1000),
-                                }
-                            )
-                            + "\n"
-                        )
-                except Exception:
-                    pass
-                # #endregion agent log
                 return int(row[0])
         cur.execute(
             """

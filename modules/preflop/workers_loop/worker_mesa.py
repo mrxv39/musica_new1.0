@@ -50,22 +50,27 @@ def _build_spot_fingerprint(
     stacks_result: Optional[Dict[str, Any]],
     ocr: Optional[Dict[str, Any]],
 ) -> str:
-    """Construye un fingerprint lógico de spot a partir de los datos OCR/preflop.
+    """Fingerprint lógico basado solo en mesa + P1 stack para deduplicar spots.
 
-    La idea es que dos spots con misma mesa + stacks/bets/names/villano se
-    consideren el mismo spot aunque la imagen cambie un poco.
+    El timestamp `ts` y el resto de campos no entran en el fingerprint; la
+    ventana de 10s se aplica en base de datos usando `created_at`.
     """
     try:
-        payload = {
-            "mesa": int(mesa),
-            "ts": ts or "",
-            "stacks": stacks_result or {},
-            "bets": (ocr or {}).get("bets") or {},
-            "names": (ocr or {}).get("names") or {},
-            "villano": (ocr or {}).get("villano") or {},
-        }
-        raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
-        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+        p1_stack: Optional[float] = None
+        if isinstance(stacks_result, dict):
+            p1_stack = stacks_result.get("p1")
+        if p1_stack is None and isinstance(ocr, dict):
+            stacks = ocr.get("stacks")
+            if isinstance(stacks, dict):
+                p1_stack = stacks.get("p1")
+
+        if p1_stack is None:
+            return ""
+
+        mesa_int = int(mesa)
+        p1_float = float(p1_stack)
+        key = f"mesa={mesa_int}|p1={p1_float:.3f}"
+        return hashlib.sha1(key.encode("utf-8")).hexdigest()
     except Exception:
         return ""
 
