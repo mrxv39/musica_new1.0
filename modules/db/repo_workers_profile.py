@@ -40,9 +40,14 @@ def insert_worker_profile(
                 strategy,
                 obs,
                 time_sec,
-                total
+                total,
+                ocr_bets,
+                ocr_stacks,
+                ocr_names,
+                ocr_dealer,
+                ocr_gamecode
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ts,
@@ -62,6 +67,11 @@ def insert_worker_profile(
                 float(metrics.get("obs", 0.0)),
                 float(metrics.get("time_sec", 0.0)),
                 float(metrics.get("total", 0.0)),
+                float(metrics.get("ocr_bets", 0.0)),
+                float(metrics.get("ocr_stacks", 0.0)),
+                float(metrics.get("ocr_names", 0.0)),
+                float(metrics.get("ocr_dealer", 0.0)),
+                float(metrics.get("ocr_gamecode", 0.0)),
             ),
         )
         conn.commit()

@@ -186,6 +186,10 @@ def run_worker_mesa_once(
                 ocr = {"ok": False, "errors": [str(e)]}
             if profile_enabled:
                 profile_times["ocr"] = time.perf_counter() - t_ocr0
+                timings = (ocr or {}).get("_timings") or {}
+                for key in ["ocr_bets", "ocr_stacks", "ocr_names", "ocr_dealer", "ocr_gamecode"]:
+                    if key in timings:
+                        profile_times[key] = float(timings[key])
             t_pre0 = time.perf_counter() if profile_enabled else 0.0
             try:
                 preflop = _run_preflop_direct(img_path)
@@ -335,6 +339,11 @@ def run_worker_mesa_once(
             "obs",
             "time_sec",
             "total",
+            "ocr_bets",
+            "ocr_stacks",
+            "ocr_names",
+            "ocr_dealer",
+            "ocr_gamecode",
         ]
         parts = " ".join(f"{k}={profile_times.get(k, 0.0):.4f}" for k in parts_keys)
         cur_spot_id = spot_id if "spot_id" in locals() else None

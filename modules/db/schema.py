@@ -186,6 +186,11 @@ CREATE TABLE IF NOT EXISTS worker_profile (
     obs REAL DEFAULT 0,
     time_sec REAL DEFAULT 0,
     total REAL DEFAULT 0,
+    ocr_bets REAL DEFAULT 0,
+    ocr_stacks REAL DEFAULT 0,
+    ocr_names REAL DEFAULT 0,
+    ocr_dealer REAL DEFAULT 0,
+    ocr_gamecode REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
 );
 """

@@ -157,6 +157,11 @@ export type WorkerProfileRow = {
   preflop_avg: number | null;
   time_gate_avg: number | null;
   total_avg: number | null;
+  ocr_bets: number | null;
+  ocr_stacks: number | null;
+  ocr_names: number | null;
+  ocr_dealer: number | null;
+  ocr_gamecode: number | null;
 };
 
 type SqlDb = {
@@ -478,7 +483,12 @@ export async function fetchWorkerProfileSummary(
        AVG(ocr)                    AS ocr_avg,
        AVG(preflop)                AS preflop_avg,
        AVG(time_gate)              AS time_gate_avg,
-       AVG(total)                  AS total_avg
+       AVG(total)                  AS total_avg,
+       AVG(ocr_bets)               AS ocr_bets,
+       AVG(ocr_stacks)             AS ocr_stacks,
+       AVG(ocr_names)              AS ocr_names,
+       AVG(ocr_dealer)             AS ocr_dealer,
+       AVG(ocr_gamecode)           AS ocr_gamecode
      FROM worker_profile
      GROUP BY mesa
      ORDER BY mesa

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, Optional
 
@@ -55,6 +56,7 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
     }
 
     img_gray, img_color = _load_images_once(image_path)
+    timings: Dict[str, float] = {}
 
     # Sequential (default) when POKER_BOSS_WORKER_SEQUENTIAL=1 or POKER_BOSS_OCR_SEQUENTIAL=1.
     # Thread parallelism can increase time due to GIL; sequential is recommended for lower latency.
@@ -66,15 +68,21 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
     if _ocr_sequential:
         # Sequential path: single-threaded OCR phases, same single image load.
         try:
+            t0 = time.perf_counter()
             out["bets"] = bets.read_bets(image_path, x1=x1, y1=y1, img_gray=img_gray)
+            timings["ocr_bets"] = time.perf_counter() - t0
         except Exception as e:
             out["errors"].append(f"bets:{e}")
         try:
+            t0 = time.perf_counter()
             out["stacks"] = stacks.read_stacks(image_path, x1=x1, y1=y1, img_gray=img_gray)
+            timings["ocr_stacks"] = time.perf_counter() - t0
         except Exception as e:
             out["errors"].append(f"stacks:{e}")
         try:
+            t0 = time.perf_counter()
             out["names"] = names.read_names(image_path, x1=x1, y1=y1, img_gray=img_gray)
+            timings["ocr_names"] = time.perf_counter() - t0
         except Exception as e:
             out["errors"].append(f"names:{e}")
         try:
@@ -94,14 +102,18 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
             out["table_state"] = {"ok": False, "errors": [str(e)]}
         active_seats = (out.get("table_state") or {}).get("active_seats") or None
         try:
+            t0 = time.perf_counter()
             out["dealer"] = dealer.read_dealer(
                 image_path, x1=x1, y1=y1, active_seats=active_seats, img_color=img_color
             )
+            timings["ocr_dealer"] = time.perf_counter() - t0
         except Exception as e:
             out["errors"].append(f"dealer:{e}")
             out["dealer"] = {"ok": False, "errors": [str(e)]}
         try:
+            t0 = time.perf_counter()
             out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1, img=img_color)
+            timings["ocr_gamecode"] = time.perf_counter() - t0
         except Exception as e:
             out["errors"].append(f"gamecode:{e}")
             out["gamecode"] = {"ok": False, "errors": [str(e)]}
@@ -109,29 +121,41 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         # Parallel path (POKER_BOSS_WORKER_SEQUENTIAL=0 and POKER_BOSS_OCR_SEQUENTIAL=0): thread pools.
         def _run_bets():
             try:
-                return ("bets", bets.read_bets(image_path, x1=x1, y1=y1, img_gray=img_gray))
+                t0 = time.perf_counter()
+                res = bets.read_bets(image_path, x1=x1, y1=y1, img_gray=img_gray)
+                return ("bets", res, time.perf_counter() - t0)
             except Exception as e:
-                return ("bets", {"ok": False, "errors": [str(e)]})
+                return ("bets", {"ok": False, "errors": [str(e)]}, 0.0)
 
         def _run_stacks():
             try:
-                return ("stacks", stacks.read_stacks(image_path, x1=x1, y1=y1, img_gray=img_gray))
+                t0 = time.perf_counter()
+                res = stacks.read_stacks(image_path, x1=x1, y1=y1, img_gray=img_gray)
+                return ("stacks", res, time.perf_counter() - t0)
             except Exception as e:
-                return ("stacks", {"ok": False, "errors": [str(e)]})
+                return ("stacks", {"ok": False, "errors": [str(e)]}, 0.0)
 
         def _run_names():
             try:
-                return ("names", names.read_names(image_path, x1=x1, y1=y1, img_gray=img_gray))
+                t0 = time.perf_counter()
+                res = names.read_names(image_path, x1=x1, y1=y1, img_gray=img_gray)
+                return ("names", res, time.perf_counter() - t0)
             except Exception as e:
-                return ("names", {"ok": False, "errors": [str(e)]})
+                return ("names", {"ok": False, "errors": [str(e)]}, 0.0)
 
         with ThreadPoolExecutor(max_workers=3) as exec1:
             f1 = exec1.submit(_run_bets)
             f2 = exec1.submit(_run_stacks)
             f3 = exec1.submit(_run_names)
             for fut in as_completed([f1, f2, f3]):
-                key, val = fut.result()
+                key, val, dt = fut.result()
                 out[key] = val
+                if key == "bets":
+                    timings["ocr_bets"] = dt
+                elif key == "stacks":
+                    timings["ocr_stacks"] = dt
+                elif key == "names":
+                    timings["ocr_names"] = dt
 
         try:
             p2_name = (out.get("names") or {}).get("p2_name", "")
@@ -154,23 +178,31 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
 
         def _run_dealer():
             try:
-                return ("dealer", dealer.read_dealer(
+                t0 = time.perf_counter()
+                res = dealer.read_dealer(
                     image_path, x1=x1, y1=y1, active_seats=active_seats, img_color=img_color
-                ))
+                )
+                return ("dealer", res, time.perf_counter() - t0)
             except Exception as e:
-                return ("dealer", {"ok": False, "errors": [str(e)]})
+                return ("dealer", {"ok": False, "errors": [str(e)]}, 0.0)
 
         def _run_gamecode():
             try:
-                return ("gamecode", gamecode.read_gamecode(image_path, x1=x1, y1=y1, img=img_color))
+                t0 = time.perf_counter()
+                res = gamecode.read_gamecode(image_path, x1=x1, y1=y1, img=img_color)
+                return ("gamecode", res, time.perf_counter() - t0)
             except Exception as e:
-                return ("gamecode", {"ok": False, "errors": [str(e)]})
+                return ("gamecode", {"ok": False, "errors": [str(e)]}, 0.0)
 
         with ThreadPoolExecutor(max_workers=2) as exec2:
             fd = exec2.submit(_run_dealer)
             fg = exec2.submit(_run_gamecode)
-            out["dealer"] = fd.result()[1]
-            out["gamecode"] = fg.result()[1]
+            key_d, val_d, dt_d = fd.result()
+            key_g, val_g, dt_g = fg.result()
+            out[key_d] = val_d
+            out[key_g] = val_g
+            timings["ocr_dealer"] = dt_d
+            timings["ocr_gamecode"] = dt_g
 
     # Posiciones (depends on table_state, bets, dealer)
     try:
@@ -207,11 +239,14 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
     ):
         errs = out.get(k, {}).get("errors")
         if errs:
-            out["errors"].extend([f"{k}:{e}" for e in errs])
+                out["errors"].extend([f"{k}:{e}" for e in errs])
         if k == "gamecode":
             err = out.get(k, {}).get("error")
             if err:
                 out["errors"].append(f"{k}:{err}")
+
+    if timings:
+        out["_timings"] = timings
 
     return out
 

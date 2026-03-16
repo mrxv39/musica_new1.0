@@ -87,6 +87,11 @@ const WORKER_PROFILE_COLUMNS: ColumnConfigItem[] = [
   { id: "ocr_avg", label: "OCR avg (s)" },
   { id: "preflop_avg", label: "Preflop avg (s)" },
   { id: "time_gate_avg", label: "Time gate avg (s)" },
+  { id: "ocr_bets", label: "OCR bets (s)" },
+  { id: "ocr_stacks", label: "OCR stacks (s)" },
+  { id: "ocr_names", label: "OCR names (s)" },
+  { id: "ocr_dealer", label: "OCR dealer (s)" },
+  { id: "ocr_gamecode", label: "OCR gamecode (s)" },
   { id: "total_avg", label: "Total avg (s)" },
 ];
 
