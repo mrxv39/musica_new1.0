@@ -81,6 +81,7 @@ const PLAYERS_COLUMNS: ColumnConfigItem[] = [
   { id: "created_at", label: "Created" },
 ];
 
+const WORKER_PROFILE_STORAGE_KEY = "hands.workerProfile.visibleColumns";
 const WORKER_PROFILE_COLUMNS: ColumnConfigItem[] = [
   { id: "mesa", label: "Mesa" },
   { id: "n", label: "N spots" },
@@ -335,14 +336,35 @@ export function PlayersTableBlock({ rows }: PlayersTableBlockProps) {
 
 type WorkerProfileTableBlockProps = { rows: WorkerProfileRow[] };
 export function WorkerProfileTableBlock({ rows }: WorkerProfileTableBlockProps) {
+  const [configOpen, setConfigOpen] = React.useState(false);
+  const { visibleIds, visibleColumns, onChangeVisibleIds } = useVisibleColumns(
+    WORKER_PROFILE_COLUMNS,
+    WORKER_PROFILE_STORAGE_KEY
+  );
+  const cols = visibleColumns.length > 0 ? visibleColumns : WORKER_PROFILE_COLUMNS;
+
   return (
     <div style={tableBlockStyle}>
-      <div style={tableTitleStyle}>Worker profile (avg per mesa)</div>
+      <div style={{ ...tableTitleStyle, display: "flex", alignItems: "center", gap: 8 }}>
+        Worker profile (avg per mesa)
+        <button onClick={() => setConfigOpen(true)} style={configButtonStyle} title="Selecciona columnas">
+          Config
+        </button>
+      </div>
+      <HandsColumnsConfigModal
+        open={configOpen}
+        columns={WORKER_PROFILE_COLUMNS}
+        visibleIds={visibleIds.length > 0 ? visibleIds : WORKER_PROFILE_COLUMNS.map((c) => c.id)}
+        onChangeVisibleIds={onChangeVisibleIds}
+        onClose={() => setConfigOpen(false)}
+        storageKey={WORKER_PROFILE_STORAGE_KEY}
+        title="Worker profile – columnas"
+      />
       <div style={tableScrollStyle}>
         <table style={smallTableStyle}>
           <thead>
             <tr>
-              {WORKER_PROFILE_COLUMNS.map((c) => (
+              {cols.map((c) => (
                 <th key={c.id} style={thStyle}>{c.label}</th>
               ))}
             </tr>
@@ -350,14 +372,14 @@ export function WorkerProfileTableBlock({ rows }: WorkerProfileTableBlockProps) 
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={WORKER_PROFILE_COLUMNS.length} style={tdStyle}>
+                <td colSpan={cols.length} style={tdStyle}>
                   Rows: 0
                 </td>
               </tr>
             ) : (
               rows.map((r) => (
                 <tr key={r.mesa}>
-                  {WORKER_PROFILE_COLUMNS.map((c) => {
+                  {cols.map((c) => {
                     const v = (r as Record<string, unknown>)[c.id];
                     let cell: string;
                     if (v == null) {

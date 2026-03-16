@@ -41,6 +41,7 @@ def _load_images_once(
 
 
 def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
+    t_global0 = time.perf_counter()
     out: Dict[str, Any] = {
         "ok": False,
         "errors": [],
@@ -55,8 +56,11 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         "gamecode": {},
     }
 
+    t_pre0 = time.perf_counter()
     img_gray, img_color = _load_images_once(image_path)
+    t_pre1 = time.perf_counter()
     timings: Dict[str, float] = {}
+    timings["ocr_preprocess"] = t_pre1 - t_pre0
 
     # Sequential (default) when POKER_BOSS_WORKER_SEQUENTIAL=1 or POKER_BOSS_OCR_SEQUENTIAL=1.
     # Thread parallelism can increase time due to GIL; sequential is recommended for lower latency.
@@ -96,7 +100,9 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         except Exception as e:
             out["errors"].append(f"villano:{e}")
         try:
+            t0 = time.perf_counter()
             out["table_state"] = table_state.compute_table_state(out.get("names"), out.get("stacks"))
+            timings["ocr_table_state"] = time.perf_counter() - t0
         except Exception as e:
             out["errors"].append(f"table_state:{e}")
             out["table_state"] = {"ok": False, "errors": [str(e)]}
@@ -110,13 +116,8 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         except Exception as e:
             out["errors"].append(f"dealer:{e}")
             out["dealer"] = {"ok": False, "errors": [str(e)]}
-        try:
-            t0 = time.perf_counter()
-            out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1, img=img_color)
-            timings["ocr_gamecode"] = time.perf_counter() - t0
-        except Exception as e:
-            out["errors"].append(f"gamecode:{e}")
-            out["gamecode"] = {"ok": False, "errors": [str(e)]}
+        # gamecode OCR desactivado temporalmente: dejamos valor neutro.
+        out["gamecode"] = {"ok": False, "skipped": "gamecode_disabled"}
     else:
         # Parallel path (POKER_BOSS_WORKER_SEQUENTIAL=0 and POKER_BOSS_OCR_SEQUENTIAL=0): thread pools.
         def _run_bets():
@@ -186,27 +187,20 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
             except Exception as e:
                 return ("dealer", {"ok": False, "errors": [str(e)]}, 0.0)
 
-        def _run_gamecode():
-            try:
-                t0 = time.perf_counter()
-                res = gamecode.read_gamecode(image_path, x1=x1, y1=y1, img=img_color)
-                return ("gamecode", res, time.perf_counter() - t0)
-            except Exception as e:
-                return ("gamecode", {"ok": False, "errors": [str(e)]}, 0.0)
-
-        with ThreadPoolExecutor(max_workers=2) as exec2:
+        with ThreadPoolExecutor(max_workers=1) as exec2:
             fd = exec2.submit(_run_dealer)
-            fg = exec2.submit(_run_gamecode)
             key_d, val_d, dt_d = fd.result()
-            key_g, val_g, dt_g = fg.result()
             out[key_d] = val_d
-            out[key_g] = val_g
             timings["ocr_dealer"] = dt_d
-            timings["ocr_gamecode"] = dt_g
+
+        # gamecode OCR desactivado temporalmente: dejamos valor neutro.
+        out["gamecode"] = {"ok": False, "skipped": "gamecode_disabled"}
 
     # Posiciones (depends on table_state, bets, dealer)
     try:
+        t0 = time.perf_counter()
         out["posiciones"] = posiciones.read_posiciones(out.get("table_state"), out.get("bets"), out.get("dealer"))
+        timings["ocr_posiciones"] = time.perf_counter() - t0
     except Exception as e:
         out["errors"].append(f"posiciones:{e}")
         out["posiciones"] = {"ok": False, "errors": [str(e)]}
@@ -221,7 +215,6 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         out.get("table_state", {}).get("ok"),
         out.get("dealer", {}).get("ok"),
         out.get("posiciones", {}).get("ok"),
-        out.get("gamecode", {}).get("ok"),
     ]
     out["ok"] = any(bool(x) for x in oks)
 
@@ -245,6 +238,7 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
             if err:
                 out["errors"].append(f"{k}:{err}")
 
+    timings.setdefault("ocr_total_internal", time.perf_counter() - t_global0)
     if timings:
         out["_timings"] = timings
 

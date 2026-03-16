@@ -277,6 +277,7 @@ export function useHandsPage() {
     loadObsOnce: obs.loadOnce,
     loadRealOnce: real.loadOnce,
     loadAllFourTables,
+    clearWorkerProfile: () => setWorkerProfile([]),
   });
 
   return {

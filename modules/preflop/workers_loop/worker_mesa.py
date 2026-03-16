@@ -187,7 +187,18 @@ def run_worker_mesa_once(
             if profile_enabled:
                 profile_times["ocr"] = time.perf_counter() - t_ocr0
                 timings = (ocr or {}).get("_timings") or {}
-                for key in ["ocr_bets", "ocr_stacks", "ocr_names", "ocr_dealer", "ocr_gamecode"]:
+                for key in [
+                    "ocr_preprocess",
+                    "ocr_table_state",
+                    "ocr_posiciones",
+                    "ocr_bets",
+                    "ocr_stacks",
+                    "ocr_names",
+                    "ocr_dealer",
+                    # ocr_gamecode se deja como métrica opcional; ahora mismo no se mide.
+                    "ocr_gamecode",
+                    "ocr_total_internal",
+                ]:
                     if key in timings:
                         profile_times[key] = float(timings[key])
             t_pre0 = time.perf_counter() if profile_enabled else 0.0
@@ -339,11 +350,15 @@ def run_worker_mesa_once(
             "obs",
             "time_sec",
             "total",
+            "ocr_preprocess",
+            "ocr_table_state",
+            "ocr_posiciones",
             "ocr_bets",
             "ocr_stacks",
             "ocr_names",
             "ocr_dealer",
             "ocr_gamecode",
+            "ocr_total_internal",
         ]
         parts = " ".join(f"{k}={profile_times.get(k, 0.0):.4f}" for k in parts_keys)
         cur_spot_id = spot_id if "spot_id" in locals() else None
@@ -360,7 +375,7 @@ def run_worker_mesa_once(
                     metrics=metrics,
                 )
         except Exception:
-            # Profiling should never break the main worker flow
+            # Profiling should never break la ejecución principal del worker
             pass
 
 

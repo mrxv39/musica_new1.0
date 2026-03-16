@@ -10,6 +10,7 @@ from .migrate_specs import (
     INDEX_SQLS,
     SPOTS_COLUMNS,
     TOURNAMENTS_COLUMNS,
+    WORKER_PROFILE_COLUMNS,
     WORKERS_CAPTURES_COLUMNS,
 )
 from .migrate_utils import apply_columns, now_ms, table_exists
@@ -36,6 +37,8 @@ def init_db() -> None:
             apply_columns(conn, "workers_captures", WORKERS_CAPTURES_COLUMNS)
             if table_exists(conn, "spots"):
                 apply_columns(conn, "spots", SPOTS_COLUMNS)
+            if table_exists(conn, "worker_profile"):
+                apply_columns(conn, "worker_profile", WORKER_PROFILE_COLUMNS)
             if table_exists(conn, "hands_real"):
                 apply_columns(conn, "hands_real", HANDS_REAL_COLUMNS)
                 conn.execute(

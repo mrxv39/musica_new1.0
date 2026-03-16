@@ -14,6 +14,7 @@ type UseHandsPageActionsArgs = {
   loadObsOnce: LoadOnceFn;
   loadRealOnce: LoadOnceFn;
   loadAllFourTables?: LoadOnceFn;
+  clearWorkerProfile?: () => void;
 };
 
 export function useHandsPageActions({
@@ -27,6 +28,7 @@ export function useHandsPageActions({
   loadObsOnce,
   loadRealOnce,
   loadAllFourTables,
+  clearWorkerProfile,
 }: UseHandsPageActionsArgs) {
   const dataActions = useHandsPageDataActions({
     mode,
@@ -37,6 +39,7 @@ export function useHandsPageActions({
     loadObsOnce,
     loadRealOnce,
     loadAllFourTables,
+    clearWorkerProfile,
   });
 
   const workerActions = useHandsPageWorkerActions({

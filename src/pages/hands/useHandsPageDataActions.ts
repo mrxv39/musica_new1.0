@@ -21,6 +21,8 @@ type UseHandsPageDataActionsArgs = {
   loadRealOnce: LoadOnceFn;
   /** When set, Reset button calls reset_four_tables and then this to reload all 4 tables. */
   loadAllFourTables?: LoadOnceFn;
+  /** Optional callback to clear in-memory workerProfile rows when resetting tables. */
+  clearWorkerProfile?: () => void;
 };
 
 export function useHandsPageDataActions({
@@ -32,6 +34,7 @@ export function useHandsPageDataActions({
   loadObsOnce,
   loadRealOnce,
   loadAllFourTables,
+  clearWorkerProfile,
 }: UseHandsPageDataActionsArgs) {
   const onReset = async () => {
     const p = safeDbPath;
@@ -50,6 +53,9 @@ export function useHandsPageDataActions({
         const m = String(msg || "");
         setLastLog(m);
         setActionStatus("reset: " + (summarize(m) || "ok"));
+        if (clearWorkerProfile) {
+          clearWorkerProfile();
+        }
         await loadAllFourTables();
       } else {
         const cmd = mode === "REAL" ? "reset_hands_real" : "reset_hands_obs";

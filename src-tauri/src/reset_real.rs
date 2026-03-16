@@ -47,8 +47,9 @@ con.execute('DELETE FROM hands_real'); \
 con.execute('DELETE FROM hands_obs'); \
 con.execute('DELETE FROM tournaments'); \
 con.execute('DELETE FROM players'); \
+con.execute('DELETE FROM worker_profile'); \
 con.commit(); \
-print('tournaments, hands, spots y players (4 tablas) vaciadas correctamente')";
+print('tournaments, hands, spots, players y worker_profile vaciadas correctamente')";
 
         let output = std::process::Command::new("python")
             .current_dir(PROJECT_ROOT)

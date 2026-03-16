@@ -56,6 +56,15 @@ SPOTS_COLUMNS = [
     ("time", "REAL DEFAULT NULL"),
 ]
 
+WORKER_PROFILE_COLUMNS = [
+    # Nuevas columnas de perfilado OCR granular; se añaden si faltan
+    ("ocr_bets", "REAL DEFAULT 0"),
+    ("ocr_stacks", "REAL DEFAULT 0"),
+    ("ocr_names", "REAL DEFAULT 0"),
+    ("ocr_dealer", "REAL DEFAULT 0"),
+    ("ocr_gamecode", "REAL DEFAULT 0"),
+]
+
 WORKERS_CAPTURES_COLUMNS = [
     # base
     ("mesa", "INTEGER NOT NULL DEFAULT 0"),
