@@ -50,11 +50,7 @@ def _build_spot_fingerprint(
     stacks_result: Optional[Dict[str, Any]],
     ocr: Optional[Dict[str, Any]],
 ) -> str:
-    """Fingerprint lógico basado solo en mesa + P1 stack para deduplicar spots.
-
-    El timestamp `ts` y el resto de campos no entran en el fingerprint; la
-    ventana de 10s se aplica en base de datos usando `created_at`.
-    """
+    """Fingerprint lógico basado solo en mesa + P1 stack para deduplicar spots."""
     try:
         p1_stack: Optional[float] = None
         if isinstance(stacks_result, dict):
@@ -63,6 +59,35 @@ def _build_spot_fingerprint(
             stacks = ocr.get("stacks")
             if isinstance(stacks, dict):
                 p1_stack = stacks.get("p1")
+
+        # #region agent log
+        try:
+            import json as _json, time as _time
+
+            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "65a7d6",
+                            "runId": "pre-fix",
+                            "hypothesisId": "H1",
+                            "location": "worker_mesa._build_spot_fingerprint",
+                            "message": "Fingerprint inputs",
+                            "data": {
+                                "mesa": int(mesa),
+                                "has_stacks_result": isinstance(stacks_result, dict),
+                                "stacks_result_p1": (stacks_result or {}).get("p1") if isinstance(stacks_result, dict) else None,
+                                "has_ocr_stacks": isinstance((ocr or {}).get("stacks"), dict),
+                                "ocr_stacks_p1": ((ocr or {}).get("stacks") or {}).get("p1") if isinstance((ocr or {}).get("stacks"), dict) else None,
+                            },
+                            "timestamp": int(_time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion agent log
 
         if p1_stack is None:
             return ""

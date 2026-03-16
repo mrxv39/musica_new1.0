@@ -33,9 +33,35 @@ def insert_spot_capture(
         if spot_fingerprint:
             # Heurística de deduplicación: mismo fingerprint (mesa + P1 stack) y
             # fila creada en los últimos 10 segundos.
+            # #region agent log
+            try:
+                import json as _json, time as _time
+
+                with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
+                    _f.write(
+                        _json.dumps(
+                            {
+                                "sessionId": "65a7d6",
+                                "runId": "pre-fix",
+                                "hypothesisId": "H2",
+                                "location": "repo_spots_capture.insert_spot_capture:before_select",
+                                "message": "Checking recent spot by fingerprint",
+                                "data": {
+                                    "mesa": int(mesa),
+                                    "spot_fingerprint": spot_fingerprint,
+                                },
+                                "timestamp": int(_time.time() * 1000),
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion agent log
+
             cur.execute(
                 """
-                SELECT id
+                SELECT id, ts, created_at
                 FROM spots
                 WHERE spot_fingerprint = ?
                   AND created_at >= datetime('now', '-10 seconds')
@@ -45,6 +71,34 @@ def insert_spot_capture(
             )
             row = cur.fetchone()
             if row and row[0]:
+                # #region agent log
+                try:
+                    import json as _json, time as _time
+
+                    with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
+                        _f.write(
+                            _json.dumps(
+                                {
+                                    "sessionId": "65a7d6",
+                                    "runId": "pre-fix",
+                                    "hypothesisId": "H3",
+                                    "location": "repo_spots_capture.insert_spot_capture:hit_existing",
+                                    "message": "Existing recent spot found, reusing id",
+                                    "data": {
+                                        "existing_id": int(row[0]),
+                                        "existing_ts": row[1],
+                                        "existing_created_at": row[2],
+                                        "mesa": int(mesa),
+                                        "spot_fingerprint": spot_fingerprint,
+                                    },
+                                    "timestamp": int(_time.time() * 1000),
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion agent log
                 return int(row[0])
         cur.execute(
             """
