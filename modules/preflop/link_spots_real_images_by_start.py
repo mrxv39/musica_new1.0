@@ -1,4 +1,6 @@
-# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\preflop\link_spots_real_images_by_start.py
+# link_spots_real_images_by_start.py
+# NOTE: This script targeted spots_real (removed). The table "spots" is now filled by the
+# worker and has image_path set at capture time. Adapt or deprecate when hands flow is decided.
 import argparse
 import os
 import re

@@ -53,9 +53,5 @@ def test_importer_creates_tables_and_imports_one_fixture():
 
             c.execute("SELECT COUNT(*) FROM actions_real")
             assert c.fetchone()[0] >= 1
-
-            c.execute("SELECT COUNT(*) FROM spots_real")
-            # hero folds preflop => should be a spot
-            assert c.fetchone()[0] >= 1
         finally:
             conn.close()

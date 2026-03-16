@@ -3,19 +3,25 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional, TextIO, Tuple
+
+from PIL import Image
 
 from modules.ocr.ocr import run_ocr
 from modules.workers.worker_loop import process_one_image
 from modules.workers.worker_loop_types import LoopConfig
 from modules.workers.worker_utils import get_file_fingerprint
 
+from .config import CAPTURES_IMG_DIR
 from .capture import capture_to_tmp
 from .fs_utils import log, safe_move
 from .preflop_logic import preflop_fail
 from .strategy_utils import force_ok_on_default_fold, has_strategy_move
-from .time_gate import run_time_gate_for_area
+from .mesa_config import build_time_bbox
+from .time_gate import run_time_gate_on_roi_path
 from .worker_mesa_candidates import write_time_mano_candidate
 from .worker_mesa_debug import safe_remove, write_no_strategy_debug
 from .worker_mesa_obs import persist_preflop_obs, update_obs_frame_ref
@@ -59,6 +65,10 @@ def run_worker_mesa_once(
     _LAST_CAPTURE_FP_BY_MESA.setdefault(mesa, None)
 
     tick_t0 = time.perf_counter()
+    time_spot_t0: Optional[float] = None
+
+    profile_enabled = os.environ.get("POKER_BOSS_WORKER_PROFILE", "0") == "1"
+    profile_times: Dict[str, float] = {}
 
     if fixed_input:
         try:
@@ -68,19 +78,39 @@ def run_worker_mesa_once(
             log(fp, f"[mesa {mesa}] CAPTURE ERROR: {e}")
             return
     else:
-        time_gate = run_time_gate_for_area(area, dirs.tmp_dir, ts)
-        if not bool(time_gate.get("time_ok")):
-            if dbg:
-                score = time_gate.get("score", None)
-                reason = time_gate.get("error") or time_gate.get("reason") or "time_false"
-                log(fp, f"[mesa {mesa}] TIME FALSE -> skip | score={score!r} | reason={reason}")
-            return
-
+        t_capture0 = time.perf_counter() if profile_enabled else 0.0
         try:
             img_path = capture_to_tmp(area, dirs.tmp_dir, ts)
         except Exception as e:
             log(fp, f"[mesa {mesa}] CAPTURE ERROR: {e}")
             return
+        if profile_enabled:
+            profile_times["capture"] = time.perf_counter() - t_capture0
+        time_bbox = build_time_bbox(area)
+        roi_path = os.path.join(dirs.tmp_dir, f"{ts}__mesa_{mesa}__time_roi.bmp")
+        try:
+            with Image.open(img_path) as img:
+                # Captured image is only the area (origin 0,0); time_bbox is in screen coords -> convert to image-relative
+                ax1, ay1 = int(area["x1"]), int(area["y1"])
+                roi_in_image = (time_bbox[0] - ax1, time_bbox[1] - ay1, time_bbox[2] - ax1, time_bbox[3] - ay1)
+                crop = img.crop(roi_in_image)
+                crop.save(roi_path, format="BMP")
+        except Exception as e:
+            _safe_remove(img_path)
+            log(fp, f"[mesa {mesa}] TIME ROI CROP ERROR: {e}")
+            return
+        t_time_gate0 = time.perf_counter() if profile_enabled else 0.0
+        time_gate = run_time_gate_on_roi_path(area, dirs.tmp_dir, ts, roi_path)
+        if profile_enabled:
+            profile_times["time_gate"] = time.perf_counter() - t_time_gate0
+        if not bool(time_gate.get("time_ok")):
+            _safe_remove(img_path)
+            if dbg:
+                score = time_gate.get("score", None)
+                reason = time_gate.get("error") or time_gate.get("reason") or "time_false"
+                log(fp, f"[mesa {mesa}] TIME FALSE -> skip | score={score!r} | reason={reason}")
+            return
+        time_spot_t0 = time.perf_counter()
 
     capture_id: Optional[int] = None
     image_fp: Optional[str] = None
@@ -88,6 +118,7 @@ def run_worker_mesa_once(
     obs_id: Optional[int] = None
 
     try:
+        t_fpdb0 = time.perf_counter() if profile_enabled else 0.0
         image_fp = get_file_fingerprint(img_path)
         image_size_bytes = os.path.getsize(img_path)
 
@@ -124,38 +155,73 @@ def run_worker_mesa_once(
             status="captured",
             reason="time_gate_passed",
         )
+        if profile_enabled:
+            profile_times["fp_db"] = time.perf_counter() - t_fpdb0
 
-        ocr = run_ocr(img_path)
-        if capture_id is not None:
-            dbmod.update_worker_capture_ocr(
-                capture_id=capture_id,
-                ocr_ok=bool((ocr or {}).get("ok")),
-                ocr_json=json.dumps(ocr or {}, ensure_ascii=False),
-            )
+        ocr: Dict[str, Any] = {}
+        preflop: Dict[str, Any] = {}
+        # Sequential (default): POKER_BOSS_WORKER_SEQUENTIAL=1. Thread parallelism can increase
+        # wall time due to Python GIL on CPU-bound work; sequential is recommended for lower latency.
+        _use_parallel = os.environ.get("POKER_BOSS_WORKER_SEQUENTIAL", "1") != "1"
+        if _use_parallel:
+            t_ocrpre0 = time.perf_counter() if profile_enabled else 0.0
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                fut_ocr = executor.submit(run_ocr, img_path)
+                fut_preflop = executor.submit(_run_preflop_direct, img_path)
+                try:
+                    ocr = fut_ocr.result()
+                except Exception as e:
+                    ocr = {"ok": False, "errors": [str(e)]}
+                try:
+                    preflop = fut_preflop.result()
+                except Exception as e:
+                    preflop = {"preflop_ok": False, "error": f"run_preflop_direct:{e}"}
+            if profile_enabled:
+                profile_times["ocr_preflop_parallel"] = time.perf_counter() - t_ocrpre0
+        else:
+            t_ocr0 = time.perf_counter() if profile_enabled else 0.0
+            try:
+                ocr = run_ocr(img_path)
+            except Exception as e:
+                ocr = {"ok": False, "errors": [str(e)]}
+            if profile_enabled:
+                profile_times["ocr"] = time.perf_counter() - t_ocr0
+            t_pre0 = time.perf_counter() if profile_enabled else 0.0
+            try:
+                preflop = _run_preflop_direct(img_path)
+            except Exception as e:
+                preflop = {"preflop_ok": False, "error": f"run_preflop_direct:{e}"}
+            if profile_enabled:
+                profile_times["preflop"] = time.perf_counter() - t_pre0
+
+        def _deferred_ocr_and_candidate() -> None:
+            try:
+                if capture_id is not None:
+                    dbmod.update_worker_capture_ocr(
+                        capture_id=capture_id,
+                        ocr_ok=bool((ocr or {}).get("ok")),
+                        ocr_json=json.dumps(ocr or {}, ensure_ascii=False),
+                    )
+            except Exception:
+                pass
+            try:
+                write_time_mano_candidate(
+                    dirs=dirs,
+                    src_img_path=img_path,
+                    mesa=mesa,
+                    capture_id=capture_id,
+                    image_fingerprint=image_fp,
+                    preflop=preflop,
+                )
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_deferred_ocr_and_candidate, daemon=True)
+        t.start()
     except Exception as e:
         _safe_remove(img_path)
         log(fp, f"[mesa {mesa}] CAPTURE/OCR ERROR: {e}")
         return
-
-    try:
-        preflop: Dict[str, Any] = _run_preflop_direct(img_path)
-    except Exception as e:
-        preflop = {"preflop_ok": False, "error": f"run_preflop_direct:{e}"}
-
-    candidate_dst = None
-    try:
-        candidate_dst = write_time_mano_candidate(
-            dirs=dirs,
-            src_img_path=img_path,
-            mesa=mesa,
-            capture_id=capture_id,
-            image_fingerprint=image_fp,
-            preflop=preflop,
-        )
-        if candidate_dst and (dbg or verbose):
-            log(fp, f"[mesa {mesa}] TIME+MANO CANDIDATE -> saved: {candidate_dst}")
-    except Exception as e:
-        log(fp, f"[mesa {mesa}] TIME+MANO CANDIDATE save error: {e}")
 
     if preflop_fail(preflop):
         dst = safe_move(img_path, dirs.del_dir)
@@ -181,11 +247,56 @@ def run_worker_mesa_once(
 
         return
 
-    mano_result, stacks_result = extract_modules_fn(preflop)
+    # Spot preflop confirmado: guardar captura en data/img.
+    dest_capture_path = img_path
+    t_copy0 = time.perf_counter() if profile_enabled else 0.0
+    try:
+        os.makedirs(CAPTURES_IMG_DIR, exist_ok=True)
+        base_name = os.path.basename(img_path)
+        dest_capture_path = os.path.join(CAPTURES_IMG_DIR, base_name)
+        shutil.copy2(img_path, dest_capture_path)
+        if dbg or verbose:
+            log(fp, f"[mesa {mesa}] PREFLOP CAPTURE -> {dest_capture_path}")
+    except Exception as e:
+        log(fp, f"[mesa {mesa}] PREFLOP CAPTURE save error: {e}")
+    if profile_enabled:
+        profile_times["copy_capture"] = time.perf_counter() - t_copy0
 
+    t_extract0 = time.perf_counter() if profile_enabled else 0.0
+    mano_result, stacks_result = extract_modules_fn(preflop)
+    if profile_enabled:
+        profile_times["extract"] = time.perf_counter() - t_extract0
+
+    time_sec = (time.perf_counter() - time_spot_t0) if time_spot_t0 is not None else None
+
+    # Introducir todos los datos en la tabla spots.
+    t_insert_spot0 = time.perf_counter() if profile_enabled else 0.0
+    try:
+        spot_id = dbmod.insert_spot_capture_from_data(
+            mesa=mesa,
+            image_path=dest_capture_path,
+            ts=ts,
+            stacks_result=stacks_result,
+            ocr=ocr,
+            preflop=preflop,
+            mano_result=mano_result,
+            time_sec=time_sec,
+        )
+        if spot_id and (dbg or verbose):
+            log(fp, f"[mesa {mesa}] spots persisted -> id={spot_id}")
+    except Exception as e:
+        log(fp, f"[mesa {mesa}] spots persist error: {e}")
+
+    if profile_enabled:
+        profile_times["insert_spot"] = time.perf_counter() - t_insert_spot0
+
+    t_strategy0 = time.perf_counter() if profile_enabled else 0.0
     strategy, err = compute_strategy_safe_fn(preflop, mano_result, ocr)
     strategy = force_ok_on_default_fold(strategy)
+    if profile_enabled:
+        profile_times["strategy"] = time.perf_counter() - t_strategy0
 
+    t_obs0 = time.perf_counter() if profile_enabled else 0.0
     try:
         obs_id = persist_preflop_obs(
             dbmod=dbmod,
@@ -203,6 +314,46 @@ def run_worker_mesa_once(
             log(fp, f"[mesa {mesa}] hands_obs persisted -> obs_id={obs_id} | fp={image_fp}")
     except Exception as e:
         log(fp, f"[mesa {mesa}] hands_obs persist error: {e}")
+    if profile_enabled:
+        profile_times["obs"] = time.perf_counter() - t_obs0
+
+    if profile_enabled:
+        total = time.perf_counter() - tick_t0
+        profile_times["total"] = total
+        profile_times["time_sec"] = time_sec or 0.0
+        parts_keys = [
+            "time_gate",
+            "capture",
+            "fp_db",
+            "ocr",
+            "preflop",
+            "ocr_preflop_parallel",
+            "copy_capture",
+            "extract",
+            "insert_spot",
+            "strategy",
+            "obs",
+            "time_sec",
+            "total",
+        ]
+        parts = " ".join(f"{k}={profile_times.get(k, 0.0):.4f}" for k in parts_keys)
+        cur_spot_id = spot_id if "spot_id" in locals() else None
+        log(fp, f"[mesa {mesa}] PROFILE ts={ts} capture_id={capture_id} spot_id={cur_spot_id} {parts}")
+        # Persist metrics to DB for historical analysis
+        metrics = {k: float(profile_times.get(k, 0.0)) for k in parts_keys}
+        try:
+            if hasattr(dbmod, "insert_worker_profile"):
+                dbmod.insert_worker_profile(
+                    ts=ts,
+                    mesa=mesa,
+                    capture_id=capture_id,
+                    spot_id=cur_spot_id,
+                    metrics=metrics,
+                )
+        except Exception:
+            # Profiling should never break the main worker flow
+            pass
+
 
     cfg = LoopConfig(
         worker_id=mesa,

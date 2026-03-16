@@ -13,6 +13,9 @@ if PROJECT_ROOT not in sys.path:
 # This fixes "Expected exactly 1 match, got 0" when p1_se falls into gaps (e.g. 14-18)
 DEFAULT_FALLBACK_SE_ENABLED = True
 
+# Carpeta donde guardar capturas de mesa cuando se confirma spot preflop (time + mano + noboard).
+CAPTURES_IMG_DIR = os.environ.get("POKER_BOSS_CAPTURES_IMG_DIR") or os.path.join(PROJECT_ROOT, "data", "img")
+
 AREAS = [
     {"mesa": 1, "x1": 520,  "y1": 210, "x2": 1296, "y2": 807},
     {"mesa": 2, "x1": 520,  "y1": 807, "x2": 1296, "y2": 1404},

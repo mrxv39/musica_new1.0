@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { HandsMode } from "./HandsToolbar";
-import type { HandsObsRow, TournamentRow, SpotRealRow } from "../../db";
-import { fetchTournaments, fetchSpotsReal } from "../../db";
+import type { HandsObsRow, TournamentRow, SpotRow, WorkerProfileRow } from "../../db";
+import { fetchTournaments, fetchSpots, fetchWorkerProfileSummary } from "../../db";
 import { listPlayers, type PlayerRow } from "../../db/players";
 
 import { getHandsDefaultDbPath } from "../../config";
@@ -60,8 +60,9 @@ export function useHandsPage() {
   const real = useHandsReal(dbPath, auto);
 
   const [tournaments, setTournaments] = useState<TournamentRow[]>([]);
-  const [spotsReal, setSpotsReal] = useState<SpotRealRow[]>([]);
+  const [spotsReal, setSpotsReal] = useState<SpotRow[]>([]);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
+  const [workerProfile, setWorkerProfile] = useState<WorkerProfileRow[]>([]);
 
   const [busy, setBusy] = useState<boolean>(false);
   const [actionStatus, setActionStatus] = useState<string>("");
@@ -178,11 +179,21 @@ export function useHandsPage() {
 
   const loadSpotsRealOnce = async () => {
     try {
-      const rows = await fetchSpotsReal(dbPath);
+      const rows = await fetchSpots(dbPath);
       setSpotsReal(rows);
     } catch (e) {
-      console.error("load spots_real failed", e);
+      console.error("load spots failed", e);
       setSpotsReal([]);
+    }
+  };
+
+  const loadWorkerProfileOnce = async () => {
+    try {
+      const rows = await fetchWorkerProfileSummary(dbPath);
+      setWorkerProfile(rows);
+    } catch (e) {
+      console.error("load worker_profile failed", e);
+      setWorkerProfile([]);
     }
   };
 
@@ -202,6 +213,7 @@ export function useHandsPage() {
       mode === "REAL" ? real.loadOnce() : obs.loadOnce(),
       loadSpotsRealOnce(),
       loadPlayersOnce(),
+      loadWorkerProfileOnce(),
     ]);
   };
 
@@ -217,8 +229,20 @@ export function useHandsPage() {
     loadTournamentsOnce();
     loadSpotsRealOnce();
     loadPlayersOnce();
+    loadWorkerProfileOnce();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbPath]);
+
+  const prevWorkersRunningRef = useRef<boolean>(false);
+  const loadAllFourTablesRef = useRef(loadAllFourTables);
+  loadAllFourTablesRef.current = loadAllFourTables;
+  useEffect(() => {
+    const wasRunning = prevWorkersRunningRef.current;
+    prevWorkersRunningRef.current = workersRunning;
+    if (wasRunning && !workersRunning) {
+      loadAllFourTablesRef.current();
+    }
+  }, [workersRunning]);
 
   const onClearFilters = () => {
     setStackEfRangeText("");
@@ -288,6 +312,7 @@ export function useHandsPage() {
     tournaments,
     spotsReal,
     players,
+    workerProfile,
     loadOnce,
     loadAllFourTables,
     onReset,

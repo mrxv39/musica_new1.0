@@ -17,6 +17,7 @@ pub fn build_loop_command(
     out_dir: &str,
     interval_ms: u64,
     log_path: &str,
+    mesa_index: usize,
     xml_dir: Option<&str>,
     hero: Option<&str>,
 ) -> Result<Command, String> {
@@ -45,6 +46,8 @@ pub fn build_loop_command(
         .stdin(Stdio::null())
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_file_err));
+
+    cmd.env("POKER_BOSS_MESA_INDEX", mesa_index.to_string());
 
     if let Ok(v) = std::env::var("POKER_BOSS_WORKERS_LOOP_DEBUG") {
         if !v.trim().is_empty() {
@@ -102,6 +105,7 @@ mod tests {
             &out_dir,
             3000,
             &log_path,
+            0,
             Some(r"C:\xml"),
             Some("Hero"),
         )
@@ -128,6 +132,7 @@ mod tests {
 
         assert!(envs.iter().any(|(k, v)| k == "POKER_BOSS_DB_PATH" && v == r"C:\db\poker_boss.db"));
         assert!(envs.iter().any(|(k, v)| k == "MUSICA_DB_PATH" && v == r"C:\db\poker_boss.db"));
+        assert!(envs.iter().any(|(k, v)| k == "POKER_BOSS_MESA_INDEX" && v == "0"));
         assert!(envs.iter().any(|(k, v)| k == "POKER_BOSS_XML_DIR" && v == r"C:\xml"));
         assert!(envs.iter().any(|(k, v)| k == "POKER_BOSS_HERO" && v == "Hero"));
     }

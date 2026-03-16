@@ -1,4 +1,7 @@
-# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\spots\build_spot_signatures.py
+# build_spot_signatures.py
+# NOTE: This script read from spots_real (removed). The table "spots" has a different schema
+# (stacks_json, bets_json, names_json, tipo_p2, tipo_p3). Update to read from "spots" and map
+# JSON/fields to build_signature_from_spot_row input, or deprecate.
 from __future__ import annotations
 
 import os

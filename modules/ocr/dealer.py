@@ -53,6 +53,7 @@ def read_dealer(
     y1: int = 0,
     threshold: float = 0.85,
     active_seats: Optional[list] = None,
+    img_color: Optional["np.ndarray"] = None,
 ) -> Dict[str, Any]:
     """
     Returns:
@@ -74,7 +75,7 @@ def read_dealer(
         "debug": {},
     }
 
-    if not image_path:
+    if not image_path and img_color is None:
         out["errors"].append("no_image")
         return out
 
@@ -84,7 +85,10 @@ def read_dealer(
         return out
 
     try:
-        img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        if img_color is not None:
+            img = img_color
+        else:
+            img = cv2.imread(image_path, cv2.IMREAD_COLOR)
         if img is None:
             out["errors"].append("image_read_failed")
             return out

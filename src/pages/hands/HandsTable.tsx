@@ -25,6 +25,10 @@ type Props = {
   shownRows?: number;
   rangeError?: string;
   batchFolderPath?: string;
+
+  /** When provided, column visibility is controlled by parent (e.g. HandsTableBlock); Config button and modal are hidden. */
+  visibleIds?: string[];
+  onChangeVisibleIds?: (next: string[]) => void;
 };
 
 const VISIBLE_COLS_STORAGE_KEY = "hands.visibleColumns";
@@ -42,6 +46,8 @@ export function HandsTable({
   shownRows,
   rangeError,
   batchFolderPath,
+  visibleIds: controlledVisibleIds,
+  onChangeVisibleIds: controlledOnChangeVisibleIds,
 }: Props) {
   const navigableRows = React.useMemo(() => rows.filter((row) => Boolean(extractLocalImagePath(row))), [rows]);
   const [previewIndex, setPreviewIndex] = React.useState<number | null>(null);
@@ -84,7 +90,15 @@ export function HandsTable({
     [openPreview, rows]
   );
 
-  const { visibleIds, visibleColumns, onChangeVisibleIds } = useVisibleColumns(columns, VISIBLE_COLS_STORAGE_KEY);
+  const internal = useVisibleColumns(columns, VISIBLE_COLS_STORAGE_KEY);
+  const visibleIds = controlledVisibleIds ?? internal.visibleIds;
+  const onChangeVisibleIds = controlledOnChangeVisibleIds ?? internal.onChangeVisibleIds;
+  const visibleColumns = React.useMemo(() => {
+    if (!visibleIds || visibleIds.length === 0) return columns;
+    const set = new Set(visibleIds);
+    return columns.filter((c) => set.has(c.id));
+  }, [columns, visibleIds]);
+  const isControlled = controlledVisibleIds !== undefined && controlledOnChangeVisibleIds !== undefined;
 
   const shown = typeof shownRows === "number" ? shownRows : rows.length;
   const total = typeof totalRows === "number" ? totalRows : rows.length;
@@ -102,30 +116,33 @@ export function HandsTable({
         />
       ) : null}
 
-      <HandsColumnsConfigModal
-        open={configOpen}
-        columns={columns}
-        visibleIds={visibleIds.length > 0 ? visibleIds : columns.map((c) => c.id)}
-        onChangeVisibleIds={onChangeVisibleIds}
-        onClose={() => setConfigOpen(false)}
-        storageKey={VISIBLE_COLS_STORAGE_KEY}
-      />
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 8 }}>
-        <button
-          onClick={() => setConfigOpen(true)}
-          style={{
-            padding: "6px 10px",
-            cursor: "pointer",
-            border: "1px solid #ddd",
-            background: "#fff",
-            borderRadius: 8,
-          }}
-          title="Selecciona qué columnas se ven"
-        >
-          Config
-        </button>
-      </div>
+      {!isControlled && (
+        <>
+          <HandsColumnsConfigModal
+            open={configOpen}
+            columns={columns}
+            visibleIds={visibleIds.length > 0 ? visibleIds : columns.map((c) => c.id)}
+            onChangeVisibleIds={onChangeVisibleIds}
+            onClose={() => setConfigOpen(false)}
+            storageKey={VISIBLE_COLS_STORAGE_KEY}
+          />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 8 }}>
+            <button
+              onClick={() => setConfigOpen(true)}
+              style={{
+                padding: "6px 10px",
+                cursor: "pointer",
+                border: "1px solid #ddd",
+                background: "#fff",
+                borderRadius: 8,
+              }}
+              title="Selecciona qué columnas se ven"
+            >
+              Config
+            </button>
+          </div>
+        </>
+      )}
 
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <HandsTableHeader columns={visibleColumns} sortKey={sortKey} sortAsc={sortAsc} onSort={onSort} />

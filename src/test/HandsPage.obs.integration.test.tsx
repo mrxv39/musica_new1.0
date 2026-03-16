@@ -27,6 +27,7 @@ vi.mock("../pages/hands/HandsFourTables", () => ({
   ),
   SpotsRealTable: () => <div data-testid="spots-real-table" />,
   PlayersTableBlock: () => <div data-testid="players-table" />,
+  WorkerProfileTableBlock: () => <div data-testid="worker-profile-table" />,
 }));
 
 vi.mock("../pages/hands/HandsTable", () => ({

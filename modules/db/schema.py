@@ -147,4 +147,45 @@ CREATE TABLE IF NOT EXISTS workers_captures (
     created_at_ms INTEGER DEFAULT 0,
     updated_at_ms INTEGER DEFAULT 0
 );
+
+-- Spots (rellenada por el worker: time + mano + noboard confirmado)
+CREATE TABLE IF NOT EXISTS spots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mesa INTEGER NOT NULL,
+    image_path TEXT NOT NULL DEFAULT '',
+    ts TEXT NOT NULL DEFAULT '',
+    stacks_json TEXT DEFAULT '{}',
+    bets_json TEXT DEFAULT '{}',
+    names_json TEXT DEFAULT '{}',
+    tipo_p2 TEXT DEFAULT '',
+    tipo_p3 TEXT DEFAULT '',
+    raw_json TEXT DEFAULT '{}',
+    time REAL DEFAULT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- =========================
+-- Worker profiling (optional, filled only when POKER_BOSS_WORKER_PROFILE=1)
+-- =========================
+CREATE TABLE IF NOT EXISTS worker_profile (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    mesa INTEGER NOT NULL,
+    capture_id INTEGER NULL,
+    spot_id INTEGER NULL,
+    time_gate REAL DEFAULT 0,
+    capture REAL DEFAULT 0,
+    fp_db REAL DEFAULT 0,
+    ocr REAL DEFAULT 0,
+    preflop REAL DEFAULT 0,
+    ocr_preflop_parallel REAL DEFAULT 0,
+    copy_capture REAL DEFAULT 0,
+    extract REAL DEFAULT 0,
+    insert_spot REAL DEFAULT 0,
+    strategy REAL DEFAULT 0,
+    obs REAL DEFAULT 0,
+    time_sec REAL DEFAULT 0,
+    total REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+);
 """

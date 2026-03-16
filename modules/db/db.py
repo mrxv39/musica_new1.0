@@ -29,6 +29,8 @@ from .repo_workers_captures import (
     update_worker_capture_ocr,
     update_worker_capture_route,
 )
+from .repo_workers_profile import insert_worker_profile
+from .repo_spots_capture import insert_spot_capture_from_data
 
 
 def get_conn():
@@ -64,4 +66,6 @@ __all__ = [
     "insert_worker_capture",
     "update_worker_capture_ocr",
     "update_worker_capture_route",
+    "insert_spot_capture_from_data",
+    "insert_worker_profile",
 ]

@@ -242,12 +242,12 @@ def _read_gamecode_impl(
     x1: int,
     y1: int,
     config_obj: _OCRConfig,
+    img: Optional["np.ndarray"] = None,
 ) -> Dict[str, Any]:
     dx, dy, w, h = config_obj.roi_rel
     x = int(x1 + dx)
     y = int(y1 + dy)
     roi_abs = (x, y, int(w), int(h))
-
 
     if cv2 is None:
         return GamecodeOCRResult(
@@ -276,16 +276,16 @@ def _read_gamecode_impl(
             error="pytesseract_not_available",
         ).__dict__
 
-    if not image_path or not os.path.exists(image_path):
-        return GamecodeOCRResult(
-            ok=False,
-            value=None,
-            raw_text="",
-            roi=roi_abs,
-            error="image_not_found",
-        ).__dict__
-
-    img = cv2.imread(image_path)
+    if img is None:
+        if not image_path or not os.path.exists(image_path):
+            return GamecodeOCRResult(
+                ok=False,
+                value=None,
+                raw_text="",
+                roi=roi_abs,
+                error="image_not_found",
+            ).__dict__
+        img = cv2.imread(image_path)
     if img is None:
         return GamecodeOCRResult(
             ok=False,
@@ -383,13 +383,14 @@ def read_gamecode(
     *,
     full_psm: int = 8,
     refine_psm: int = 8,
+    img: Optional["np.ndarray"] = None,
 ) -> Dict[str, Any]:
     config_obj = _OCRConfig(
         roi_rel=roi_rel,
         full_psm=full_psm,
         refine_psm=refine_psm,
     )
-    return _read_gamecode_impl(image_path, x1, y1, config_obj)
+    return _read_gamecode_impl(image_path, x1, y1, config_obj, img=img)
 
 
 if __name__ == "__main__":

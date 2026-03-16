@@ -143,34 +143,12 @@ def _maybe_write_time_gate_debug(
         pass
 
 
-def run_time_gate_for_area(area: Dict[str, Any], tmp_dir: str, ts: str, timeout_sec: int = 5) -> Dict[str, Any]:
-    mesa = int(area["mesa"])
-    bbox = build_time_bbox(area)
-
-    roi_path = capture_bbox_to_tmp(
-        bbox,
-        tmp_dir,
-        f"{ts}__mesa_{mesa}__time_roi.bmp",
-    )
-
-    _write_area_and_roi_probe_once(
-        area=area,
-        tmp_dir=tmp_dir,
-        ts=ts,
-        roi_path=roi_path,
-    )
-
+def _run_time_script_on_roi(roi_path: str, timeout_sec: int) -> Dict[str, Any]:
+    """Run time.py on an existing ROI image; returns parsed out dict."""
     script_path = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "time.py")
     )
-
-    cmd = [
-        sys.executable,
-        script_path,
-        "--image",
-        roi_path,
-    ]
-
+    cmd = [sys.executable, script_path, "--image", roi_path]
     try:
         proc = subprocess.run(
             cmd,
@@ -181,7 +159,7 @@ def run_time_gate_for_area(area: Dict[str, Any], tmp_dir: str, ts: str, timeout_
             errors="replace",
         )
     except subprocess.TimeoutExpired as e:
-        out = {
+        return {
             "time_ok": False,
             "error": "time_timeout",
             "timeout_sec": timeout_sec,
@@ -190,9 +168,8 @@ def run_time_gate_for_area(area: Dict[str, Any], tmp_dir: str, ts: str, timeout_
             "stdout": (e.stdout or ""),
             "stderr": (e.stderr or ""),
         }
-
     except Exception as e:
-        out = {
+        return {
             "time_ok": False,
             "error": "time_spawn_exception",
             "exception": str(e),
@@ -200,78 +177,79 @@ def run_time_gate_for_area(area: Dict[str, Any], tmp_dir: str, ts: str, timeout_
             "image_path": roi_path,
         }
 
-    else:
-        stdout = (proc.stdout or "").strip()
-        stderr = (proc.stderr or "").strip()
-
-        if proc.returncode != 0:
-            out = {
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+    if proc.returncode != 0:
+        return {
+            "time_ok": False,
+            "error": "time_process_failed",
+            "returncode": proc.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "script_path": script_path,
+            "image_path": roi_path,
+        }
+    if not stdout:
+        return {
+            "time_ok": False,
+            "error": "time_empty_stdout",
+            "stderr": stderr,
+            "script_path": script_path,
+            "image_path": roi_path,
+        }
+    try:
+        data = json.loads(stdout)
+        if not isinstance(data, dict):
+            return {
                 "time_ok": False,
-                "error": "time_process_failed",
-                "returncode": proc.returncode,
-                "stdout": stdout,
+                "error": "time_json_not_dict",
+                "payload": data,
                 "stderr": stderr,
                 "script_path": script_path,
                 "image_path": roi_path,
             }
+        data.setdefault("time_ok", False)
+        data.setdefault("script_path", script_path)
+        data.setdefault("image_path", roi_path)
+        if stderr:
+            data.setdefault("stderr", stderr)
+        return data
+    except Exception as e:
+        return {
+            "time_ok": False,
+            "error": "time_invalid_json",
+            "exception": str(e),
+            "stdout": stdout,
+            "stderr": stderr,
+            "script_path": script_path,
+            "image_path": roi_path,
+        }
 
-        elif not stdout:
-            out = {
-                "time_ok": False,
-                "error": "time_empty_stdout",
-                "stderr": stderr,
-                "script_path": script_path,
-                "image_path": roi_path,
-            }
 
-        else:
-            try:
-                data = json.loads(stdout)
-
-                if not isinstance(data, dict):
-                    out = {
-                        "time_ok": False,
-                        "error": "time_json_not_dict",
-                        "payload": data,
-                        "stderr": stderr,
-                        "script_path": script_path,
-                        "image_path": roi_path,
-                    }
-
-                else:
-                    data.setdefault("time_ok", False)
-                    data.setdefault("script_path", script_path)
-                    data.setdefault("image_path", roi_path)
-
-                    if stderr:
-                        data.setdefault("stderr", stderr)
-
-                    out = data
-
-            except Exception as e:
-                out = {
-                    "time_ok": False,
-                    "error": "time_invalid_json",
-                    "exception": str(e),
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "script_path": script_path,
-                    "image_path": roi_path,
-                }
-
+def run_time_gate_on_roi_path(
+    area: Dict[str, Any], tmp_dir: str, ts: str, roi_path: str, timeout_sec: int = 5
+) -> Dict[str, Any]:
+    """Run time gate using an existing ROI image path (e.g. cropped from full-area capture)."""
+    bbox = build_time_bbox(area)
+    _write_area_and_roi_probe_once(area=area, tmp_dir=tmp_dir, ts=ts, roi_path=roi_path)
+    out = _run_time_script_on_roi(roi_path, timeout_sec)
     _maybe_write_time_gate_debug(
-        area=area,
-        tmp_dir=tmp_dir,
-        ts=ts,
-        roi_path=roi_path,
-        bbox=bbox,
-        out=out,
+        area=area, tmp_dir=tmp_dir, ts=ts, roi_path=roi_path, bbox=bbox, out=out
     )
-
     try:
         if os.path.exists(roi_path):
             os.remove(roi_path)
     except Exception:
         pass
-
     return out
+
+
+def run_time_gate_for_area(area: Dict[str, Any], tmp_dir: str, ts: str, timeout_sec: int = 5) -> Dict[str, Any]:
+    mesa = int(area["mesa"])
+    bbox = build_time_bbox(area)
+    roi_path = capture_bbox_to_tmp(
+        bbox,
+        tmp_dir,
+        f"{ts}__mesa_{mesa}__time_roi.bmp",
+    )
+    return run_time_gate_on_roi_path(area, tmp_dir, ts, roi_path, timeout_sec)

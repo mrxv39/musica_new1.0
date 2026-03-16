@@ -36,6 +36,7 @@ pub async fn set_workers_running(
                     &instance_out,
                     interval_ms,
                     &log_path,
+                    i,
                     xml_dir.as_deref(),
                     hero.as_deref(),
                 )?;

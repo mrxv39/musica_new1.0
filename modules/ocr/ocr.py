@@ -4,7 +4,12 @@
 from __future__ import annotations
 
 import json
-from typing import Dict, Any
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, Optional
+
+import cv2
+import numpy as np
 
 from modules.ocr import (
     bets,
@@ -18,8 +23,24 @@ from modules.ocr import (
 )
 
 
+def _load_images_once(
+    image_path: str,
+) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """Load gray and color images once; returns (img_gray, img_color)."""
+    if not image_path:
+        return None, None
+    try:
+        img_color = cv2.imread(image_path)
+        if img_color is None:
+            return None, None
+        img_gray = cv2.cvtColor(img_color, cv2.COLOR_BGR2GRAY)
+        return img_gray, img_color
+    except Exception:
+        return None, None
+
+
 def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
-    out = {
+    out: Dict[str, Any] = {
         "ok": False,
         "errors": [],
         "names": {},
@@ -33,61 +54,130 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         "gamecode": {},
     }
 
-    # Run base OCR modules
-    try:
-        out["bets"] = bets.read_bets(image_path, x1=x1, y1=y1)
-    except Exception as e:
-        out["errors"].append(f"bets:{e}")
+    img_gray, img_color = _load_images_once(image_path)
 
-    try:
-        out["stacks"] = stacks.read_stacks(image_path, x1=x1, y1=y1)
-    except Exception as e:
-        out["errors"].append(f"stacks:{e}")
+    # Sequential (default) when POKER_BOSS_WORKER_SEQUENTIAL=1 or POKER_BOSS_OCR_SEQUENTIAL=1.
+    # Thread parallelism can increase time due to GIL; sequential is recommended for lower latency.
+    _ocr_sequential = (
+        os.environ.get("POKER_BOSS_WORKER_SEQUENTIAL", "1") == "1"
+        or os.environ.get("POKER_BOSS_OCR_SEQUENTIAL", "1") == "1"
+    )
 
-    try:
-        out["names"] = names.read_names(image_path, x1=x1, y1=y1)
-    except Exception as e:
-        out["errors"].append(f"names:{e}")
-
-    # Villano: pass precomputed names if available (tests expect this)
-    try:
-        p2_name = (out.get("names") or {}).get("p2_name", "")
-        p3_name = (out.get("names") or {}).get("p3_name", "")
-        villano_args = dict(image_path=image_path, x1=x1, y1=y1, p2_name=p2_name, p3_name=p3_name)
-        if hasattr(villano, "classify_villano"):
-            out["villano"] = villano.classify_villano(**villano_args)
-        else:
-            out["villano"] = {}
-    except Exception as e:
-        out["errors"].append(f"villano:{e}")
-
-    # Derive table state (3H / HU)
-    try:
-        out["table_state"] = table_state.compute_table_state(out.get("names"), out.get("stacks"))
-    except Exception as e:
-        out["errors"].append(f"table_state:{e}")
-        out["table_state"] = {"ok": False, "errors": [str(e)]}
-
-    # Detect dealer button (best effort)
-    try:
+    if _ocr_sequential:
+        # Sequential path: single-threaded OCR phases, same single image load.
+        try:
+            out["bets"] = bets.read_bets(image_path, x1=x1, y1=y1, img_gray=img_gray)
+        except Exception as e:
+            out["errors"].append(f"bets:{e}")
+        try:
+            out["stacks"] = stacks.read_stacks(image_path, x1=x1, y1=y1, img_gray=img_gray)
+        except Exception as e:
+            out["errors"].append(f"stacks:{e}")
+        try:
+            out["names"] = names.read_names(image_path, x1=x1, y1=y1, img_gray=img_gray)
+        except Exception as e:
+            out["errors"].append(f"names:{e}")
+        try:
+            p2_name = (out.get("names") or {}).get("p2_name", "")
+            p3_name = (out.get("names") or {}).get("p3_name", "")
+            villano_args = dict(image_path=image_path, x1=x1, y1=y1, p2_name=p2_name, p3_name=p3_name)
+            if hasattr(villano, "classify_villano"):
+                out["villano"] = villano.classify_villano(**villano_args)
+            else:
+                out["villano"] = {}
+        except Exception as e:
+            out["errors"].append(f"villano:{e}")
+        try:
+            out["table_state"] = table_state.compute_table_state(out.get("names"), out.get("stacks"))
+        except Exception as e:
+            out["errors"].append(f"table_state:{e}")
+            out["table_state"] = {"ok": False, "errors": [str(e)]}
         active_seats = (out.get("table_state") or {}).get("active_seats") or None
-        out["dealer"] = dealer.read_dealer(image_path, x1=x1, y1=y1, active_seats=active_seats)
-    except Exception as e:
-        out["errors"].append(f"dealer:{e}")
-        out["dealer"] = {"ok": False, "errors": [str(e)]}
+        try:
+            out["dealer"] = dealer.read_dealer(
+                image_path, x1=x1, y1=y1, active_seats=active_seats, img_color=img_color
+            )
+        except Exception as e:
+            out["errors"].append(f"dealer:{e}")
+            out["dealer"] = {"ok": False, "errors": [str(e)]}
+        try:
+            out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1, img=img_color)
+        except Exception as e:
+            out["errors"].append(f"gamecode:{e}")
+            out["gamecode"] = {"ok": False, "errors": [str(e)]}
+    else:
+        # Parallel path (POKER_BOSS_WORKER_SEQUENTIAL=0 and POKER_BOSS_OCR_SEQUENTIAL=0): thread pools.
+        def _run_bets():
+            try:
+                return ("bets", bets.read_bets(image_path, x1=x1, y1=y1, img_gray=img_gray))
+            except Exception as e:
+                return ("bets", {"ok": False, "errors": [str(e)]})
 
-    # Derive positions (BTN/SB/BB) from dealer first, then bets fallback
+        def _run_stacks():
+            try:
+                return ("stacks", stacks.read_stacks(image_path, x1=x1, y1=y1, img_gray=img_gray))
+            except Exception as e:
+                return ("stacks", {"ok": False, "errors": [str(e)]})
+
+        def _run_names():
+            try:
+                return ("names", names.read_names(image_path, x1=x1, y1=y1, img_gray=img_gray))
+            except Exception as e:
+                return ("names", {"ok": False, "errors": [str(e)]})
+
+        with ThreadPoolExecutor(max_workers=3) as exec1:
+            f1 = exec1.submit(_run_bets)
+            f2 = exec1.submit(_run_stacks)
+            f3 = exec1.submit(_run_names)
+            for fut in as_completed([f1, f2, f3]):
+                key, val = fut.result()
+                out[key] = val
+
+        try:
+            p2_name = (out.get("names") or {}).get("p2_name", "")
+            p3_name = (out.get("names") or {}).get("p3_name", "")
+            villano_args = dict(image_path=image_path, x1=x1, y1=y1, p2_name=p2_name, p3_name=p3_name)
+            if hasattr(villano, "classify_villano"):
+                out["villano"] = villano.classify_villano(**villano_args)
+            else:
+                out["villano"] = {}
+        except Exception as e:
+            out["errors"].append(f"villano:{e}")
+
+        try:
+            out["table_state"] = table_state.compute_table_state(out.get("names"), out.get("stacks"))
+        except Exception as e:
+            out["errors"].append(f"table_state:{e}")
+            out["table_state"] = {"ok": False, "errors": [str(e)]}
+
+        active_seats = (out.get("table_state") or {}).get("active_seats") or None
+
+        def _run_dealer():
+            try:
+                return ("dealer", dealer.read_dealer(
+                    image_path, x1=x1, y1=y1, active_seats=active_seats, img_color=img_color
+                ))
+            except Exception as e:
+                return ("dealer", {"ok": False, "errors": [str(e)]})
+
+        def _run_gamecode():
+            try:
+                return ("gamecode", gamecode.read_gamecode(image_path, x1=x1, y1=y1, img=img_color))
+            except Exception as e:
+                return ("gamecode", {"ok": False, "errors": [str(e)]})
+
+        with ThreadPoolExecutor(max_workers=2) as exec2:
+            fd = exec2.submit(_run_dealer)
+            fg = exec2.submit(_run_gamecode)
+            out["dealer"] = fd.result()[1]
+            out["gamecode"] = fg.result()[1]
+
+    # Posiciones (depends on table_state, bets, dealer)
     try:
         out["posiciones"] = posiciones.read_posiciones(out.get("table_state"), out.get("bets"), out.get("dealer"))
     except Exception as e:
         out["errors"].append(f"posiciones:{e}")
         out["posiciones"] = {"ok": False, "errors": [str(e)]}
-
-    try:
-        out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1)
-    except Exception as e:
-        out["errors"].append(f"gamecode:{e}")
-        out["gamecode"] = {"ok": False, "errors": [str(e)]}
 
     # ok = True if any submodule ok is True
     oks = [

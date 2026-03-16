@@ -181,23 +181,6 @@ CREATE TABLE IF NOT EXISTS actions_real (
 
 CREATE INDEX IF NOT EXISTS idx_actions_real_hand_round_no ON actions_real(hand_id, round_no, action_no);
 
--- Spots: hero decision points (v1 minimal)
-CREATE TABLE IF NOT EXISTS spots_real (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    hand_id INTEGER NOT NULL,
-    gamecode TEXT NOT NULL,
-    hero TEXT NOT NULL,
-    street TEXT NOT NULL,              -- 'PREFLOP'/'FLOP'/'TURN'/'RIVER'
-    round_no INTEGER NOT NULL,
-    action_no INTEGER NOT NULL,
-    to_act_player TEXT NOT NULL,       -- should be hero
-    raw_json TEXT NOT NULL DEFAULT '{}',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY(hand_id) REFERENCES hands_real(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_spots_real_hand_street ON spots_real(hand_id, street, action_no);
-
 -- Spots XML real (v1 preflop only)
 CREATE TABLE IF NOT EXISTS spots_xml_real (
     spot_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -550,67 +533,6 @@ def _insert_actions(conn: sqlite3.Connection, hand_id: int, hand: ImportedHand) 
     )
 
 
-def _extract_hero_spots(hand: ImportedHand) -> List[Dict[str, Any]]:
-    """
-    v1: a "spot" is any action where player == hero and round_no >= 1
-    (We can later enrich with: pot, to_call, last aggressor, positions, etc.)
-    """
-    spots: List[Dict[str, Any]] = []
-    for a in sorted(hand.actions, key=lambda x: (x.round_no, x.action_no)):
-        if a.round_no < 1:
-            continue
-        if a.player != hand.hero:
-            continue
-
-        spots.append(
-            {
-                "gamecode": hand.gamecode,
-                "hero": hand.hero,
-                "street": _round_to_street(a.round_no),
-                "round_no": a.round_no,
-                "action_no": a.action_no,
-                "to_act_player": a.player,
-                "action_type": a.type_name,
-                "action_type_id": a.type_id,
-                "sum_bb": a.sum_bb,
-                "sum_chips": a.sum_chips,
-                "hero_cards": hand.hero_cards,
-                "flop": hand.flop,
-                "turn": hand.turn,
-                "river": hand.river,
-            }
-        )
-
-    return spots
-
-
-def _insert_spots(conn: sqlite3.Connection, hand_id: int, hand: ImportedHand) -> int:
-    cur = conn.cursor()
-    cur.execute("DELETE FROM spots_real WHERE hand_id=?", (hand_id,))
-
-    spots = _extract_hero_spots(hand)
-    cur.executemany(
-        """
-        INSERT INTO spots_real(hand_id, gamecode, hero, street, round_no, action_no, to_act_player, raw_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        [
-            (
-                hand_id,
-                s["gamecode"],
-                s["hero"],
-                s["street"],
-                int(s["round_no"]),
-                int(s["action_no"]),
-                s["to_act_player"],
-                json.dumps(s, ensure_ascii=False),
-            )
-            for s in spots
-        ],
-    )
-    return len(spots)
-
-
 def _spot_kind_from_action_type(type_name: str) -> str:
     t = (type_name or "").upper()
     if t in {"POST_SB", "POST_BB", "ANTE"}:
@@ -762,7 +684,6 @@ def import_xml_folder(
 
         total_files = len(xml_files)
         total_hands = 0
-        total_spots = 0
         total_spots_xml_real = 0
 
         for i, xp in enumerate(sorted(xml_files)):
@@ -778,7 +699,6 @@ def import_xml_folder(
             for h in hands:
                 hand_id = _insert_hand(conn, h, tournament_id)
                 _insert_actions(conn, hand_id, h)
-                total_spots += _insert_spots(conn, hand_id, h)
                 total_spots_xml_real += _insert_spots_xml_real(conn, hand_id, h)
                 total_hands += 1
 
@@ -795,7 +715,6 @@ def import_xml_folder(
             "hero": hero,
             "xml_files": total_files,
             "hands_imported": total_hands,
-            "hero_spots_imported": total_spots,
             "spots_xml_real_imported": total_spots_xml_real,
         }
     finally:

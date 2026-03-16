@@ -1,4 +1,6 @@
 # tmp_import_spots_real.py
+# NOTE: spots_real was removed; the app uses a single table "spots" (filled by the worker).
+# Update this script to import into "spots" if still needed, or remove.
 from __future__ import annotations
 
 import json

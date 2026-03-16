@@ -6,6 +6,7 @@ import {
   HandsTableBlock,
   SpotsRealTable,
   PlayersTableBlock,
+  WorkerProfileTableBlock,
 } from "./hands/HandsFourTables";
 
 import { useHandsPage } from "./hands/useHandsPage";
@@ -91,7 +92,7 @@ export default function HandsPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "1fr",
           gap: 16,
           alignItems: "start",
         }}
@@ -111,6 +112,7 @@ export default function HandsPage() {
         />
         <SpotsRealTable rows={hp.spotsReal ?? []} />
         <PlayersTableBlock rows={hp.players ?? []} />
+        <WorkerProfileTableBlock rows={hp.workerProfile ?? []} />
       </div>
 
       {hp.obsFooterText ? (

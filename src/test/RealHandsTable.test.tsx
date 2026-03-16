@@ -21,6 +21,17 @@ vi.mock("../pages/hands/RealHandsImageModal", () => ({
 }));
 
 vi.mock("../pages/hands/RealHandsTableBody", () => ({
+  REAL_HANDS_BODY_COLUMN_IDS: [
+    "icon",
+    "gamecode",
+    "startdate",
+    "blinds",
+    "hero_cards",
+    "board",
+    "ocr_audit",
+    "tournament",
+    "room_hero",
+  ],
   default: (props: any) => {
     realHandsTableBodyMock(props);
     return (

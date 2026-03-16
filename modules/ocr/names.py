@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Dict, Tuple, Any
+from typing import Dict, Optional, Tuple, Any
 
 import cv2
 import numpy as np
@@ -104,6 +104,7 @@ def read_names(
     y1: int = 0,
     roi_p2: Tuple[int, int, int, int] = ROI_P2NAME,
     roi_p3: Tuple[int, int, int, int] = ROI_P3NAME,
+    img_gray: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
     out = {
         "ok": False,
@@ -115,7 +116,10 @@ def read_names(
         },
         "errors": [],
     }
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img_gray is not None:
+        img = img_gray
+    else:
+        img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         out["errors"].append("imread_fail")
         return out

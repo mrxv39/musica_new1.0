@@ -1,11 +1,26 @@
 import type { HandRealRow } from "../../db";
 import { formatBoardCompact, formatCardsString } from "./realHandsFormatters";
 
+/** Column ids in display order; when visibleColumnIds is passed, only these are shown. */
+export const REAL_HANDS_BODY_COLUMN_IDS = [
+  "icon",
+  "gamecode",
+  "startdate",
+  "blinds",
+  "hero_cards",
+  "board",
+  "ocr_audit",
+  "tournament",
+  "room_hero",
+] as const;
+
 type Props = {
   rows: HandRealRow[];
   getSpotPng: (h: HandRealRow) => string;
   onOpenHand: (h: HandRealRow) => void;
   onOpenImage: (h: HandRealRow) => void;
+  /** When set, only these columns are rendered (order preserved). */
+  visibleColumnIds?: string[];
 };
 
 function auditColors(status?: HandRealRow["ocr_audit_status"]) {
@@ -30,12 +45,20 @@ function tournamentLabel(h: HandRealRow): string {
   return "";
 }
 
+const cellStyle = { padding: "6px 8px" as const, whiteSpace: "nowrap" as const };
+
 export default function RealHandsTableBody({
   rows,
   getSpotPng,
   onOpenHand,
   onOpenImage,
+  visibleColumnIds,
 }: Props) {
+  const cols =
+    visibleColumnIds && visibleColumnIds.length > 0
+      ? visibleColumnIds.filter((id) => REAL_HANDS_BODY_COLUMN_IDS.includes(id as any))
+      : [...REAL_HANDS_BODY_COLUMN_IDS];
+
   return (
     <tbody>
       {rows.map((h) => {
@@ -54,6 +77,54 @@ export default function RealHandsTableBody({
           .filter(Boolean)
           .join(" | ");
 
+        const cells: Record<string, React.ReactNode> = {
+          icon: (
+            <button
+              disabled={!spotPng}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenImage(h);
+              }}
+              title={spotPng ? "Abrir screenshot (spot_png)" : "Sin screenshot enlazado"}
+              style={{
+                padding: "4px 8px",
+                borderRadius: 8,
+                border: "1px solid #ddd",
+                background: spotPng ? "#fff" : "#f6f6f6",
+                cursor: spotPng ? "pointer" : "not-allowed",
+                opacity: spotPng ? 1 : 0.5,
+              }}
+            >
+              📷
+            </button>
+          ),
+          gamecode: <b>{h.gamecode}</b>,
+          startdate: h.startdate || "",
+          blinds: `${h.sb} / ${h.bb}`,
+          hero_cards: formatCardsString(h.hero_cards || ""),
+          board: formatBoardCompact(h.flop || "", h.turn || "", h.river || ""),
+          ocr_audit: (
+            <span
+              title={auditTitle}
+              style={{
+                display: "inline-block",
+                padding: "3px 8px",
+                borderRadius: 999,
+                border: `1px solid ${colors.border}`,
+                background: colors.bg,
+                color: colors.fg,
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              {audit}
+            </span>
+          ),
+          tournament: <span style={{ opacity: tournament ? 0.9 : 0.5 }}>{tournament}</span>,
+          room_hero: <span style={{ opacity: 0.8 }}>{h.room} / {h.hero}</span>,
+        };
+
         return (
           <tr
             key={h.id}
@@ -61,73 +132,11 @@ export default function RealHandsTableBody({
             onClick={() => onOpenHand(h)}
             title="Click para abrir"
           >
-            <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-              <button
-                disabled={!spotPng}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onOpenImage(h);
-                }}
-                title={spotPng ? "Abrir screenshot (spot_png)" : "Sin screenshot enlazado"}
-                style={{
-                  padding: "4px 8px",
-                  borderRadius: 8,
-                  border: "1px solid #ddd",
-                  background: spotPng ? "#fff" : "#f6f6f6",
-                  cursor: spotPng ? "pointer" : "not-allowed",
-                  opacity: spotPng ? 1 : 0.5,
-                }}
-              >
-                📷
-              </button>
-            </td>
-
-            <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-              <b>{h.gamecode}</b>
-            </td>
-
-            <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-              {h.startdate || ""}
-            </td>
-
-            <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-              {h.sb} / {h.bb}
-            </td>
-
-            <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-              {formatCardsString(h.hero_cards || "")}
-            </td>
-
-            <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-              {formatBoardCompact(h.flop || "", h.turn || "", h.river || "")}
-            </td>
-
-            <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
-              <span
-                title={auditTitle}
-                style={{
-                  display: "inline-block",
-                  padding: "3px 8px",
-                  borderRadius: 999,
-                  border: `1px solid ${colors.border}`,
-                  background: colors.bg,
-                  color: colors.fg,
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
-                {audit}
-              </span>
-            </td>
-
-            <td style={{ padding: "6px 8px", whiteSpace: "nowrap", opacity: tournament ? 0.9 : 0.5 }}>
-              {tournament}
-            </td>
-
-            <td style={{ padding: "6px 8px", whiteSpace: "nowrap", opacity: 0.8 }}>
-              {h.room} / {h.hero}
-            </td>
+            {cols.map((id) => (
+              <td key={id} style={cellStyle}>
+                {cells[id] ?? ""}
+              </td>
+            ))}
           </tr>
         );
       })}

@@ -28,6 +28,9 @@ let mockReal = {
 
 vi.mock("../db", () => ({
   DEFAULT_DB_PATH: "C:\\db\\default.db",
+  fetchTournaments: vi.fn().mockResolvedValue([]),
+  fetchSpots: vi.fn().mockResolvedValue([]),
+  fetchWorkerProfileSummary: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../pages/hands/useHandsObs", () => ({

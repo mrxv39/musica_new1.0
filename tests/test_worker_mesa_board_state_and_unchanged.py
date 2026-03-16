@@ -31,14 +31,21 @@ def _write_file(path, content=b"bmp"):
         f.write(content)
 
 
+def _make_cap_bmp(dirs, name="cap.bmp"):
+    """Valid BMP so worker can crop time ROI (~400x500)."""
+    from PIL import Image as PILImage
+    path = os.path.join(dirs.tmp_dir, name)
+    PILImage.new("RGB", (400, 500), color=(0, 0, 0)).save(path, format="BMP")
+    return path
+
+
 def test_run_worker_mesa_once_skip_unchanged_frame_in_memory(monkeypatch, tmp_path):
     dirs = _make_dirs(tmp_path)
     fp = io.StringIO()
 
-    img_path = os.path.join(dirs.tmp_dir, "cap_same.bmp")
-    _write_file(img_path, b"same-frame")
+    img_path = _make_cap_bmp(dirs, "cap_same.bmp")
 
-    monkeypatch.setattr(wmod, "run_time_gate_for_area", lambda *a, **k: {"time_ok": True})
+    monkeypatch.setattr(wmod, "run_time_gate_on_roi_path", lambda *a, **k: {"time_ok": True})
     monkeypatch.setattr(wmod, "capture_to_tmp", lambda *a, **k: img_path)
     monkeypatch.setattr(wmod, "get_file_fingerprint", lambda _p: "fp_same_mem")
 
@@ -104,10 +111,9 @@ def test_run_worker_mesa_once_postflop_skips_preflop_processing(monkeypatch, tmp
     dirs = _make_dirs(tmp_path)
     fp = io.StringIO()
 
-    img_path = os.path.join(dirs.tmp_dir, "cap_postflop.bmp")
-    _write_file(img_path, b"postflop-frame")
+    img_path = _make_cap_bmp(dirs, "cap_postflop.bmp")
 
-    monkeypatch.setattr(wmod, "run_time_gate_for_area", lambda *a, **k: {"time_ok": True})
+    monkeypatch.setattr(wmod, "run_time_gate_on_roi_path", lambda *a, **k: {"time_ok": True})
     monkeypatch.setattr(wmod, "capture_to_tmp", lambda *a, **k: img_path)
     monkeypatch.setattr(wmod, "get_file_fingerprint", lambda _p: "fp_postflop")
     monkeypatch.setattr(wmod, "run_ocr", lambda _p: {"ok": True})

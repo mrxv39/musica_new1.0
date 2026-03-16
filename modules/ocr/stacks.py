@@ -170,6 +170,7 @@ def read_stacks(
     thr_p1: int = THR_P1,
     thr_p2: int = THR_P2,
     thr_p3: int = THR_P3,
+    img_gray: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "ok": False,
@@ -185,7 +186,10 @@ def read_stacks(
         "method": {"p1": "", "p2": "", "p3": ""},
         "errors": [],
     }
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img_gray is not None:
+        img = img_gray
+    else:
+        img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         out["errors"].append("imread_fail")
         return out

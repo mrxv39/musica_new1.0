@@ -25,14 +25,20 @@ def run_one_tick(
     extract_modules_fn: Any,
     build_ocr_safe_fn: Any,
     compute_strategy_safe_fn: Any,
+    mesa_index: Optional[int] = None,
 ) -> None:
     _ = worker_preflop_mod
 
-    max_workers = max(1, len(AREAS))
+    if mesa_index is not None and 0 <= mesa_index < len(AREAS):
+        areas_to_run = [AREAS[mesa_index]]
+    else:
+        areas_to_run = AREAS
+
+    max_workers = max(1, len(areas_to_run))
     futures: list[tuple[int, Any]] = []
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for area in AREAS:
+        for area in areas_to_run:
             mesa = int(area["mesa"])
             future = executor.submit(
                 run_worker_mesa_once,

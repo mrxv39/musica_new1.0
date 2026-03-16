@@ -133,18 +133,30 @@ export type TournamentRow = {
   [k: string]: unknown;
 };
 
-/** spots_real: hero decision points per hand. */
-export type SpotRealRow = {
+/** spots: rellenada por el worker (mesa, image_path, stacks, bets, names, tipo p2/p3, time, etc.). */
+export type SpotRow = {
   id: number;
-  hand_id: number;
-  gamecode: string;
-  hero: string;
-  street: string;
-  round_no: number;
-  action_no: number;
-  to_act_player: string;
+  mesa: number;
+  image_path: string;
+  ts: string;
+  stacks_json: string;
+  bets_json: string;
+  names_json: string;
+  tipo_p2: string;
+  tipo_p3: string;
+  time?: number | null;
   created_at: string;
   [k: string]: unknown;
+};
+
+/** Resumen de tiempos del worker por mesa (worker_profile). */
+export type WorkerProfileRow = {
+  mesa: number;
+  n: number;
+  ocr_avg: number | null;
+  preflop_avg: number | null;
+  time_gate_avg: number | null;
+  total_avg: number | null;
 };
 
 type SqlDb = {
@@ -440,17 +452,40 @@ export async function fetchTournaments(dbPath: string, limit = 200): Promise<Tou
   return rows as TournamentRow[];
 }
 
-/** List spots_real for the Hands section (same DB). */
-export async function fetchSpotsReal(dbPath: string, limit = 500): Promise<SpotRealRow[]> {
+/** List spots for the Hands section (same DB; table filled by worker). */
+export async function fetchSpots(dbPath: string, limit = 500): Promise<SpotRow[]> {
   const db = await openDb(dbPath);
   const rows = await (db as any).select(
-    `SELECT id, hand_id, gamecode, hero, street, round_no, action_no, to_act_player, created_at
-     FROM spots_real
-     ORDER BY hand_id DESC, round_no ASC, action_no ASC
+    `SELECT id, mesa, image_path, ts, stacks_json, bets_json, names_json, tipo_p2, tipo_p3, time, created_at
+     FROM spots
+     ORDER BY id DESC
      LIMIT ?1`,
     [limit]
   );
-  return rows as SpotRealRow[];
+  return rows as SpotRow[];
+}
+
+/** Perfilado: resumen de tiempos por mesa desde worker_profile. */
+export async function fetchWorkerProfileSummary(
+  dbPath: string,
+  limitMesas = 50
+): Promise<WorkerProfileRow[]> {
+  const db = await openDb(dbPath);
+  const rows = await (db as any).select(
+    `SELECT
+       mesa,
+       COUNT(*)                    AS n,
+       AVG(ocr)                    AS ocr_avg,
+       AVG(preflop)                AS preflop_avg,
+       AVG(time_gate)              AS time_gate_avg,
+       AVG(total)                  AS total_avg
+     FROM worker_profile
+     GROUP BY mesa
+     ORDER BY mesa
+     LIMIT ?1`,
+    [limitMesas]
+  );
+  return rows as WorkerProfileRow[];
 }
 
 /** ========== Existing extractors used by UI ========== */

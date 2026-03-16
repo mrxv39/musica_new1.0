@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Optional, TextIO
 
-from .config import DEFAULT_FALLBACK_SE_ENABLED, PROJECT_ROOT
+from .config import AREAS, DEFAULT_FALLBACK_SE_ENABLED, PROJECT_ROOT
 from .env_flags import debug_enabled, enable_fallback_env, pytest_fixed_input
 from .fs_utils import ensure_dirs, log
 from .tick_runner import run_one_tick
@@ -100,9 +100,19 @@ def run_loop(
     xml_dir = _env_text("POKER_BOSS_XML_DIR")
     hero = _env_text("POKER_BOSS_HERO")
     sync_every_ticks = _env_int("POKER_BOSS_SYNC_EVERY_TICKS", 10)
+    mesa_index_raw = _env_text("POKER_BOSS_MESA_INDEX")
+    mesa_index: Optional[int] = None
+    if mesa_index_raw != "":
+        try:
+            mesa_index = int(mesa_index_raw)
+            if mesa_index < 0 or mesa_index >= len(AREAS):
+                mesa_index = None
+        except (ValueError, TypeError):
+            mesa_index = None
     log(fp, f"POKER_BOSS_DB_PATH={db_path}")
     log(fp, f"POKER_BOSS_XML_DIR={xml_dir}")
     log(fp, f"POKER_BOSS_HERO={hero}")
+    log(fp, f"POKER_BOSS_MESA_INDEX={mesa_index!r}")
     log(fp, f"POKER_BOSS_SYNC_EVERY_TICKS={sync_every_ticks}")
 
     import modules.workers.worker_preflop as worker_preflop_mod
@@ -150,6 +160,7 @@ def run_loop(
                     extract_modules_fn=extract_modules,
                     build_ocr_safe_fn=build_ocr_safe,
                     compute_strategy_safe_fn=compute_strategy_safe,
+                    mesa_index=mesa_index,
                 )
             except Exception as e:
                 log(fp, f"TICK_ERROR n={tick_n} err={type(e).__name__}:{e}")

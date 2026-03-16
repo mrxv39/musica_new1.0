@@ -2,8 +2,22 @@ import React from "react";
 import type { HandRealRow } from "../../db";
 import RealHandModal from "./RealHandModal";
 import RealHandsImageModal from "./RealHandsImageModal";
-import RealHandsTableBody from "./RealHandsTableBody";
+import RealHandsTableBody, { REAL_HANDS_BODY_COLUMN_IDS } from "./RealHandsTableBody";
 import RealHandsTableSummary from "./RealHandsTableSummary";
+
+const REAL_HANDS_HEADER_LABELS: Record<string, string> = {
+  icon: "📷",
+  gamecode: "Gamecode",
+  startdate: "Start",
+  blinds: "Blinds",
+  hero_cards: "Hero cards",
+  board: "Board",
+  ocr_audit: "OCR Audit",
+  tournament: "Tournament",
+  room_hero: "Room/Hero",
+};
+
+const thStyle = { textAlign: "left" as const, borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" as const };
 
 type AuditFilter =
   | "all"
@@ -79,9 +93,12 @@ function FilterButton({
 export function RealHandsTable({
   rows,
   dbPath,
+  visibleColumnIds,
 }: {
   rows: HandRealRow[];
   dbPath: string;
+  /** When set, only these columns are shown (order preserved). */
+  visibleColumnIds?: string[];
 }) {
   const [openHandModal, setOpenHandModal] = React.useState(false);
   const [selectedHand, setSelectedHand] = React.useState<HandRealRow | null>(null);
@@ -121,6 +138,11 @@ export function RealHandsTable({
     setImageTitle("");
   };
 
+  const headerColumns =
+    visibleColumnIds && visibleColumnIds.length > 0
+      ? visibleColumnIds.filter((id) => REAL_HANDS_BODY_COLUMN_IDS.includes(id as (typeof REAL_HANDS_BODY_COLUMN_IDS)[number]))
+      : [...REAL_HANDS_BODY_COLUMN_IDS];
+
   return (
     <>
       <RealHandModal open={openHandModal} dbPath={dbPath} hand={selectedHand} onClose={closeHand} />
@@ -140,15 +162,11 @@ export function RealHandsTable({
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>📷</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Gamecode</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Start</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Blinds</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Hero cards</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Board</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>OCR Audit</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Tournament</th>
-            <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "6px 8px", whiteSpace: "nowrap" }}>Room/Hero</th>
+            {headerColumns.map((id) => (
+              <th key={id} style={thStyle}>
+                {REAL_HANDS_HEADER_LABELS[id] ?? id}
+              </th>
+            ))}
           </tr>
         </thead>
 
@@ -157,6 +175,7 @@ export function RealHandsTable({
           getSpotPng={getSpotPng}
           onOpenHand={openHand}
           onOpenImage={openImage}
+          visibleColumnIds={visibleColumnIds && visibleColumnIds.length > 0 ? visibleColumnIds : undefined}
         />
       </table>
 

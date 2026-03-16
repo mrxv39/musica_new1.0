@@ -52,6 +52,10 @@ HANDS_REAL_COLUMNS = [
     ("tournament_id", "INTEGER REFERENCES tournaments(id)"),
 ]
 
+SPOTS_COLUMNS = [
+    ("time", "REAL DEFAULT NULL"),
+]
+
 WORKERS_CAPTURES_COLUMNS = [
     # base
     ("mesa", "INTEGER NOT NULL DEFAULT 0"),
