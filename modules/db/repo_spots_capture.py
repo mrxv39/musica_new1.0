@@ -21,6 +21,7 @@ def insert_spot_capture(
     raw_json: str = "{}",
     time_sec: Optional[float] = None,
     spot_fingerprint: str = "",
+    strategy_id: Optional[int] = None,
 ) -> Optional[int]:
     """Inserta un spot preflop detectado por captura (time + mano + noboard ok).
 
@@ -103,8 +104,8 @@ def insert_spot_capture(
         cur.execute(
             """
             INSERT INTO spots
-            (mesa, image_path, ts, stacks_json, bets_json, names_json, tipo_p2, tipo_p3, raw_json, time, spot_fingerprint)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (mesa, image_path, ts, stacks_json, bets_json, names_json, tipo_p2, tipo_p3, raw_json, time, spot_fingerprint, strategy_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 int(mesa),
@@ -118,10 +119,73 @@ def insert_spot_capture(
                 raw_json or "{}",
                 time_sec if time_sec is not None else None,
                 spot_fingerprint or "",
+                int(strategy_id) if strategy_id is not None else None,
             ),
         )
+        # #region agent log
+        try:
+            import json as _json, time as _time
+
+            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "65a7d6",
+                            "runId": "repro",
+                            "hypothesisId": "H2",
+                            "location": "repo_spots_capture.insert_spot_capture:after_insert",
+                            "message": "Inserted spot row (pre-commit)",
+                            "data": {
+                                "mesa": int(mesa),
+                                "ts": ts or "",
+                                "spot_fingerprint": spot_fingerprint or "",
+                                "strategy_id": int(strategy_id) if strategy_id is not None else None,
+                                "lastrowid": int(cur.lastrowid) if cur.lastrowid else None,
+                            },
+                            "timestamp": int(_time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion agent log
         conn.commit()
+        # #region agent log
+        try:
+            import json as _json, time as _time
+
+            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "65a7d6",
+                            "runId": "repro",
+                            "hypothesisId": "H2",
+                            "location": "repo_spots_capture.insert_spot_capture:after_commit",
+                            "message": "Committed spot insert",
+                            "data": {"lastrowid": int(cur.lastrowid) if cur.lastrowid else None},
+                            "timestamp": int(_time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion agent log
         return int(cur.lastrowid) if cur.lastrowid else None
+
+
+def update_spot_strategy_id(*, spot_id: int, strategy_id: int) -> bool:
+    init_db()
+    with connect() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE spots SET strategy_id = ? WHERE id = ?",
+            (int(strategy_id), int(spot_id)),
+        )
+        conn.commit()
+        return cur.rowcount > 0
 
 
 def _safe_json(obj: Any) -> str:

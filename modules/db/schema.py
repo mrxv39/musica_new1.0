@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS spots (
     raw_json TEXT DEFAULT '{}',
     time REAL DEFAULT NULL,
     spot_fingerprint TEXT DEFAULT '',
+    strategy_id INTEGER DEFAULT NULL,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -193,5 +194,70 @@ CREATE TABLE IF NOT EXISTS worker_profile (
     ocr_dealer REAL DEFAULT 0,
     ocr_gamecode REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- =========================
+-- Spot strategies (Excel -> DB)
+-- =========================
+CREATE TABLE IF NOT EXISTS spots_strategy_scopes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    spot_key TEXT NOT NULL,
+    p2_tipo TEXT NOT NULL,
+    p3_tipo TEXT NOT NULL,
+    scope_se_min REAL NOT NULL,
+    scope_se_max REAL NOT NULL,
+    sheet_name TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS spots_strategies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    spot_key TEXT NOT NULL,
+    hand_range_name TEXT NOT NULL,
+    move TEXT NOT NULL,
+    bet_min REAL DEFAULT NULL,
+    bet_max REAL DEFAULT NULL,
+    hand_range TEXT DEFAULT '',
+    stack_effective_min REAL NOT NULL,
+    stack_effective_max REAL NOT NULL,
+    p1_pos TEXT DEFAULT '',
+    p2_pos TEXT DEFAULT '',
+    p3_pos TEXT DEFAULT '',
+    p2_tipo TEXT DEFAULT '',
+    p3_tipo TEXT DEFAULT '',
+    p1bet_min REAL DEFAULT NULL,
+    p1bet_max REAL DEFAULT NULL,
+    p2bet_min REAL DEFAULT NULL,
+    p2bet_max REAL DEFAULT NULL,
+    p3bet_min REAL DEFAULT NULL,
+    p3bet_max REAL DEFAULT NULL,
+    p2stack_min REAL DEFAULT NULL,
+    p2stack_max REAL DEFAULT NULL,
+    p3stack_min REAL DEFAULT NULL,
+    p3stack_max REAL DEFAULT NULL
+);
+
+CREATE TABLE IF NOT EXISTS spots_strategies_nash (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    spot_key TEXT NOT NULL,
+    hand_range_name TEXT NOT NULL,
+    move TEXT NOT NULL,
+    hand_class TEXT NOT NULL,
+    stack_effective_min REAL NOT NULL,
+    stack_effective_max REAL NOT NULL,
+    p1_pos TEXT DEFAULT '',
+    p2_pos TEXT DEFAULT '',
+    p3_pos TEXT DEFAULT '',
+    p2_tipo TEXT DEFAULT '',
+    p3_tipo TEXT DEFAULT '',
+    p1bet_min REAL DEFAULT NULL,
+    p1bet_max REAL DEFAULT NULL,
+    p2bet_min REAL DEFAULT NULL,
+    p2bet_max REAL DEFAULT NULL,
+    p3bet_min REAL DEFAULT NULL,
+    p3bet_max REAL DEFAULT NULL,
+    p2stack_min REAL DEFAULT NULL,
+    p2stack_max REAL DEFAULT NULL,
+    p3stack_min REAL DEFAULT NULL,
+    p3stack_max REAL DEFAULT NULL
 );
 """

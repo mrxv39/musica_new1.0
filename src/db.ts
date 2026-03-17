@@ -145,6 +145,10 @@ export type SpotRow = {
   tipo_p2: string;
   tipo_p3: string;
   time?: number | null;
+  strategy_id?: number | null;
+  strategy_move?: string | null;
+  strategy_bet_min?: number | string | null;
+  strategy_bet_max?: number | string | null;
   created_at: string;
   [k: string]: unknown;
 };
@@ -461,8 +465,19 @@ export async function fetchTournaments(dbPath: string, limit = 200): Promise<Tou
 export async function fetchSpots(dbPath: string, limit = 500): Promise<SpotRow[]> {
   const db = await openDb(dbPath);
   const rows = await (db as any).select(
-    `SELECT id, mesa, image_path, ts, stacks_json, bets_json, names_json, tipo_p2, tipo_p3, time, created_at
-     FROM spots
+    `SELECT
+       s.id, s.mesa, s.image_path, s.ts,
+       s.stacks_json, s.bets_json, s.names_json,
+       s.tipo_p2, s.tipo_p3,
+       s.time,
+       s.strategy_id,
+       st.move    AS strategy_move,
+       st.bet_min AS strategy_bet_min,
+       st.bet_max AS strategy_bet_max,
+       s.created_at
+     FROM spots s
+     LEFT JOIN spots_strategies st
+       ON st.id = s.strategy_id
      ORDER BY id DESC
      LIMIT ?1`,
     [limit]

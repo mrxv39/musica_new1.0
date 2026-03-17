@@ -121,11 +121,8 @@ def run_loop(
     from modules.preflop.link_hands_obs_to_real import link_hands_obs_to_real
     from modules.preflop.link_hands_obs_to_spots_xml_real import link_obs_to_spots
 
-    try:
-        from modules.strategy.substrategy_selector import MatchInput, select_move
-    except Exception:
-        MatchInput = None
-        select_move = None
+    MatchInput = None
+    select_move = None
 
     dbg = _debug_enabled()
     last_sig_by_mesa: Dict[int, Optional[str]] = {}

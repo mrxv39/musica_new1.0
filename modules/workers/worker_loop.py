@@ -370,11 +370,8 @@ def run_loop(args: Any) -> None:
     from modules.db import db as dbmod
     from modules.ocr.ocr import run_ocr
 
-    try:
-        from modules.strategy.substrategy_selector import MatchInput, select_move
-    except Exception:
-        MatchInput = None  # type: ignore
-        select_move = None  # type: ignore
+    MatchInput = None
+    select_move = None
 
     dir_state = ReplayDirState()
     if mode == "replay_dir" and cfg.images_dir:

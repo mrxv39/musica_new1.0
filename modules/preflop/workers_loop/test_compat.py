@@ -62,12 +62,6 @@ def compute_strategy_safe(preflop: Any, mano_result: Any, ocr: Any) -> Tuple[Dic
     try:
         from modules.workers.worker_strategy import compute_strategy
 
-        try:
-            from modules.strategy.substrategy_selector import MatchInput, select_move
-        except Exception:
-            MatchInput = None  # type: ignore
-            select_move = None  # type: ignore
-
         ocr_stacks = ocr.get("stacks", {}) if isinstance(ocr, dict) else {}
         bets_result = ocr.get("bets", {}) if isinstance(ocr, dict) else {}
         stackefectivo_result = ocr.get("stackefectivo", {}) if isinstance(ocr, dict) else {}
@@ -81,8 +75,8 @@ def compute_strategy_safe(preflop: Any, mano_result: Any, ocr: Any) -> Tuple[Dic
             ocr_stacks=ocr_stacks,
             stackefectivo_result=stackefectivo_result,
             villano_result=villano_result,
-            MatchInput=MatchInput,
-            select_move=select_move,
+            MatchInput=None,
+            select_move=None,
         )
         return (strategy, "")
     except Exception as e:

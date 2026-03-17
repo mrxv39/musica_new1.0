@@ -26,6 +26,10 @@ const TOURNAMENTS_COLUMNS: ColumnConfigItem[] = [
 const SPOTS_STORAGE_KEY = "hands.spots.visibleColumns";
 const SPOTS_COLUMNS: ColumnConfigItem[] = [
   { id: "id", label: "ID" },
+  { id: "strategy_id", label: "Strategy ID" },
+  { id: "strategy_move", label: "Move" },
+  { id: "strategy_bet_min", label: "Bet min" },
+  { id: "strategy_bet_max", label: "Bet max" },
   { id: "mesa", label: "Mesa" },
   { id: "image_path", label: "Image" },
   { id: "ts", label: "Ts" },

@@ -55,6 +55,7 @@ HANDS_REAL_COLUMNS = [
 SPOTS_COLUMNS = [
     ("time", "REAL DEFAULT NULL"),
     ("spot_fingerprint", "TEXT DEFAULT ''"),
+    ("strategy_id", "INTEGER DEFAULT NULL REFERENCES spots_strategies(id)"),
 ]
 
 WORKER_PROFILE_COLUMNS = [
@@ -183,4 +184,9 @@ INDEX_SQLS = [
     "CREATE INDEX IF NOT EXISTS idx_workers_captures_table_players_time ON workers_captures(table_players, created_at_ms DESC)",
     "CREATE INDEX IF NOT EXISTS idx_workers_captures_dealer_seat_time ON workers_captures(dealer_seat, created_at_ms DESC)",
     "CREATE INDEX IF NOT EXISTS idx_workers_captures_pos_method_time ON workers_captures(pos_method, created_at_ms DESC)",
+
+    # Spot strategies (Excel -> DB)
+    "CREATE INDEX IF NOT EXISTS idx_spots_strategy_scopes_lookup ON spots_strategy_scopes(spot_key, p2_tipo, p3_tipo, scope_se_min, scope_se_max)",
+    "CREATE INDEX IF NOT EXISTS idx_spots_strategies_lookup ON spots_strategies(spot_key, p2_tipo, p3_tipo, stack_effective_min, stack_effective_max)",
+    "CREATE INDEX IF NOT EXISTS idx_spots_strategies_nash_lookup ON spots_strategies_nash(spot_key, p2_tipo, p3_tipo, hand_class, stack_effective_min, stack_effective_max)",
 ]

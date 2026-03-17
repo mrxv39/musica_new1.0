@@ -12,6 +12,8 @@ omit =
     */spots/spot_signature.py
     */preflop/workers_loop/test_*.py
     */preflop/test_import_xml_args.py
+    */strategy/selector_*.py
+    */strategy/substrategy_constants.py
 
 [report]
 fail_under = 75

@@ -2,6 +2,7 @@
 from typing import Any, Dict, Optional
 
 from modules.strategy.effective_stack import compute_effective_stack_bb
+from modules.strategy.spot_strategy_engine import SpotDecisionInput, decide_spot_strategy
 
 
 def _as_float(v: Any, default: float = 0.0) -> float:
@@ -108,7 +109,7 @@ def compute_strategy(
             se_used = None
             se_method = "none"
 
-        if preflop_ok and mano_ok and pos_ok and bets_ok and stacks_ok and (se_used is not None) and (select_move is not None) and (MatchInput is not None):
+        if preflop_ok and mano_ok and pos_ok and bets_ok and stacks_ok and (se_used is not None):
             hero_pos = str(pos.get("p1", "") or "")
             p2_pos = str(pos.get("p2", "") or "")
             p3_pos = str(pos.get("p3", "") or "")
@@ -129,26 +130,46 @@ def compute_strategy(
             situacion = f"{hero_pos}_vs_{p2_pos}_{p3_pos}_{p2_tipo}_{p3_tipo}"
 
             hand_class = str(mano_result.get("hand_class", "") or "") if isinstance(mano_result, dict) else ""
+            # Compat: legacy tests can inject MatchInput/select_move to bypass DB engine.
+            if (MatchInput is not None) and (select_move is not None):
+                inp = MatchInput(
+                    situacion=situacion,
+                    spot=hero_pos,
+                    hero_pos=hero_pos,
+                    hand_class=hand_class,
+                    p1_bet_bb=float(bets_fixed["p1_used"]),
+                    p1_stack_bb=float(ocr_stacks.get("p1", 0) or 0),
+                    p1_se_bb=float(se_used),
+                    p2_pos=p2_pos,
+                    p2_tipo=p2_tipo,
+                    p2_bet_bb=float(bets_fixed["p2_used"]),
+                    p2_stack_bb=float(ocr_stacks.get("p2", 0) or 0),
+                    p3_pos=p3_pos,
+                    p3_tipo=p3_tipo,
+                    p3_bet_bb=float(bets_fixed["p3_used"]),
+                    p3_stack_bb=float(ocr_stacks.get("p3", 0) or 0),
+                )
+                decision = select_move(inp)
+            else:
+                from modules.db.db import get_conn
 
-            inp = MatchInput(
-                situacion=situacion,
-                spot=hero_pos,
-                hero_pos=hero_pos,
-                hand_class=hand_class,
-                p1_bet_bb=float(bets_fixed["p1_used"]),
-                p1_stack_bb=float(ocr_stacks.get("p1", 0) or 0),
-                p1_se_bb=float(se_used),
-                p2_pos=p2_pos,
-                p2_tipo=p2_tipo,
-                p2_bet_bb=float(bets_fixed["p2_used"]),
-                p2_stack_bb=float(ocr_stacks.get("p2", 0) or 0),
-                p3_pos=p3_pos,
-                p3_tipo=p3_tipo,
-                p3_bet_bb=float(bets_fixed["p3_used"]),
-                p3_stack_bb=float(ocr_stacks.get("p3", 0) or 0),
-            )
-
-            decision = select_move(inp)
+                conn = get_conn()
+                try:
+                    decision = decide_spot_strategy(
+                        conn,
+                        SpotDecisionInput(
+                            spot_key=hero_pos,
+                            hand_class=hand_class,
+                            p1_se_bb=float(se_used),
+                            p1_bet_bb=float(bets_fixed["p1_used"]),
+                            p2_pos=p2_pos,
+                            p3_pos=p3_pos,
+                            p2_tipo=p2_tipo,
+                            p3_tipo=p3_tipo,
+                        ),
+                    )
+                finally:
+                    conn.close()
             strategy = {
                 "ok": True,
                 **decision,
@@ -157,6 +178,8 @@ def compute_strategy(
                 "bets_p2_raw": bets_fixed["p2_raw"],
                 "bets_p3_raw": bets_fixed["p3_raw"],
                 "bets_p1_used": bets_fixed["p1_used"],
+                "bets_p2_used": bets_fixed["p2_used"],
+                "bets_p3_used": bets_fixed["p3_used"],
                 "bets_fix_reason": bets_fixed["reason"] or None,
                 "se_external": se_external,
                 "se_derived": se_derived,
@@ -175,6 +198,9 @@ def compute_strategy(
                 "bets_p1_raw": _as_float(bets_result.get("p1", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0,
                 "bets_p2_raw": _as_float(bets_result.get("p2", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0,
                 "bets_p3_raw": _as_float(bets_result.get("p3", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0,
+                "bets_p1_used": _as_float(bets_result.get("p1", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0,
+                "bets_p2_used": _as_float(bets_result.get("p2", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0,
+                "bets_p3_used": _as_float(bets_result.get("p3", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0,
                 "se_external": se_external,
                 "se_derived": se_derived,
                 "se_used": float(se_used) if se_used is not None else None,

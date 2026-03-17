@@ -122,6 +122,8 @@ def run_worker_mesa_once(
     last_sig_by_mesa.setdefault(mesa, None)
     _LAST_CAPTURE_FP_BY_MESA.setdefault(mesa, None)
 
+    spot_id: Optional[int] = None
+
     tick_t0 = time.perf_counter()
     time_spot_t0: Optional[float] = None
 
@@ -351,6 +353,36 @@ def run_worker_mesa_once(
             stacks_result=stacks_result,
             ocr=ocr,
         )
+        # #region agent log
+        try:
+            import json as _json, time as _time
+
+            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "65a7d6",
+                            "runId": "repro",
+                            "hypothesisId": "H3",
+                            "location": "worker_mesa.run_worker_mesa_once:before_insert_spot",
+                            "message": "About to insert spot row",
+                            "data": {
+                                "mesa": int(mesa),
+                                "ts": str(ts),
+                                "dest_capture_path": str(dest_capture_path),
+                                "spot_fingerprint": str(spot_fingerprint or ""),
+                                "has_mano_result": isinstance(mano_result, dict),
+                                "has_stacks_result": isinstance(stacks_result, dict),
+                                "ocr_ok": bool((ocr or {}).get("ok")) if isinstance(ocr, dict) else None,
+                            },
+                            "timestamp": int(_time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion agent log
         spot_id = dbmod.insert_spot_capture_from_data(
             mesa=mesa,
             image_path=dest_capture_path,
@@ -362,10 +394,54 @@ def run_worker_mesa_once(
             time_sec=time_sec,
             spot_fingerprint=spot_fingerprint,
         )
+        # #region agent log
+        try:
+            import json as _json, time as _time
+
+            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "65a7d6",
+                            "runId": "repro",
+                            "hypothesisId": "H3",
+                            "location": "worker_mesa.run_worker_mesa_once:after_insert_spot",
+                            "message": "Inserted spot row result",
+                            "data": {"spot_id": int(spot_id) if spot_id else None},
+                            "timestamp": int(_time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion agent log
         if spot_id and (dbg or verbose):
             log(fp, f"[mesa {mesa}] spots persisted -> id={spot_id}")
     except Exception as e:
         log(fp, f"[mesa {mesa}] spots persist error: {e}")
+        # #region agent log
+        try:
+            import json as _json, time as _time
+
+            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "65a7d6",
+                            "runId": "repro",
+                            "hypothesisId": "H3",
+                            "location": "worker_mesa.run_worker_mesa_once:insert_spot_exception",
+                            "message": "Exception while inserting spot",
+                            "data": {"err": f"{type(e).__name__}: {e}"},
+                            "timestamp": int(_time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion agent log
 
     if profile_enabled:
         profile_times["insert_spot"] = time.perf_counter() - t_insert_spot0
@@ -375,6 +451,53 @@ def run_worker_mesa_once(
     strategy = force_ok_on_default_fold(strategy)
     if profile_enabled:
         profile_times["strategy"] = time.perf_counter() - t_strategy0
+
+    # Link spot -> unique strategy (spots_strategies) when possible
+    if spot_id and isinstance(strategy, dict):
+        try:
+            se_used = strategy.get("se_used", None)
+            hero_pos = str((strategy.get("spot") or "")).strip()
+            # strategy.get("spot") isn't set by worker_strategy; derive from situacion or OCR
+            if not hero_pos:
+                situacion = str(strategy.get("situacion") or "")
+                # "{HERO}_vs_{P2POS}_{P3POS}_{P2TIPO}_{P3TIPO}"
+                hero_pos = (situacion.split("_vs_", 1)[0] if "_vs_" in situacion else "").strip()
+
+            if se_used is not None and hero_pos:
+                from modules.db.db import get_conn
+                from modules.db.repo_spots_capture import update_spot_strategy_id
+                from modules.strategy.spots_strategies_repo import (
+                    SpotStrategyMatchInput,
+                    find_unique_spot_strategy_id,
+                )
+
+                # derive p2/p3 from situacion for consistency (worker_strategy uppercased tipos)
+                situacion = str(strategy.get("situacion") or "")
+                rest = situacion.split("_vs_", 1)[1] if "_vs_" in situacion else ""
+                parts = rest.split("_") if rest else []
+                p2_pos = parts[0] if len(parts) >= 1 else ""
+                p3_pos = parts[1] if len(parts) >= 2 else ""
+                p2_tipo = parts[2] if len(parts) >= 3 else ""
+                p3_tipo = parts[3] if len(parts) >= 4 else ""
+
+                inp = SpotStrategyMatchInput(
+                    spot_key=hero_pos,
+                    p1_se_bb=float(se_used),
+                    p1_bet_bb=float(strategy.get("bets_p1_used") or 0.0),
+                    p2_pos=p2_pos,
+                    p3_pos=p3_pos,
+                    p2_tipo=p2_tipo,
+                    p3_tipo=p3_tipo,
+                )
+                conn = get_conn()
+                try:
+                    sid = find_unique_spot_strategy_id(conn, inp)
+                finally:
+                    conn.close()
+                update_spot_strategy_id(spot_id=int(spot_id), strategy_id=int(sid))
+                strategy["spot_strategy_id"] = int(sid)
+        except Exception as e:
+            strategy["spot_strategy_link_error"] = str(e)
 
     t_obs0 = time.perf_counter() if profile_enabled else 0.0
     try:
