@@ -464,24 +464,6 @@ export async function fetchTournaments(dbPath: string, limit = 200): Promise<Tou
 /** List spots for the Hands section (same DB; table filled by worker). */
 export async function fetchSpots(dbPath: string, limit = 500): Promise<SpotRow[]> {
   const db = await openDb(dbPath);
-  // #region agent log
-  fetch("http://127.0.0.1:7899/ingest/f11c7dac-a87c-4159-b25b-d97d70878eae", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "65a7d6",
-    },
-    body: JSON.stringify({
-      sessionId: "65a7d6",
-      runId: "spots-debug",
-      hypothesisId: "H1",
-      location: "src/db.ts:fetchSpots:before",
-      message: "fetchSpots called",
-      data: { dbPath, limit },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion agent log
   const rows = await (db as any).select(
     `SELECT
        s.id, s.mesa, s.image_path, s.ts,
@@ -496,28 +478,10 @@ export async function fetchSpots(dbPath: string, limit = 500): Promise<SpotRow[]
      FROM spots s
      LEFT JOIN spots_strategies st
        ON st.id = s.strategy_id
-     ORDER BY id DESC
+     ORDER BY s.id DESC
      LIMIT ?1`,
     [limit]
   );
-  // #region agent log
-  fetch("http://127.0.0.1:7899/ingest/f11c7dac-a87c-4159-b25b-d97d70878eae", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "65a7d6",
-    },
-    body: JSON.stringify({
-      sessionId: "65a7d6",
-      runId: "spots-debug",
-      hypothesisId: "H2",
-      location: "src/db.ts:fetchSpots:after",
-      message: "fetchSpots got rows",
-      data: { count: Array.isArray(rows) ? rows.length : -1 },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion agent log
   return rows as SpotRow[];
 }
 
