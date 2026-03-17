@@ -1,5 +1,6 @@
 // C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\HandsPage.tsx
 import { invoke } from "@tauri-apps/api/core";
+import React from "react";
 import HandsToolbar from "./hands/HandsToolbar";
 import {
   TournamentsTable,
@@ -11,6 +12,12 @@ import {
 
 import { useHandsPage } from "./hands/useHandsPage";
 import { CHAMPION_XML_DIR, XML_ARCHIVE_DIR } from "./hands/handsPagePaths";
+import {
+  HandsBlocksConfigModal,
+  HandsVisibleBlocks,
+  loadInitialVisibleBlocks,
+  persistVisibleBlocks,
+} from "./hands/HandsBlocksConfigModal";
 
 const canUseTauriInvoke = () => {
   try {
@@ -22,6 +29,8 @@ const canUseTauriInvoke = () => {
 
 export default function HandsPage() {
   const hp = useHandsPage();
+  const [blocksConfigOpen, setBlocksConfigOpen] = React.useState(false);
+  const [visibleBlocks, setVisibleBlocks] = React.useState<HandsVisibleBlocks>(() => loadInitialVisibleBlocks());
 
   const canRunOne = hp.mode === "OBS" && hp.canLoad && !hp.busy;
 
@@ -47,28 +56,55 @@ export default function HandsPage() {
 
   return (
     <div style={{ padding: 16 }}>
-      <HandsToolbar
-        mode={hp.mode}
-        onChangeMode={hp.setMode}
-        canLoad={hp.canLoad}
-        onRefresh={hp.loadOnce}
-        auto={hp.auto}
-        onToggleAuto={hp.setAuto}
-        status={hp.uiStatus}
-        busy={hp.busy}
-        onReset={hp.onReset}
-        onRunBatch={hp.onRunBatch}
-        workersRunning={hp.workersRunning}
-        onToggleWorkers={handleToggleWorkers}
-        stackEfRangeText={hp.stackEfRangeText}
-        onChangeStackEfRangeText={hp.setStackEfRangeText}
-        betRangeText={hp.betRangeText}
-        onChangeBetRangeText={hp.setBetRangeText}
-        rangeListText={hp.rangeListText}
-        onChangeRangeListText={hp.setRangeListText}
-        linkFilter={hp.linkFilter}
-        onChangeLinkFilter={hp.setLinkFilter}
-        onClearFilters={hp.onClearFilters}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <HandsToolbar
+          mode={hp.mode}
+          onChangeMode={hp.setMode}
+          canLoad={hp.canLoad}
+          onRefresh={hp.loadOnce}
+          auto={hp.auto}
+          onToggleAuto={hp.setAuto}
+          status={hp.uiStatus}
+          busy={hp.busy}
+          onReset={hp.onReset}
+          onRunBatch={hp.onRunBatch}
+          workersRunning={hp.workersRunning}
+          onToggleWorkers={handleToggleWorkers}
+          stackEfRangeText={hp.stackEfRangeText}
+          onChangeStackEfRangeText={hp.setStackEfRangeText}
+          betRangeText={hp.betRangeText}
+          onChangeBetRangeText={hp.setBetRangeText}
+          rangeListText={hp.rangeListText}
+          onChangeRangeListText={hp.setRangeListText}
+          linkFilter={hp.linkFilter}
+          onChangeLinkFilter={hp.setLinkFilter}
+          onClearFilters={hp.onClearFilters}
+        />
+        <button
+          style={{
+            marginLeft: "auto",
+            padding: "6px 10px",
+            cursor: "pointer",
+            borderRadius: 6,
+            border: "1px solid #ddd",
+            background: "#fff",
+            fontSize: 12,
+          }}
+          onClick={() => setBlocksConfigOpen(true)}
+          title="Selecciona qué tablas se muestran"
+        >
+          Config tablas
+        </button>
+      </div>
+
+      <HandsBlocksConfigModal
+        open={blocksConfigOpen}
+        visibleBlocks={visibleBlocks}
+        onChangeVisibleBlocks={(next) => {
+          persistVisibleBlocks(next);
+          setVisibleBlocks(next);
+        }}
+        onClose={() => setBlocksConfigOpen(false)}
       />
 
       <div style={{ height: 10 }} />
@@ -97,22 +133,24 @@ export default function HandsPage() {
           alignItems: "start",
         }}
       >
-        <TournamentsTable rows={hp.tournaments ?? []} />
-        <HandsTableBlock
-          mode={hp.mode}
-          realRows={hp.sortedRealRows}
-          obsRows={hp.sortedObsRows}
-          dbPath={hp.dbPath}
-          sortKey={hp.sortKey}
-          sortAsc={hp.sortAsc}
-          onSort={hp.onSort}
-          canRunOne={canRunOne}
-          onRunOneForImage={hp.onRunOneForImage}
-          lastLog={hp.lastLog}
-        />
-        <SpotsRealTable rows={hp.spotsReal ?? []} />
-        <PlayersTableBlock rows={hp.players ?? []} />
-        <WorkerProfileTableBlock rows={hp.workerProfile ?? []} />
+        {visibleBlocks.tournaments && <TournamentsTable rows={hp.tournaments ?? []} />}
+        {visibleBlocks.hands && (
+          <HandsTableBlock
+            mode={hp.mode}
+            realRows={hp.sortedRealRows}
+            obsRows={hp.sortedObsRows}
+            dbPath={hp.dbPath}
+            sortKey={hp.sortKey}
+            sortAsc={hp.sortAsc}
+            onSort={hp.onSort}
+            canRunOne={canRunOne}
+            onRunOneForImage={hp.onRunOneForImage}
+            lastLog={hp.lastLog}
+          />
+        )}
+        {visibleBlocks.spots && <SpotsRealTable rows={hp.spotsReal ?? []} />}
+        {visibleBlocks.players && <PlayersTableBlock rows={hp.players ?? []} />}
+        {visibleBlocks.workerProfile && <WorkerProfileTableBlock rows={hp.workerProfile ?? []} />}
       </div>
 
       {hp.obsFooterText ? (

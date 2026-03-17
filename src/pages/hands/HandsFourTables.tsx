@@ -12,6 +12,7 @@ import HandsTable from "./HandsTable";
 import { makeHandsColumns } from "./handsColumns";
 
 const TOURNAMENTS_STORAGE_KEY = "hands.tournaments.visibleColumns";
+const TOURNAMENTS_COLLAPSE_KEY = "hands.tournaments.collapsed";
 const TOURNAMENTS_COLUMNS: ColumnConfigItem[] = [
   { id: "id", label: "ID" },
   { id: "tournamentcode", label: "Code" },
@@ -24,6 +25,7 @@ const TOURNAMENTS_COLUMNS: ColumnConfigItem[] = [
 ];
 
 const SPOTS_STORAGE_KEY = "hands.spots.visibleColumns";
+const SPOTS_COLLAPSE_KEY = "hands.spots.collapsed";
 const SPOTS_COLUMNS: ColumnConfigItem[] = [
   { id: "id", label: "ID" },
   { id: "strategy_id", label: "Strategy ID" },
@@ -78,6 +80,7 @@ function getDerivedSpotCell(row: SpotRow, columnId: string): string {
 }
 
 const PLAYERS_STORAGE_KEY = "hands.players.visibleColumns";
+const PLAYERS_COLLAPSE_KEY = "hands.players.collapsed";
 const PLAYERS_COLUMNS: ColumnConfigItem[] = [
   { id: "id", label: "ID" },
   { id: "name", label: "Name" },
@@ -86,6 +89,7 @@ const PLAYERS_COLUMNS: ColumnConfigItem[] = [
 ];
 
 const WORKER_PROFILE_STORAGE_KEY = "hands.workerProfile.visibleColumns";
+const WORKER_PROFILE_COLLAPSE_KEY = "hands.workerProfile.collapsed";
 const WORKER_PROFILE_COLUMNS: ColumnConfigItem[] = [
   { id: "mesa", label: "Mesa" },
   { id: "n", label: "N spots" },
@@ -102,6 +106,7 @@ const WORKER_PROFILE_COLUMNS: ColumnConfigItem[] = [
 
 const HANDS_OBS_STORAGE_KEY = "hands.visibleColumns";
 const HANDS_REAL_STORAGE_KEY = "hands.realHands.visibleColumns";
+const HANDS_COLLAPSE_KEY = "hands.handsTable.collapsed";
 const REAL_HANDS_COLUMNS: ColumnConfigItem[] = [
   { id: "icon", label: "📷" },
   { id: "gamecode", label: "Gamecode" },
@@ -157,12 +162,25 @@ const configButtonStyle: React.CSSProperties = {
   background: "#fff",
   borderRadius: 6,
   fontSize: 12,
-  marginLeft: "auto",
 };
 
 type TournamentsTableProps = { rows: TournamentRow[] };
 export function TournamentsTable({ rows }: TournamentsTableProps) {
   const [configOpen, setConfigOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState<boolean>(() => {
+    try {
+      return localStorage.getItem(TOURNAMENTS_COLLAPSE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(TOURNAMENTS_COLLAPSE_KEY, collapsed ? "true" : "false");
+    } catch {
+      // ignore
+    }
+  }, [collapsed]);
   const { visibleIds, visibleColumns, onChangeVisibleIds } = useVisibleColumns(
     TOURNAMENTS_COLUMNS,
     TOURNAMENTS_STORAGE_KEY
@@ -173,6 +191,13 @@ export function TournamentsTable({ rows }: TournamentsTableProps) {
     <div style={tableBlockStyle}>
       <div style={{ ...tableTitleStyle, display: "flex", alignItems: "center", gap: 8 }}>
         Tournaments
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          style={configButtonStyle}
+          title={collapsed ? "Mostrar filas" : "Ocultar filas"}
+        >
+          {collapsed ? "Expandir" : "Colapsar"}
+        </button>
         <button onClick={() => setConfigOpen(true)} style={configButtonStyle} title="Selecciona columnas">
           Config
         </button>
@@ -186,32 +211,36 @@ export function TournamentsTable({ rows }: TournamentsTableProps) {
         storageKey={TOURNAMENTS_STORAGE_KEY}
         title="Tournaments – columnas"
       />
-      <div style={tableScrollStyle}>
-        <table style={smallTableStyle}>
-          <thead>
-            <tr>
-              {cols.map((c) => (
-                <th key={c.id} style={thStyle}>{c.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={cols.length} style={tdStyle}>Rows: 0</td></tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id}>
-                  {cols.map((c) => (
-                    <td key={c.id} style={tdStyle}>
-                      {String((r as Record<string, unknown>)[c.id] ?? "")}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {collapsed ? (
+        <div style={{ padding: "6px 8px", fontSize: 12, opacity: 0.7 }}>Tabla colapsada</div>
+      ) : (
+        <div style={tableScrollStyle}>
+          <table style={smallTableStyle}>
+            <thead>
+              <tr>
+                {cols.map((c) => (
+                  <th key={c.id} style={thStyle}>{c.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr><td colSpan={cols.length} style={tdStyle}>Rows: 0</td></tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.id}>
+                    {cols.map((c) => (
+                      <td key={c.id} style={tdStyle}>
+                        {String((r as Record<string, unknown>)[c.id] ?? "")}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -219,6 +248,20 @@ export function TournamentsTable({ rows }: TournamentsTableProps) {
 type SpotsTableProps = { rows: SpotRow[] };
 export function SpotsRealTable({ rows }: SpotsTableProps) {
   const [configOpen, setConfigOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SPOTS_COLLAPSE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(SPOTS_COLLAPSE_KEY, collapsed ? "true" : "false");
+    } catch {
+      // ignore
+    }
+  }, [collapsed]);
   const { visibleIds, visibleColumns, onChangeVisibleIds } = useVisibleColumns(
     SPOTS_COLUMNS,
     SPOTS_STORAGE_KEY
@@ -229,6 +272,13 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
     <div style={tableBlockStyle}>
       <div style={{ ...tableTitleStyle, display: "flex", alignItems: "center", gap: 8 }}>
         Spots
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          style={configButtonStyle}
+          title={collapsed ? "Mostrar filas" : "Ocultar filas"}
+        >
+          {collapsed ? "Expandir" : "Colapsar"}
+        </button>
         <button onClick={() => setConfigOpen(true)} style={configButtonStyle} title="Selecciona columnas">
           Config
         </button>
@@ -242,42 +292,46 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
         storageKey={SPOTS_STORAGE_KEY}
         title="Spots – columnas"
       />
-      <div style={tableScrollStyle}>
-        <table style={smallTableStyle}>
-          <thead>
-            <tr>
-              {cols.map((c) => (
-                <th key={c.id} style={thStyle}>{c.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={cols.length} style={tdStyle}>Rows: 0</td></tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id}>
-                  {cols.map((c) => {
-                    const isDerived = c.id in SPOTS_DERIVED;
-                    let cell: string;
-                    if (c.id === "time") {
-                      const val = (r as Record<string, unknown>)[c.id];
-                      cell = val != null && typeof val === "number" ? Number(val).toFixed(3) : "";
-                    } else {
-                      cell = isDerived ? getDerivedSpotCell(r, c.id) : String((r as Record<string, unknown>)[c.id] ?? "");
-                    }
-                    return (
-                      <td key={c.id} style={tdStyle}>
-                        {cell || "–"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {collapsed ? (
+        <div style={{ padding: "6px 8px", fontSize: 12, opacity: 0.7 }}>Tabla colapsada</div>
+      ) : (
+        <div style={tableScrollStyle}>
+          <table style={smallTableStyle}>
+            <thead>
+              <tr>
+                {cols.map((c) => (
+                  <th key={c.id} style={thStyle}>{c.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr><td colSpan={cols.length} style={tdStyle}>Rows: 0</td></tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.id}>
+                    {cols.map((c) => {
+                      const isDerived = c.id in SPOTS_DERIVED;
+                      let cell: string;
+                      if (c.id === "time") {
+                        const val = (r as Record<string, unknown>)[c.id];
+                        cell = val != null && typeof val === "number" ? Number(val).toFixed(3) : "";
+                      } else {
+                        cell = isDerived ? getDerivedSpotCell(r, c.id) : String((r as Record<string, unknown>)[c.id] ?? "");
+                      }
+                      return (
+                        <td key={c.id} style={tdStyle}>
+                          {cell || "–"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -285,6 +339,20 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
 type PlayersTableBlockProps = { rows: PlayerRow[] };
 export function PlayersTableBlock({ rows }: PlayersTableBlockProps) {
   const [configOpen, setConfigOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState<boolean>(() => {
+    try {
+      return localStorage.getItem(PLAYERS_COLLAPSE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(PLAYERS_COLLAPSE_KEY, collapsed ? "true" : "false");
+    } catch {
+      // ignore
+    }
+  }, [collapsed]);
   const { visibleIds, visibleColumns, onChangeVisibleIds } = useVisibleColumns(
     PLAYERS_COLUMNS,
     PLAYERS_STORAGE_KEY
@@ -295,6 +363,13 @@ export function PlayersTableBlock({ rows }: PlayersTableBlockProps) {
     <div style={tableBlockStyle}>
       <div style={{ ...tableTitleStyle, display: "flex", alignItems: "center", gap: 8 }}>
         Players
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          style={configButtonStyle}
+          title={collapsed ? "Mostrar filas" : "Ocultar filas"}
+        >
+          {collapsed ? "Expandir" : "Colapsar"}
+        </button>
         <button onClick={() => setConfigOpen(true)} style={configButtonStyle} title="Selecciona columnas">
           Config
         </button>
@@ -308,32 +383,36 @@ export function PlayersTableBlock({ rows }: PlayersTableBlockProps) {
         storageKey={PLAYERS_STORAGE_KEY}
         title="Players – columnas"
       />
-      <div style={tableScrollStyle}>
-        <table style={smallTableStyle}>
-          <thead>
-            <tr>
-              {cols.map((c) => (
-                <th key={c.id} style={thStyle}>{c.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={cols.length} style={tdStyle}>Rows: 0</td></tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id}>
-                  {cols.map((c) => (
-                    <td key={c.id} style={tdStyle}>
-                      {String((r as Record<string, unknown>)[c.id] ?? "")}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {collapsed ? (
+        <div style={{ padding: "6px 8px", fontSize: 12, opacity: 0.7 }}>Tabla colapsada</div>
+      ) : (
+        <div style={tableScrollStyle}>
+          <table style={smallTableStyle}>
+            <thead>
+              <tr>
+                {cols.map((c) => (
+                  <th key={c.id} style={thStyle}>{c.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr><td colSpan={cols.length} style={tdStyle}>Rows: 0</td></tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.id}>
+                    {cols.map((c) => (
+                      <td key={c.id} style={tdStyle}>
+                        {String((r as Record<string, unknown>)[c.id] ?? "")}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -341,6 +420,20 @@ export function PlayersTableBlock({ rows }: PlayersTableBlockProps) {
 type WorkerProfileTableBlockProps = { rows: WorkerProfileRow[] };
 export function WorkerProfileTableBlock({ rows }: WorkerProfileTableBlockProps) {
   const [configOpen, setConfigOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState<boolean>(() => {
+    try {
+      return localStorage.getItem(WORKER_PROFILE_COLLAPSE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(WORKER_PROFILE_COLLAPSE_KEY, collapsed ? "true" : "false");
+    } catch {
+      // ignore
+    }
+  }, [collapsed]);
   const { visibleIds, visibleColumns, onChangeVisibleIds } = useVisibleColumns(
     WORKER_PROFILE_COLUMNS,
     WORKER_PROFILE_STORAGE_KEY
@@ -351,6 +444,13 @@ export function WorkerProfileTableBlock({ rows }: WorkerProfileTableBlockProps) 
     <div style={tableBlockStyle}>
       <div style={{ ...tableTitleStyle, display: "flex", alignItems: "center", gap: 8 }}>
         Worker profile (avg per mesa)
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          style={configButtonStyle}
+          title={collapsed ? "Mostrar filas" : "Ocultar filas"}
+        >
+          {collapsed ? "Expandir" : "Colapsar"}
+        </button>
         <button onClick={() => setConfigOpen(true)} style={configButtonStyle} title="Selecciona columnas">
           Config
         </button>
@@ -364,47 +464,51 @@ export function WorkerProfileTableBlock({ rows }: WorkerProfileTableBlockProps) 
         storageKey={WORKER_PROFILE_STORAGE_KEY}
         title="Worker profile – columnas"
       />
-      <div style={tableScrollStyle}>
-        <table style={smallTableStyle}>
-          <thead>
-            <tr>
-              {cols.map((c) => (
-                <th key={c.id} style={thStyle}>{c.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
+      {collapsed ? (
+        <div style={{ padding: "6px 8px", fontSize: 12, opacity: 0.7 }}>Tabla colapsada</div>
+      ) : (
+        <div style={tableScrollStyle}>
+          <table style={smallTableStyle}>
+            <thead>
               <tr>
-                <td colSpan={cols.length} style={tdStyle}>
-                  Rows: 0
-                </td>
+                {cols.map((c) => (
+                  <th key={c.id} style={thStyle}>{c.label}</th>
+                ))}
               </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.mesa}>
-                  {cols.map((c) => {
-                    const v = (r as Record<string, unknown>)[c.id];
-                    let cell: string;
-                    if (v == null) {
-                      cell = "";
-                    } else if (typeof v === "number" && c.id !== "mesa" && c.id !== "n") {
-                      cell = Number(v).toFixed(3);
-                    } else {
-                      cell = String(v);
-                    }
-                    return (
-                      <td key={c.id} style={tdStyle}>
-                        {cell || "–"}
-                      </td>
-                    );
-                  })}
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={cols.length} style={tdStyle}>
+                    Rows: 0
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.mesa}>
+                    {cols.map((c) => {
+                      const v = (r as Record<string, unknown>)[c.id];
+                      let cell: string;
+                      if (v == null) {
+                        cell = "";
+                      } else if (typeof v === "number" && c.id !== "mesa" && c.id !== "n") {
+                        cell = Number(v).toFixed(3);
+                      } else {
+                        cell = String(v);
+                      }
+                      return (
+                        <td key={c.id} style={tdStyle}>
+                          {cell || "–"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -434,6 +538,20 @@ export function HandsTableBlock({
   lastLog,
 }: HandsTableBlockProps) {
   const [configOpen, setConfigOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState<boolean>(() => {
+    try {
+      return localStorage.getItem(HANDS_COLLAPSE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(HANDS_COLLAPSE_KEY, collapsed ? "true" : "false");
+    } catch {
+      // ignore
+    }
+  }, [collapsed]);
 
   const obsColumns = React.useMemo(
     () => makeHandsColumns(() => {}, obsRows[0] ?? null),
@@ -450,6 +568,13 @@ export function HandsTableBlock({
     <div style={{ ...tableBlockStyle, maxHeight: 420 }}>
       <div style={{ ...tableTitleStyle, display: "flex", alignItems: "center", gap: 8 }}>
         Hands
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          style={configButtonStyle}
+          title={collapsed ? "Mostrar filas" : "Ocultar filas"}
+        >
+          {collapsed ? "Expandir" : "Colapsar"}
+        </button>
         <button onClick={() => setConfigOpen(true)} style={configButtonStyle} title="Selecciona columnas">
           Config
         </button>
@@ -478,28 +603,32 @@ export function HandsTableBlock({
         />
       )}
 
-      <div style={tableScrollStyle}>
-        {mode === "REAL" ? (
-          <RealHandsTable
-            rows={realRows}
-            dbPath={dbPath}
-            visibleColumnIds={realVisible.visibleIds.length > 0 ? realVisible.visibleIds : undefined}
-          />
-        ) : (
-          <HandsTable
-            rows={obsRows}
-            onSort={onSort}
-            sortKey={sortKey}
-            sortAsc={sortAsc}
-            canRunOne={canRunOne}
-            onRunOneForImage={onRunOneForImage}
-            lastLog={lastLog}
-            dbPath={dbPath}
-            visibleIds={obsVisible.visibleIds}
-            onChangeVisibleIds={obsVisible.onChangeVisibleIds}
-          />
-        )}
-      </div>
+      {collapsed ? (
+        <div style={{ padding: "6px 8px", fontSize: 12, opacity: 0.7 }}>Tabla colapsada</div>
+      ) : (
+        <div style={tableScrollStyle}>
+          {mode === "REAL" ? (
+            <RealHandsTable
+              rows={realRows}
+              dbPath={dbPath}
+              visibleColumnIds={realVisible.visibleIds.length > 0 ? realVisible.visibleIds : undefined}
+            />
+          ) : (
+            <HandsTable
+              rows={obsRows}
+              onSort={onSort}
+              sortKey={sortKey}
+              sortAsc={sortAsc}
+              canRunOne={canRunOne}
+              onRunOneForImage={onRunOneForImage}
+              lastLog={lastLog}
+              dbPath={dbPath}
+              visibleIds={obsVisible.visibleIds}
+              onChangeVisibleIds={obsVisible.onChangeVisibleIds}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
