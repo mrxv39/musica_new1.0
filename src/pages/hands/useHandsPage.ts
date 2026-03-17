@@ -180,9 +180,53 @@ export function useHandsPage() {
   const loadSpotsRealOnce = async () => {
     try {
       const rows = await fetchSpots(dbPath);
+      // #region agent log
+      fetch("http://127.0.0.1:7899/ingest/f11c7dac-a87c-4159-b25b-d97d70878eae", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "65a7d6",
+        },
+        body: JSON.stringify({
+          sessionId: "65a7d6",
+          runId: "spots-debug",
+          hypothesisId: "H3",
+          location: "src/pages/hands/useHandsPage.ts:loadSpotsRealOnce:success",
+          message: "loadSpotsRealOnce loaded rows",
+          data: { dbPath, count: Array.isArray(rows) ? rows.length : -1 },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion agent log
       setSpotsReal(rows);
     } catch (e) {
-      console.error("load spots failed", e);
+      const msg = String(e instanceof Error ? e.message : e);
+      if (msg.toLowerCase().includes("no such column")) {
+        console.error(
+          "load spots failed (schema mismatch). Asegúrate de haber ejecutado las migraciones para la tabla spots.",
+          e
+        );
+      } else {
+        console.error("load spots failed", e);
+      }
+      // #region agent log
+      fetch("http://127.0.0.1:7899/ingest/f11c7dac-a87c-4159-b25b-d97d70878eae", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "65a7d6",
+        },
+        body: JSON.stringify({
+          sessionId: "65a7d6",
+          runId: "spots-debug",
+          hypothesisId: "H4",
+          location: "src/pages/hands/useHandsPage.ts:loadSpotsRealOnce:error",
+          message: "loadSpotsRealOnce failed",
+          data: { dbPath, error: msg },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion agent log
       setSpotsReal([]);
     }
   };

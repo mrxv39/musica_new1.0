@@ -53,9 +53,19 @@ HANDS_REAL_COLUMNS = [
 ]
 
 SPOTS_COLUMNS = [
+    # columnas históricas (ya presentes en muchos esquemas antiguos):
+    #   id, mesa, image_path, ts, stacks_json, bets_json
+    #
+    # columnas nuevas añadidas en schema.py que deben existir también
+    # en DBs antiguas para que el frontend (fetchSpots) funcione:
+    ("names_json", "TEXT DEFAULT '{}'"),
+    ("tipo_p2", "TEXT DEFAULT ''"),
+    ("tipo_p3", "TEXT DEFAULT ''"),
+    ("raw_json", "TEXT DEFAULT '{}'"),
     ("time", "REAL DEFAULT NULL"),
     ("spot_fingerprint", "TEXT DEFAULT ''"),
     ("strategy_id", "INTEGER DEFAULT NULL REFERENCES spots_strategies(id)"),
+    ("created_at", "TEXT DEFAULT (datetime('now'))"),
 ]
 
 WORKER_PROFILE_COLUMNS = [
