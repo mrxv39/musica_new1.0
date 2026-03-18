@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"TODO\\\\|FIXME\\\\|XXX\\\\|HACK\" /c/Users/Usuario/Desktop/proyectos/poker_boss --include=*.py --include=*.tsx --include=*.ts)",
+      "Bash(grep -r \"eval\\\\|exec\\\\|pickle\\\\|__dict__\" /c/Users/Usuario/Desktop/proyectos/poker_boss/modules --include=*.py)",
+      "Bash(python -m pytest tests/test_preflop.py::TestPreflop::test_shape_and_flags -v)",
+      "Bash(python -c \"import modules.db.db; import modules.preflop.workers_loop.worker_mesa; print\\(''✓ Imports OK''\\)\")",
+      "Bash(python -c \"import modules.db.db; import modules.preflop.workers_loop.worker_mesa; print\\(''Imports OK''\\)\")",
+      "Bash(python -m pytest tests/test_preflop.py -q)",
+      "Bash(gh pr:*)",
+      "Bash(grep:*)",
+      "Bash(python -c \"import modules.preflop.workers_loop.worker_mesa\")"
+    ]
+  }
+}

@@ -102,6 +102,7 @@ describe("useHandsPageWorkerActions", () => {
   });
 
   it("onToggleWorkers starts workers and updates local running state", async () => {
+    invokeMock.mockResolvedValue(undefined);
     setWorkersRunningCommandMock.mockResolvedValue("workers started");
 
     const { result } = renderHook(() =>
@@ -120,6 +121,7 @@ describe("useHandsPageWorkerActions", () => {
       await result.current.onToggleWorkers();
     });
 
+    expect(invokeMock).toHaveBeenCalledWith("show_overlay");
     expect(setWorkersRunningCommandMock).toHaveBeenCalledWith({
       running: true,
       dbPath: "C:\\db\\poker_boss.db",
@@ -132,6 +134,7 @@ describe("useHandsPageWorkerActions", () => {
   });
 
   it("onToggleWorkers stops workers when already running", async () => {
+    invokeMock.mockResolvedValue(undefined);
     setWorkersRunningCommandMock.mockResolvedValue("workers stopped");
 
     const { result } = renderHook(() =>
@@ -150,6 +153,7 @@ describe("useHandsPageWorkerActions", () => {
       await result.current.onToggleWorkers();
     });
 
+    expect(invokeMock).toHaveBeenCalledWith("hide_overlay");
     expect(setWorkersRunningCommandMock).toHaveBeenCalledWith({
       running: false,
       dbPath: "C:\\db\\poker_boss.db",
