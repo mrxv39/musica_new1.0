@@ -60,14 +60,29 @@ def get_image_for_tick(
             else:
                 return ImageGrabResult(None, images_dir, errors, None, done=True)
 
-        img_path = dir_state.files[dir_state.idx]
-        dir_state.idx += 1
+        # Try to find next valid file in cache (handle TOCTOU: file may have been deleted)
+        max_attempts = len(dir_state.files)
+        attempts = 0
+        while attempts < max_attempts:
+            if dir_state.idx >= len(dir_state.files):
+                if loop_dir:
+                    dir_state.idx = 0
+                else:
+                    return ImageGrabResult(None, images_dir, errors, None, done=True)
 
-        image_ref = os.path.abspath(img_path)
-        if not os.path.exists(img_path):
-            return ImageGrabResult(None, image_ref, ["replay_dir image not found"], None)
+            img_path = dir_state.files[dir_state.idx]
+            dir_state.idx += 1
 
-        return ImageGrabResult(img_path, image_ref, errors, None)
+            image_ref = os.path.abspath(img_path)
+            if os.path.exists(img_path):
+                return ImageGrabResult(img_path, image_ref, errors, None)
+
+            # File no longer exists (deleted by user); log and try next
+            errors.append(f"replay_dir image deleted: {image_ref}")
+            attempts += 1
+
+        # All files in cache are missing
+        return ImageGrabResult(None, images_dir, ["all replay_dir images missing or deleted"], None)
 
     # screen
     try:

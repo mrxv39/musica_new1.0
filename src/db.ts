@@ -176,6 +176,7 @@ type SqlDb = {
 
 let _db: SqlDb | null = null;
 let _dbPath: string | null = null;
+let _dbInitPromise: Promise<void> | null = null;
 
 export async function openDb(dbPath: string) {
   return await Database.load(`sqlite:${dbPath}`);
@@ -184,24 +185,64 @@ export async function openDb(dbPath: string) {
 /**
  * ✅ Contract export (compat):
  * src/db.ts debe exportar dbInit/dbQuery/dbExec
+ *
+ * NOTE: If called from worker context that also changes DB path,
+ * ensure coordination to avoid path mismatch between TS and Python.
  */
 export async function dbInit(dbPath: string = DEFAULT_DB_PATH): Promise<void> {
-  _dbPath = dbPath;
-  _db = (await openDb(dbPath)) as any;
+  // Prevent concurrent reinit attempts
+  if (_dbInitPromise) {
+    await _dbInitPromise;
+  }
+
+  // Return early if already initialized to this path
+  if (_db && _dbPath === dbPath) {
+    return;
+  }
+
+  // Create new init promise
+  _dbInitPromise = (async () => {
+    try {
+      _dbPath = dbPath;
+      _db = (await openDb(dbPath)) as any;
+    } finally {
+      _dbInitPromise = null;
+    }
+  })();
+
+  await _dbInitPromise;
 }
 
 export async function dbQuery<T = any>(sql: string, params: any[] = [], dbPath?: string): Promise<T> {
-  if (!_db || (dbPath && dbPath !== _dbPath)) {
-    await dbInit(dbPath ?? DEFAULT_DB_PATH);
+  const targetPath = dbPath ?? DEFAULT_DB_PATH;
+
+  // Path mismatch or no db: reinitialize
+  if (!_db || (targetPath !== _dbPath)) {
+    await dbInit(targetPath);
   }
+
+  // Safety check: verify path is still correct after init
+  if (_dbPath !== targetPath) {
+    throw new Error(`DB path mismatch after init: expected ${targetPath}, got ${_dbPath}`);
+  }
+
   const rows = await (_db as any).select(sql, params);
   return rows as T;
 }
 
 export async function dbExec(sql: string, params: any[] = [], dbPath?: string): Promise<any> {
-  if (!_db || (dbPath && dbPath !== _dbPath)) {
-    await dbInit(dbPath ?? DEFAULT_DB_PATH);
+  const targetPath = dbPath ?? DEFAULT_DB_PATH;
+
+  // Path mismatch or no db: reinitialize
+  if (!_db || (targetPath !== _dbPath)) {
+    await dbInit(targetPath);
   }
+
+  // Safety check: verify path is still correct after init
+  if (_dbPath !== targetPath) {
+    throw new Error(`DB path mismatch after init: expected ${targetPath}, got ${_dbPath}`);
+  }
+
   return await (_db as any).execute(sql, params);
 }
 

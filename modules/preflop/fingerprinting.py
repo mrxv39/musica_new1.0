@@ -38,8 +38,11 @@ def spot_fingerprint(mesa: int, p1_stack: float) -> str:
 def image_fingerprint(image_path: str, timestamp_ms: Optional[int] = None) -> str:
     """Fingerprint for deduplicating captures by image content and time bucket.
 
-    Key = path + (timestamp // 2000) ms.
+    Key = path + (timestamp // 2) seconds.
     Bucketing every 2 seconds prevents identical frames from being reprocessed.
+
+    Note: Uses second precision (not milliseconds) to match board_state_fingerprint().
+    This avoids bucket collision inconsistencies at second boundaries.
 
     Args:
         image_path: Absolute path to image file
@@ -51,8 +54,9 @@ def image_fingerprint(image_path: str, timestamp_ms: Optional[int] = None) -> st
     if timestamp_ms is None:
         timestamp_ms = int(time.time() * 1000)
 
-    # Bucket every 2 seconds to group identical frames
-    bucket = timestamp_ms // 2000
+    # Convert to seconds and bucket every 2 seconds (matches board_state_fingerprint)
+    timestamp_sec = timestamp_ms // 1000
+    bucket = timestamp_sec // 2
     key = f"{image_path}|bucket={bucket}"
     return sha1_hash(key)
 

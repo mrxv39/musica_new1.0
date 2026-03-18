@@ -35,27 +35,42 @@ def run_module(name: str, path: str, image_path: str):
             text=True,
             timeout=5,
         )
-        if proc.returncode != 0 or not (proc.stdout or "").strip():
+
+        # Check for subprocess errors first
+        if proc.returncode != 0:
+            stderr_msg = (proc.stderr or "").strip()
             return (
-                {"error": "nonzero exit or no output"},
-                f"{name}: nonzero exit or no output",
+                {"error": f"nonzero_exit_{proc.returncode}"},
+                f"{name}: nonzero exit code {proc.returncode}" + (f": {stderr_msg}" if stderr_msg else ""),
             )
 
+        # Check for empty output
+        stdout = (proc.stdout or "").strip()
+        if not stdout:
+            return (
+                {"error": "empty_stdout"},
+                f"{name}: subprocess produced no output",
+            )
+
+        # Try to parse JSON
         try:
-            data = json.loads(proc.stdout)
+            data = json.loads(stdout)
             if not isinstance(data, dict):
                 return (
-                    {"error": "invalid json (not an object)"},
-                    f"{name}: invalid json (not an object)",
+                    {"error": "invalid_json_not_dict"},
+                    f"{name}: JSON output is not a dictionary",
                 )
             return data, None
-        except Exception:
-            return ({"error": "invalid json"}, f"{name}: invalid json")
+        except json.JSONDecodeError as je:
+            return (
+                {"error": f"json_parse_error"},
+                f"{name}: JSON parse failed at line {je.lineno}: {je.msg}",
+            )
 
     except subprocess.TimeoutExpired:
-        return ({"error": "timeout"}, f"{name}: timeout")
+        return ({"error": "subprocess_timeout"}, f"{name}: subprocess timed out after 5s")
     except Exception as e:
-        return ({"error": str(e)}, f"{name}: {str(e)}")
+        return ({"error": f"exception_{type(e).__name__}"}, f"{name}: {type(e).__name__}: {str(e)}")
 
 
 def extract_ok_flag(name: str, data: dict) -> bool:
