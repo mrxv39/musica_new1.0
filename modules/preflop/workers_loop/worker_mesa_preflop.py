@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -11,9 +12,11 @@ def short_value(v: Any, max_len: int = 240) -> str:
     try:
         s = json.dumps(v, ensure_ascii=False, default=str)
     except Exception:
+        logging.debug(f"json.dumps failed for value type={type(v).__name__}", exc_info=True)
         try:
             s = str(v)
         except Exception:
+            logging.debug(f"str() failed for value type={type(v).__name__}", exc_info=True)
             s = "<unprintable>"
     s = s.replace("\r", " ").replace("\n", " ")
     if len(s) > max_len:

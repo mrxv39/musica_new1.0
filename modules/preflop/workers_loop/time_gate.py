@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -76,7 +77,7 @@ def _write_area_and_roi_probe_once(
 
         _DEBUG_SAVED_MESAS.add(mesa)
     except Exception:
-        pass
+        logging.warning(f"Failed to write time_gate debug for mesa={area.get('mesa')}", exc_info=True)
 
 
 def _maybe_write_time_gate_debug(
@@ -97,7 +98,7 @@ def _maybe_write_time_gate_debug(
             if score is not None:
                 score_num = float(score)
         except Exception:
-            pass
+            logging.debug(f"Failed to convert time_gate score to float: {score}", exc_info=True)
 
         should_save = (not time_ok) or (score_num is not None and score_num >= DEBUG_SAVE_SCORE_MIN)
         if not should_save:
@@ -140,7 +141,7 @@ def _maybe_write_time_gate_debug(
             json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
 
     except Exception:
-        pass
+        logging.warning(f"Failed to write time_gate debug payload for mesa={area.get('mesa')}", exc_info=True)
 
 
 def _run_time_script_on_roi(roi_path: str, timeout_sec: int) -> Dict[str, Any]:
@@ -240,7 +241,7 @@ def run_time_gate_on_roi_path(
         if os.path.exists(roi_path):
             os.remove(roi_path)
     except Exception:
-        pass
+        logging.debug(f"Failed to remove roi_path: {roi_path}", exc_info=True)
     return out
 
 

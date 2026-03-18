@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from typing import Any, Optional
@@ -17,6 +18,7 @@ def update_obs_frame_ref(dbmod: Any, fingerprint: str, new_frame_ref: str) -> bo
         conn.commit()
         return True
     except Exception:
+        logging.exception(f"update_obs_frame_ref failed for fingerprint={fingerprint}")
         return False
 
 
@@ -26,6 +28,7 @@ def _to_float(v: Any) -> Optional[float]:
             return None
         return float(v)
     except Exception:
+        logging.debug(f"Failed to convert value to float: {v}", exc_info=True)
         return None
 
 

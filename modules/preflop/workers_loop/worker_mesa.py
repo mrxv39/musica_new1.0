@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import threading
@@ -59,35 +60,6 @@ def _build_spot_fingerprint(
             stacks = ocr.get("stacks")
             if isinstance(stacks, dict):
                 p1_stack = stacks.get("p1")
-
-        # #region agent log
-        try:
-            import json as _json, time as _time
-
-            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
-                _f.write(
-                    _json.dumps(
-                        {
-                            "sessionId": "65a7d6",
-                            "runId": "pre-fix",
-                            "hypothesisId": "H1",
-                            "location": "worker_mesa._build_spot_fingerprint",
-                            "message": "Fingerprint inputs",
-                            "data": {
-                                "mesa": int(mesa),
-                                "has_stacks_result": isinstance(stacks_result, dict),
-                                "stacks_result_p1": (stacks_result or {}).get("p1") if isinstance(stacks_result, dict) else None,
-                                "has_ocr_stacks": isinstance((ocr or {}).get("stacks"), dict),
-                                "ocr_stacks_p1": ((ocr or {}).get("stacks") or {}).get("p1") if isinstance((ocr or {}).get("stacks"), dict) else None,
-                            },
-                            "timestamp": int(_time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion agent log
 
         if p1_stack is None:
             return ""
@@ -278,7 +250,7 @@ def run_worker_mesa_once(
                         ocr_json=json.dumps(ocr or {}, ensure_ascii=False),
                     )
             except Exception:
-                pass
+                logging.exception(f"[mesa {mesa}] update_worker_capture_ocr failed")
             try:
                 write_time_mano_candidate(
                     dirs=dirs,
@@ -289,7 +261,7 @@ def run_worker_mesa_once(
                     preflop=preflop,
                 )
             except Exception:
-                pass
+                logging.exception(f"[mesa {mesa}] write_time_mano_candidate failed")
 
         t = threading.Thread(target=_deferred_ocr_and_candidate, daemon=True)
         t.start()
@@ -318,7 +290,7 @@ def run_worker_mesa_once(
                     reason=reason_text,
                 )
             except Exception:
-                pass
+                logging.exception(f"[mesa {mesa}] update_worker_capture_route (preflop fail) failed")
 
         return
 
@@ -353,36 +325,6 @@ def run_worker_mesa_once(
             stacks_result=stacks_result,
             ocr=ocr,
         )
-        # #region agent log
-        try:
-            import json as _json, time as _time
-
-            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
-                _f.write(
-                    _json.dumps(
-                        {
-                            "sessionId": "65a7d6",
-                            "runId": "repro",
-                            "hypothesisId": "H3",
-                            "location": "worker_mesa.run_worker_mesa_once:before_insert_spot",
-                            "message": "About to insert spot row",
-                            "data": {
-                                "mesa": int(mesa),
-                                "ts": str(ts),
-                                "dest_capture_path": str(dest_capture_path),
-                                "spot_fingerprint": str(spot_fingerprint or ""),
-                                "has_mano_result": isinstance(mano_result, dict),
-                                "has_stacks_result": isinstance(stacks_result, dict),
-                                "ocr_ok": bool((ocr or {}).get("ok")) if isinstance(ocr, dict) else None,
-                            },
-                            "timestamp": int(_time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion agent log
         spot_id = dbmod.insert_spot_capture_from_data(
             mesa=mesa,
             image_path=dest_capture_path,
@@ -394,54 +336,10 @@ def run_worker_mesa_once(
             time_sec=time_sec,
             spot_fingerprint=spot_fingerprint,
         )
-        # #region agent log
-        try:
-            import json as _json, time as _time
-
-            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
-                _f.write(
-                    _json.dumps(
-                        {
-                            "sessionId": "65a7d6",
-                            "runId": "repro",
-                            "hypothesisId": "H3",
-                            "location": "worker_mesa.run_worker_mesa_once:after_insert_spot",
-                            "message": "Inserted spot row result",
-                            "data": {"spot_id": int(spot_id) if spot_id else None},
-                            "timestamp": int(_time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion agent log
         if spot_id and (dbg or verbose):
             log(fp, f"[mesa {mesa}] spots persisted -> id={spot_id}")
     except Exception as e:
         log(fp, f"[mesa {mesa}] spots persist error: {e}")
-        # #region agent log
-        try:
-            import json as _json, time as _time
-
-            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
-                _f.write(
-                    _json.dumps(
-                        {
-                            "sessionId": "65a7d6",
-                            "runId": "repro",
-                            "hypothesisId": "H3",
-                            "location": "worker_mesa.run_worker_mesa_once:insert_spot_exception",
-                            "message": "Exception while inserting spot",
-                            "data": {"err": f"{type(e).__name__}: {e}"},
-                            "timestamp": int(_time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion agent log
 
     if profile_enabled:
         profile_times["insert_spot"] = time.perf_counter() - t_insert_spot0
@@ -451,6 +349,20 @@ def run_worker_mesa_once(
     strategy = force_ok_on_default_fold(strategy)
     if profile_enabled:
         profile_times["strategy"] = time.perf_counter() - t_strategy0
+
+    # Persist the effective decision (even when there is no linked strategy row).
+    if spot_id and isinstance(strategy, dict) and has_strategy_move(strategy):
+        try:
+            from modules.db.repo_spots_capture import update_spot_decision
+
+            update_spot_decision(
+                spot_id=int(spot_id),
+                move=str(strategy.get("move") or ""),
+                betmin=strategy.get("betmin", None),
+                betmax=strategy.get("betmax", None),
+            )
+        except Exception:
+            pass
 
     # Link spot -> spots_strategies row only when hand is in that row's hand_range (Hoja1+)
     if spot_id and isinstance(strategy, dict):
@@ -631,19 +543,19 @@ def run_worker_mesa_once(
                     reason="strategy_has_move_and_bets",
                 )
             except Exception:
-                pass
+                logging.exception(f"[mesa {mesa}] update_worker_capture_route (ok) failed")
 
         if image_fp and dst:
             try:
                 update_obs_frame_ref(dbmod, image_fp, dst)
             except Exception:
-                pass
+                logging.exception(f"[mesa {mesa}] update_obs_frame_ref (fp) failed")
 
         if out.get("persisted") and new_sig and dst and new_sig != image_fp:
             try:
                 update_obs_frame_ref(dbmod, new_sig, dst)
             except Exception:
-                pass
+                logging.exception(f"[mesa {mesa}] update_obs_frame_ref (new_sig) failed")
     else:
         dst = safe_move(img_path, dirs.err_dir)
         reason = None
@@ -663,19 +575,19 @@ def run_worker_mesa_once(
                     reason=reason_text,
                 )
             except Exception:
-                pass
+                logging.exception(f"[mesa {mesa}] update_worker_capture_route (errors) failed")
 
         if image_fp and dst:
             try:
                 update_obs_frame_ref(dbmod, image_fp, dst)
             except Exception:
-                pass
+                logging.exception(f"[mesa {mesa}] update_obs_frame_ref (fp, errors path) failed")
 
         if out.get("persisted") and new_sig and dst and new_sig != image_fp:
             try:
                 update_obs_frame_ref(dbmod, new_sig, dst)
             except Exception:
-                pass
+                logging.exception(f"[mesa {mesa}] update_obs_frame_ref (new_sig, errors path) failed")
 
         if dbg:
             try:
@@ -690,4 +602,4 @@ def run_worker_mesa_once(
                     capture_id=capture_id,
                 )
             except Exception:
-                pass
+                logging.debug(f"[mesa {mesa}] write_no_strategy_debug failed", exc_info=True)

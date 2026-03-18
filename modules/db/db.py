@@ -12,10 +12,14 @@ Compatibilidad:
 """
 from __future__ import annotations
 
+import logging
+import threading
+
 from .paths import get_db_path
 
 _DB_CONN = None
 _DB_PATH_ACTIVE = None
+_db_lock = threading.Lock()
 
 _CONN_PATH = None
 from .conn import get_conn as _get_conn_raw
@@ -35,20 +39,21 @@ from .repo_spots_capture import insert_spot_capture_from_data
 
 def get_conn():
     global _DB_CONN, _DB_PATH_ACTIVE
-    path_now = get_db_path()
-    if _DB_PATH_ACTIVE is None:
-        _DB_PATH_ACTIVE = path_now
-    if _DB_PATH_ACTIVE != path_now:
-        try:
-            if _DB_CONN is not None:
-                _DB_CONN.close()
-        except Exception:
-            pass
-        _DB_CONN = None
-        _DB_PATH_ACTIVE = path_now
+    with _db_lock:
+        path_now = get_db_path()
+        if _DB_PATH_ACTIVE is None:
+            _DB_PATH_ACTIVE = path_now
+        if _DB_PATH_ACTIVE != path_now:
+            try:
+                if _DB_CONN is not None:
+                    _DB_CONN.close()
+            except Exception:
+                logging.exception("Failed to close DB connection during path change")
+            _DB_CONN = None
+            _DB_PATH_ACTIVE = path_now
 
-    init_db()
-    return _get_conn_raw()
+        init_db()
+        return _get_conn_raw()
 
 
 __all__ = [

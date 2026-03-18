@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Dict, Optional
 
 from .conn import connect
@@ -34,32 +35,6 @@ def insert_spot_capture(
         if spot_fingerprint:
             # Heurística de deduplicación: mismo fingerprint (mesa + P1 stack) y
             # fila creada en los últimos 10 segundos.
-            # #region agent log
-            try:
-                import json as _json, time as _time
-
-                with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
-                    _f.write(
-                        _json.dumps(
-                            {
-                                "sessionId": "65a7d6",
-                                "runId": "pre-fix",
-                                "hypothesisId": "H2",
-                                "location": "repo_spots_capture.insert_spot_capture:before_select",
-                                "message": "Checking recent spot by fingerprint",
-                                "data": {
-                                    "mesa": int(mesa),
-                                    "spot_fingerprint": spot_fingerprint,
-                                },
-                                "timestamp": int(_time.time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion agent log
-
             cur.execute(
                 """
                 SELECT id, ts, created_at
@@ -72,34 +47,6 @@ def insert_spot_capture(
             )
             row = cur.fetchone()
             if row and row[0]:
-                # #region agent log
-                try:
-                    import json as _json, time as _time
-
-                    with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
-                        _f.write(
-                            _json.dumps(
-                                {
-                                    "sessionId": "65a7d6",
-                                    "runId": "pre-fix",
-                                    "hypothesisId": "H3",
-                                    "location": "repo_spots_capture.insert_spot_capture:hit_existing",
-                                    "message": "Existing recent spot found, reusing id",
-                                    "data": {
-                                        "existing_id": int(row[0]),
-                                        "existing_ts": row[1],
-                                        "existing_created_at": row[2],
-                                        "mesa": int(mesa),
-                                        "spot_fingerprint": spot_fingerprint,
-                                    },
-                                    "timestamp": int(_time.time() * 1000),
-                                }
-                            )
-                            + "\n"
-                        )
-                except Exception:
-                    pass
-                # #endregion agent log
                 return int(row[0])
         cur.execute(
             """
@@ -122,57 +69,7 @@ def insert_spot_capture(
                 int(strategy_id) if strategy_id is not None else None,
             ),
         )
-        # #region agent log
-        try:
-            import json as _json, time as _time
-
-            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
-                _f.write(
-                    _json.dumps(
-                        {
-                            "sessionId": "65a7d6",
-                            "runId": "repro",
-                            "hypothesisId": "H2",
-                            "location": "repo_spots_capture.insert_spot_capture:after_insert",
-                            "message": "Inserted spot row (pre-commit)",
-                            "data": {
-                                "mesa": int(mesa),
-                                "ts": ts or "",
-                                "spot_fingerprint": spot_fingerprint or "",
-                                "strategy_id": int(strategy_id) if strategy_id is not None else None,
-                                "lastrowid": int(cur.lastrowid) if cur.lastrowid else None,
-                            },
-                            "timestamp": int(_time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion agent log
         conn.commit()
-        # #region agent log
-        try:
-            import json as _json, time as _time
-
-            with open("debug-65a7d6.log", "a", encoding="utf-8") as _f:
-                _f.write(
-                    _json.dumps(
-                        {
-                            "sessionId": "65a7d6",
-                            "runId": "repro",
-                            "hypothesisId": "H2",
-                            "location": "repo_spots_capture.insert_spot_capture:after_commit",
-                            "message": "Committed spot insert",
-                            "data": {"lastrowid": int(cur.lastrowid) if cur.lastrowid else None},
-                            "timestamp": int(_time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion agent log
         return int(cur.lastrowid) if cur.lastrowid else None
 
 
@@ -190,6 +87,24 @@ def update_spot_strategy_id(*, spot_id: int, strategy_id: Optional[int]) -> bool
                 "UPDATE spots SET strategy_id = ? WHERE id = ?",
                 (int(strategy_id), int(spot_id)),
             )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def update_spot_decision(
+    *,
+    spot_id: int,
+    move: str,
+    betmin: Optional[float],
+    betmax: Optional[float],
+) -> bool:
+    init_db()
+    with connect() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE spots SET decision_move = ?, decision_betmin = ?, decision_betmax = ? WHERE id = ?",
+            (str(move or ""), betmin, betmax, int(spot_id)),
+        )
         conn.commit()
         return cur.rowcount > 0
 
@@ -262,7 +177,7 @@ def insert_spot_capture_from_data(
                 preflop_ocr["posiciones"] = pos
                 raw["preflop"] = preflop
     except Exception:
-        pass
+        logging.exception(f"Failed to persist posiciones for spot (mesa={mesa})")
     return insert_spot_capture(
         mesa=mesa,
         image_path=image_path,
