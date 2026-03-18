@@ -250,6 +250,19 @@ def insert_spot_capture_from_data(
         "preflop": preflop,
         "mano_result": mano_result,
     }
+    # Persist posiciones for UI/debug matching (expected at raw_json.preflop.ocr.posiciones).
+    try:
+        if isinstance(preflop, dict) and isinstance(ocr, dict):
+            pos = ocr.get("posiciones")
+            if isinstance(pos, dict):
+                preflop_ocr = preflop.get("ocr")
+                if not isinstance(preflop_ocr, dict):
+                    preflop_ocr = {}
+                    preflop["ocr"] = preflop_ocr
+                preflop_ocr["posiciones"] = pos
+                raw["preflop"] = preflop
+    except Exception:
+        pass
     return insert_spot_capture(
         mesa=mesa,
         image_path=image_path,

@@ -1,6 +1,7 @@
 import React from "react";
 import type { SpotRow } from "../../db";
 import { convertFileSrc as _convertFileSrc } from "@tauri-apps/api/core";
+import { computeEffectiveStackBbFromSpot, extractSpotPositionsFromRawJson } from "./handsTableUtils";
 
 type Props = {
   open: boolean;
@@ -106,6 +107,12 @@ export function SpotDetailsModal({ open, row, onClose }: Props) {
 
   const imagePath = (row as any).image_path as string | undefined;
   const imgSrc = imagePath ? convertFileSrc(imagePath) : "";
+  const se = computeEffectiveStackBbFromSpot({
+    stacks_json: (row as any).stacks_json,
+    bets_json: (row as any).bets_json,
+    raw_json: (row as any).raw_json,
+  });
+  const pos = extractSpotPositionsFromRawJson((row as any).raw_json);
 
   return (
     <div style={overlayStyle} onClick={onClose}>
@@ -125,6 +132,10 @@ export function SpotDetailsModal({ open, row, onClose }: Props) {
             {renderKV("Move", String((row as any).strategy_move ?? ""))}
             {renderKV("Bet min", String((row as any).strategy_bet_min ?? ""))}
             {renderKV("Bet max", String((row as any).strategy_bet_max ?? ""))}
+            {renderKV("SE (bb)", se.se_bb != null ? se.se_bb.toFixed(2) : "")}
+            {renderKV("Hero pos", pos?.hero_pos ?? "")}
+            {renderKV("P2 pos", pos?.p2_pos ?? "")}
+            {renderKV("P3 pos", pos?.p3_pos ?? "")}
             {renderKV("Created", String((row as any).created_at ?? ""))}
             {renderKV("Mano", (() => {
               const raw = (row as any).raw_json as string | undefined;

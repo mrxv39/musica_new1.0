@@ -7,7 +7,13 @@ import type { HandsSortKey } from "./sortHands";
 import type { ColumnConfigItem } from "./HandsColumnsConfigModal";
 import { HandsColumnsConfigModal } from "./HandsColumnsConfigModal";
 import { useVisibleColumns } from "./useVisibleColumns";
-import { getManoFromRawJson } from "./handsTableUtils";
+import {
+  computeEffectiveStackBbFromSpot,
+  extractSpotPositionsFromRawJson,
+  fixBetsForMatching,
+  getManoFromRawJson,
+  safeParseJson,
+} from "./handsTableUtils";
 import { SpotDetailsModal } from "./SpotDetailsModal";
 import RealHandsTable from "./RealHandsTable";
 import HandsTable from "./HandsTable";
@@ -40,6 +46,9 @@ const SPOTS_COLUMNS: ColumnConfigItem[] = [
   { id: "time", label: "Time" },
   { id: "mano", label: "Mano" },
   { id: "stackefectivo", label: "SE" },
+  { id: "hero_pos", label: "Hero pos" },
+  { id: "p2_pos", label: "P2 pos" },
+  { id: "p3_pos", label: "P3 pos" },
   { id: "p1stack", label: "P1 stack" },
   { id: "p2stack", label: "P2 stack" },
   { id: "p3stack", label: "P3 stack" },
@@ -249,31 +258,6 @@ export function TournamentsTable({ rows }: TournamentsTableProps) {
   );
 }
 
-function extractSpotStackEfectivo(rawJson: string | undefined): { value: number | null; path: string } {
-  if (!rawJson || !rawJson.trim()) return { value: null, path: "empty" };
-  let root: any;
-  try {
-    root = JSON.parse(rawJson);
-  } catch {
-    return { value: null, path: "invalid_json" };
-  }
-  const preflop = root?.preflop ?? null;
-  const candidates: Array<[string, any]> = [
-    ["preflop.ocr.stackefectivo.value", preflop?.ocr?.stackefectivo?.value],
-    ["preflop.ocr.stackefectivo", preflop?.ocr?.stackefectivo],
-    ["preflop.stackefectivo.value", preflop?.stackefectivo?.value],
-    ["preflop.stackefectivo", preflop?.stackefectivo],
-    // sometimes nested under modules
-    ["preflop.modules.stackefectivo.value", preflop?.modules?.stackefectivo?.value],
-    ["preflop.modules.stackefectivo", preflop?.modules?.stackefectivo],
-  ];
-  for (const [path, v] of candidates) {
-    const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : null;
-    if (n != null && Number.isFinite(n)) return { value: n, path };
-  }
-  return { value: null, path: "not_found" };
-}
-
 type SpotsTableProps = { rows: SpotRow[] };
 export function SpotsRealTable({ rows }: SpotsTableProps) {
   const [configOpen, setConfigOpen] = React.useState(false);
@@ -294,6 +278,7 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
   });
   const [hoverRowId, setHoverRowId] = React.useState<number | null>(null);
   const [selectedRow, setSelectedRow] = React.useState<SpotRow | null>(null);
+  const [copiedRowId, setCopiedRowId] = React.useState<number | null>(null);
   const [collapsed, setCollapsed] = React.useState<boolean>(() => {
     try {
       return localStorage.getItem(SPOTS_COLLAPSE_KEY) === "true";
@@ -322,6 +307,69 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
   );
   const cols = visibleColumns.length > 0 ? visibleColumns : SPOTS_COLUMNS;
 
+  async function copySpotJson(row: SpotRow) {
+    const r = row as any;
+    const mano = getManoFromRawJson(r.raw_json);
+    const se = computeEffectiveStackBbFromSpot({
+      stacks_json: r.stacks_json,
+      bets_json: r.bets_json,
+      raw_json: r.raw_json,
+    });
+
+    const raw = safeParseJson<any>(r.raw_json ?? null);
+    const posiciones =
+      raw?.preflop?.ocr?.posiciones ?? raw?.preflop?.posiciones ?? raw?.preflop?.ocr?.pos ?? null;
+
+    const hero_pos = String(posiciones?.p1 ?? "").toUpperCase().trim();
+    const p2_pos = String(posiciones?.p2 ?? "").toUpperCase().trim();
+    const p3_pos = String(posiciones?.p3 ?? "").toUpperCase().trim();
+    const p2_tipo = String(r.tipo_p2 ?? "").toUpperCase().trim();
+    const p3_tipo = String(r.tipo_p3 ?? "").toUpperCase().trim();
+
+    const betFix = fixBetsForMatching({ hero_pos, bets_json: r.bets_json });
+
+    const payload = {
+      spot: { ...(r as Record<string, unknown>) },
+      derived: {
+        mano,
+        se_bb: se.se_bb,
+      },
+      debug_match: {
+        hand_class: mano || null,
+        p1_se_bb: se.se_bb,
+        p1_bet_bb_raw: betFix.p1_raw,
+        p1_bet_bb_used: betFix.p1_used,
+        p2_bet_bb_raw: betFix.p2_raw,
+        p3_bet_bb_raw: betFix.p3_raw,
+        hero_pos: hero_pos || null,
+        p2_pos: p2_pos || null,
+        p3_pos: p3_pos || null,
+        p2_tipo: p2_tipo || null,
+        p3_tipo: p3_tipo || null,
+        situacion: hero_pos ? `${hero_pos}_vs_${p2_pos}_${p3_pos}_${p2_tipo}_${p3_tipo}` : null,
+        bet_fix_reason: betFix.reason,
+        se_reason: se.reason,
+      },
+      meta: {
+        copied_at: new Date().toISOString(),
+        version: 1,
+      },
+    };
+
+    const text = JSON.stringify(payload, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedRowId(Number(r.id) || null);
+      window.setTimeout(() => setCopiedRowId((prev) => (prev === Number(r.id) ? null : prev)), 1200);
+    } catch {
+      try {
+        window.alert("No se pudo copiar al portapapeles.");
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   function getCellValue(row: SpotRow, colId: string): string {
     const isDerived = colId in SPOTS_DERIVED;
     if (colId === "time") {
@@ -330,12 +378,19 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
     } else if (colId === "mano") {
       return getManoFromRawJson((row as Record<string, unknown>).raw_json as string | undefined);
     } else if (colId === "stackefectivo") {
-      const raw = (row as Record<string, unknown>).raw_json as string | undefined;
-      const out = extractSpotStackEfectivo(raw);
-      // #region agent log
-      fetch('http://127.0.0.1:7899/ingest/f11c7dac-a87c-4159-b25b-d97d70878eae',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'600e1f'},body:JSON.stringify({sessionId:'600e1f',runId:'pre-fix',hypothesisId:'H1',location:'HandsFourTables.tsx:getCellValue(stackefectivo)',message:'extractSpotStackEfectivo result',data:{spotId:(row as any).id,mesa:(row as any).mesa,path:out.path,value:out.value,hasRawJson:!!raw},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion agent log
-      return out.value != null ? String(Number(out.value).toFixed(1)) : "";
+      const r = row as any;
+      const out = computeEffectiveStackBbFromSpot({
+        stacks_json: r.stacks_json,
+        bets_json: r.bets_json,
+        raw_json: r.raw_json,
+      });
+      return out.se_bb != null ? String(out.se_bb.toFixed(2)) : "";
+    } else if (colId === "hero_pos" || colId === "p2_pos" || colId === "p3_pos") {
+      const pos = extractSpotPositionsFromRawJson((row as any).raw_json);
+      if (!pos) return "";
+      if (colId === "hero_pos") return pos.hero_pos;
+      if (colId === "p2_pos") return pos.p2_pos;
+      return pos.p3_pos;
     } else {
       return isDerived
         ? getDerivedSpotCell(row, colId)
@@ -415,6 +470,7 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
           <table style={smallTableStyle}>
             <thead>
               <tr>
+                <th style={{ ...thStyle, width: 64 }}>Copy</th>
                 {cols.map((c) => {
                   const isActive = sortKey === c.id;
                   const arrow = isActive ? (sortDir === "asc" ? " ▲" : " ▼") : "";
@@ -435,7 +491,7 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={cols.length} style={tdStyle}>Rows: 0</td></tr>
+                <tr><td colSpan={cols.length + 1} style={tdStyle}>Rows: 0</td></tr>
               ) : (
                 sortedRows.map((r) => (
                   <tr
@@ -455,6 +511,18 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
                       }
                     }}
                   >
+                    <td style={tdStyle}>
+                      <button
+                        style={{ ...configButtonStyle, padding: "2px 6px", fontSize: 11 }}
+                        title="Copiar JSON del spot"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copySpotJson(r);
+                        }}
+                      >
+                        {copiedRowId === (r as any).id ? "Copied" : "Copy"}
+                      </button>
+                    </td>
                     {cols.map((c) => {
                       const cell = getCellValue(r, c.id);
                       return (
