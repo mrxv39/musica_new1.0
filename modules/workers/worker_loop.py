@@ -111,6 +111,7 @@ def _update_db_frame_ref(dbmod: Any, fingerprint: str, new_frame_ref: str) -> bo
     """
     Update hands_obs.frame_ref after moving the image, so DB always points to the real file path.
     """
+    conn = None
     try:
         conn = dbmod.get_conn()
         cur = conn.cursor()
@@ -122,6 +123,12 @@ def _update_db_frame_ref(dbmod: Any, fingerprint: str, new_frame_ref: str) -> bo
         return True
     except Exception:
         return False
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def _route_replay_dir_image(

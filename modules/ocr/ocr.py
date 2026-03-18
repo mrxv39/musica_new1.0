@@ -149,14 +149,17 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
             f2 = exec1.submit(_run_stacks)
             f3 = exec1.submit(_run_names)
             for fut in as_completed([f1, f2, f3]):
-                key, val, dt = fut.result()
-                out[key] = val
-                if key == "bets":
-                    timings["ocr_bets"] = dt
-                elif key == "stacks":
-                    timings["ocr_stacks"] = dt
-                elif key == "names":
-                    timings["ocr_names"] = dt
+                try:
+                    key, val, dt = fut.result()
+                    out[key] = val
+                    if key == "bets":
+                        timings["ocr_bets"] = dt
+                    elif key == "stacks":
+                        timings["ocr_stacks"] = dt
+                    elif key == "names":
+                        timings["ocr_names"] = dt
+                except Exception as e:
+                    out["errors"].append(f"parallel_ocr_future_error:{e}")
 
         try:
             p2_name = (out.get("names") or {}).get("p2_name", "")
@@ -189,9 +192,13 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
 
         with ThreadPoolExecutor(max_workers=1) as exec2:
             fd = exec2.submit(_run_dealer)
-            key_d, val_d, dt_d = fd.result()
-            out[key_d] = val_d
-            timings["ocr_dealer"] = dt_d
+            try:
+                key_d, val_d, dt_d = fd.result()
+                out[key_d] = val_d
+                timings["ocr_dealer"] = dt_d
+            except Exception as e:
+                out["errors"].append(f"parallel_dealer_future_error:{e}")
+                out["dealer"] = {"ok": False, "errors": [str(e)]}
 
         # gamecode OCR desactivado temporalmente: dejamos valor neutro.
         out["gamecode"] = {"ok": False, "skipped": "gamecode_disabled"}
