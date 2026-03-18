@@ -25,10 +25,17 @@ def compute_can_persist(
 
 
 def compute_sig(mano_result: Any, p1: float, persist_without_stack: bool) -> str:
+    """Compute signature for hand deduplication.
+
+    Note: p1 is rounded to 3 decimals to avoid float precision artifacts
+    (e.g., 100.0 vs 99.99999999999999 -> same signature).
+    """
     mano_raw = ""
     if isinstance(mano_result, dict):
         mano_raw = str(mano_result.get("mano_raw") or "")
-    base = f"{mano_raw}" if persist_without_stack else f"{mano_raw}|{p1}"
+    # Round p1 to 3 decimals to avoid precision issues
+    p1_rounded = round(p1, 3) if p1 else 0.0
+    base = f"{mano_raw}" if persist_without_stack else f"{mano_raw}|{p1_rounded}"
     return hashlib.sha1(base.encode("utf-8", errors="ignore")).hexdigest()
 
 

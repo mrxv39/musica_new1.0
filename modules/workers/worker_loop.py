@@ -414,28 +414,30 @@ def run_loop(args: Any) -> None:
             if img.done:
                 break
 
-            out, last_hand_sig = process_one_image(
-                cfg=cfg,
-                mode=mode,
-                img_path=img.img_path,
-                image_ref=img.image_ref,
-                dbmod=dbmod,
-                run_ocr_fn=run_ocr,
-                MatchInput=MatchInput,
-                select_move=select_move,
-                last_hand_sig=last_hand_sig,
-            )
+            try:
+                out, last_hand_sig = process_one_image(
+                    cfg=cfg,
+                    mode=mode,
+                    img_path=img.img_path,
+                    image_ref=img.image_ref,
+                    dbmod=dbmod,
+                    run_ocr_fn=run_ocr,
+                    MatchInput=MatchInput,
+                    select_move=select_move,
+                    last_hand_sig=last_hand_sig,
+                )
 
-            # add non-core fields
-            out["tick"] = tick
-            out["ts"] = ts
-            out["errors"] = img.errors
+                # add non-core fields
+                out["tick"] = tick
+                out["ts"] = ts
+                out["errors"] = img.errors
 
-            if cfg.print_every_tick:
-                print(json.dumps(out, ensure_ascii=False))
-
-            if mode == "screen" and img.cleanup_path:
-                safe_remove(img.cleanup_path)
+                if cfg.print_every_tick:
+                    print(json.dumps(out, ensure_ascii=False))
+            finally:
+                # Always cleanup temp files, even if process_one_image fails
+                if mode == "screen" and img.cleanup_path:
+                    safe_remove(img.cleanup_path)
 
             if cfg.max_ticks is not None and tick >= cfg.max_ticks:
                 break

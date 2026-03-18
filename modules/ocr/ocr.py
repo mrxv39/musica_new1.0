@@ -59,8 +59,16 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
     t_pre0 = time.perf_counter()
     img_gray, img_color = _load_images_once(image_path)
     t_pre1 = time.perf_counter()
-    timings: Dict[str, float] = {}
-    timings["ocr_preprocess"] = t_pre1 - t_pre0
+    timings: Dict[str, float] = {
+        "ocr_preprocess": t_pre1 - t_pre0,
+        "ocr_bets": None,
+        "ocr_stacks": None,
+        "ocr_names": None,
+        "ocr_dealer": None,
+        "ocr_table_state": None,
+        "ocr_posiciones": None,
+        "ocr_total_internal": None,
+    }
 
     # Sequential (default) when POKER_BOSS_WORKER_SEQUENTIAL=1 or POKER_BOSS_OCR_SEQUENTIAL=1.
     # Thread parallelism can increase time due to GIL; sequential is recommended for lower latency.
