@@ -24,6 +24,14 @@ def isolated_db_env(monkeypatch, tmp_path):
     except Exception:
         pass
 
+    # Reset worker mesa state (fingerprint cache by mesa)
+    try:
+        import modules.preflop.workers_loop.worker_mesa as worker_mesa
+        if hasattr(worker_mesa, "_LAST_CAPTURE_FP_BY_MESA"):
+            worker_mesa._LAST_CAPTURE_FP_BY_MESA.clear()
+    except Exception:
+        pass
+
     yield db_path
 
     try:
@@ -35,6 +43,14 @@ def isolated_db_env(monkeypatch, tmp_path):
             pass
         dbmod._DB_CONN = None
         dbmod._DB_PATH_ACTIVE = None
+    except Exception:
+        pass
+
+    # Reset worker mesa state after test
+    try:
+        import modules.preflop.workers_loop.worker_mesa as worker_mesa
+        if hasattr(worker_mesa, "_LAST_CAPTURE_FP_BY_MESA"):
+            worker_mesa._LAST_CAPTURE_FP_BY_MESA.clear()
     except Exception:
         pass
 

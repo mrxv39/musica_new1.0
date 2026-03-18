@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any, Dict, Optional
 
 from .conn import connect
 from .migrate import init_db
+
+# Configurable deduplication window (seconds)
+SPOT_DEDUPE_WINDOW_SEC = int(os.environ.get("POKER_BOSS_SPOT_DEDUPE_WINDOW_SEC", "10"))
 
 
 def insert_spot_capture(
@@ -26,27 +30,29 @@ def insert_spot_capture(
 ) -> Optional[int]:
     """Inserta un spot preflop detectado por captura (time + mano + noboard ok).
 
-    Si ya existe un spot con el mismo spot_fingerprint creado en los últimos
-    10 segundos, no inserta una fila nueva y devuelve el id existente.
+    Si ya existe un spot con el mismo spot_fingerprint creado en el último
+    SPOT_DEDUPE_WINDOW_SEC segundos, no inserta una fila nueva y devuelve el id existente.
+    Configurable via POKER_BOSS_SPOT_DEDUPE_WINDOW_SEC env var (default: 10s).
     """
     init_db()
     with connect() as conn:
         cur = conn.cursor()
         if spot_fingerprint:
             # Heurística de deduplicación: mismo fingerprint (mesa + P1 stack) y
-            # fila creada en los últimos 10 segundos.
+            # fila creada en los últimos N segundos (configurable).
             cur.execute(
-                """
+                f"""
                 SELECT id, ts, created_at
                 FROM spots
                 WHERE spot_fingerprint = ?
-                  AND created_at >= datetime('now', '-10 seconds')
+                  AND created_at >= datetime('now', '-{SPOT_DEDUPE_WINDOW_SEC} seconds')
                 LIMIT 1
                 """,
                 (spot_fingerprint,),
             )
             row = cur.fetchone()
             if row and row[0]:
+                logging.debug(f"Spot deduped: fingerprint={spot_fingerprint}, reused_id={row[0]}")
                 return int(row[0])
         cur.execute(
             """
@@ -110,9 +116,11 @@ def update_spot_decision(
 
 
 def _safe_json(obj: Any) -> str:
+    """Serialize object to JSON string safely, returning empty dict on error."""
     try:
         return json.dumps(obj, ensure_ascii=False, default=str)
     except Exception:
+        logging.warning(f"Failed to serialize object to JSON: {type(obj).__name__}", exc_info=True)
         return "{}"
 
 

@@ -6,7 +6,6 @@ import os
 import shutil
 import threading
 import time
-import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional, TextIO, Tuple
 
@@ -32,6 +31,7 @@ from .worker_mesa_preflop import (
     run_preflop_direct,
     write_preflop_fail_debug,
 )
+from ..fingerprinting import spot_fingerprint
 
 RECENT_CAPTURE_WINDOW_MS = int(os.environ.get("POKER_BOSS_CAPTURE_DEDUPE_WINDOW_MS", "15000"))
 
@@ -51,7 +51,7 @@ def _build_spot_fingerprint(
     stacks_result: Optional[Dict[str, Any]],
     ocr: Optional[Dict[str, Any]],
 ) -> str:
-    """Fingerprint lógico basado solo en mesa + P1 stack para deduplicar spots."""
+    """Fingerprint lógico basado en mesa + P1 stack para deduplicar spots."""
     try:
         p1_stack: Optional[float] = None
         if isinstance(stacks_result, dict):
@@ -64,11 +64,10 @@ def _build_spot_fingerprint(
         if p1_stack is None:
             return ""
 
-        mesa_int = int(mesa)
-        p1_float = float(p1_stack)
-        key = f"mesa={mesa_int}|p1={p1_float:.3f}"
-        return hashlib.sha1(key.encode("utf-8")).hexdigest()
+        # Use centralized fingerprinting (see modules/preflop/fingerprinting.py)
+        return spot_fingerprint(mesa=int(mesa), p1_stack=float(p1_stack))
     except Exception:
+        logging.exception(f"Failed to build spot fingerprint for mesa={mesa}")
         return ""
 
 
@@ -263,7 +262,9 @@ def run_worker_mesa_once(
             except Exception:
                 logging.exception(f"[mesa {mesa}] write_time_mano_candidate failed")
 
-        t = threading.Thread(target=_deferred_ocr_and_candidate, daemon=True)
+        # Non-daemon thread ensures OCR/candidate writes complete before worker exits.
+        # This prevents data loss if the process is killed or workers stop suddenly.
+        t = threading.Thread(target=_deferred_ocr_and_candidate, daemon=False)
         t.start()
     except Exception as e:
         _safe_remove(img_path)
