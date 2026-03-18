@@ -96,6 +96,13 @@ export function useHandsPageWorkerActions({
     setLastLog("");
 
     try {
+      // Show/hide overlay windows when starting/stopping workers
+      if (next) {
+        await invoke("show_overlay").catch(e => console.warn("show_overlay failed:", e));
+      } else {
+        await invoke("hide_overlay").catch(e => console.warn("hide_overlay failed:", e));
+      }
+
       const msg = await setWorkersRunningCommand({
         running: next,
         dbPath: p,
@@ -113,6 +120,12 @@ export function useHandsPageWorkerActions({
       const m = "ERROR: " + getErrorMessage(e);
       setLastLog(m);
       setActionStatus("workers: " + summarize(m));
+      // Hide overlay on error
+      try {
+        await invoke("hide_overlay");
+      } catch {
+        // ignore
+      }
     } finally {
       setBusy(false);
     }
