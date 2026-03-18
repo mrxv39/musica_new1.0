@@ -73,23 +73,31 @@ def _build_spot_fingerprint(
 
 def run_worker_mesa_once(
     *,
-    area: Dict[str, Any],
-    dirs: Any,
-    ts: str,
-    interval_ms: int,
+    area: Dict[str, Any],  # Required: {"mesa": int, "x1": int, "y1": int, "x2": int, "y2": int}
+    dirs: Any,  # LoopDirs with: tmp_dir, ok_dir, err_dir, del_dir
+    ts: str,  # Timestamp string (format: YYYY-MM-DD HH:MM:SS or similar)
+    interval_ms: int,  # Sleep interval between captures in milliseconds
     verbose: bool,
-    fp: TextIO,
-    fixed_input: Optional[str],
-    last_sig_by_mesa: Dict[int, Optional[str]],
+    fp: TextIO,  # File pointer for logging
+    fixed_input: Optional[str],  # Optional fixed image path for testing
+    last_sig_by_mesa: Dict[int, Optional[str]],  # Cache of last frame fingerprint per mesa
     dbg: bool,
-    dbmod: Any,
-    MatchInput: Any,
-    select_move: Any,
-    extract_modules_fn: Any,
-    build_ocr_safe_fn: Any,
-    compute_strategy_safe_fn: Any,
+    dbmod: Any,  # Database module with ORM-like methods
+    MatchInput: Any,  # Type for matching inputs
+    select_move: Any,  # Function to select move
+    extract_modules_fn: Any,  # Function to extract preflop modules
+    build_ocr_safe_fn: Any,  # Function to build OCR safely
+    compute_strategy_safe_fn: Any,  # Function to compute strategy safely
 ) -> None:
-    mesa = int(area["mesa"])
+    # Validate required area fields
+    try:
+        mesa = int(area["mesa"])
+        if mesa <= 0:
+            log(fp, f"ERROR: Invalid mesa number: {mesa}")
+            return
+    except (KeyError, ValueError, TypeError) as e:
+        log(fp, f"ERROR: Invalid area structure: {e}")
+        return
     last_sig_by_mesa.setdefault(mesa, None)
     _LAST_CAPTURE_FP_BY_MESA.setdefault(mesa, None)
 
