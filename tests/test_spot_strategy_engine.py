@@ -89,6 +89,44 @@ def test_decide_spot_strategy_hoja1_or_range_fold_default(conn):
     assert out["move"] == "FOLD"
     assert out["betmin"] == 0
     assert out["betmax"] == 0
+    assert out.get("spot_strategy_id") is None
+
+
+def test_decide_spot_strategy_hoja1_picks_row_matching_hand(conn):
+    conn.execute(
+        """
+        INSERT INTO spots_strategy_scopes(spot_key,p2_tipo,p3_tipo,scope_se_min,scope_se_max,sheet_name)
+        VALUES ('BTN','fish','fish',6,75,'Hoja1')
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO spots_strategies(spot_key,hand_range_name,move,bet_min,bet_max,hand_range,stack_effective_min,stack_effective_max,p2_tipo,p3_tipo)
+        VALUES ('BTN','OR','OR','2','75','AA-99',6,75,'fish','fish')
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO spots_strategies(spot_key,hand_range_name,move,bet_min,bet_max,hand_range,stack_effective_min,stack_effective_max,p2_tipo,p3_tipo)
+        VALUES ('BTN','PUSH','PUSH','2','75','AKs',6,75,'fish','fish')
+        """
+    )
+    out = decide_spot_strategy(
+        conn,
+        SpotDecisionInput(
+            spot_key="BTN",
+            hand_class="AKs",
+            p1_se_bb=10.0,
+            p1_bet_bb=2.0,
+            p2_pos="SB",
+            p3_pos="BB",
+            p2_tipo="fish",
+            p3_tipo="fish",
+        ),
+    )
+    assert out["ok"] is True
+    assert out["move"] == "PUSH"
+    assert out["spot_strategy_id"] == 2
 
 
 def test_decide_spot_strategy_hoja1_or_range_hit(conn):

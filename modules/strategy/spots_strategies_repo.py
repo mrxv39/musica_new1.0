@@ -4,10 +4,13 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from modules.strategy.range_parser import hand_in_range, normalize_hand_class
+
 
 @dataclass(frozen=True)
 class SpotStrategyMatchInput:
     spot_key: str
+    hand_class: str
     p1_se_bb: float
     p1_bet_bb: float
     p2_pos: str
@@ -83,7 +86,14 @@ def _specificity_score(row: sqlite3.Row) -> tuple[int, int, int, int, float, flo
     return (p2_tipo, p3_tipo, pos, bet, -se_width, -bet_width)
 
 
-def find_unique_spot_strategy_id(conn: sqlite3.Connection, inp: SpotStrategyMatchInput) -> int:
+def find_unique_spot_strategy_id(
+    conn: sqlite3.Connection, inp: SpotStrategyMatchInput
+) -> Optional[int]:
+    try:
+        hc = normalize_hand_class(inp.hand_class)
+    except ValueError:
+        return None
+
     cur = conn.cursor()
     cur.execute(
         """
@@ -113,13 +123,22 @@ def find_unique_spot_strategy_id(conn: sqlite3.Connection, inp: SpotStrategyMatc
             continue
         matches.append(r)
 
-    if len(matches) == 1:
-        return int(matches[0]["id"])
-    if len(matches) == 0:
+    if not matches:
         raise ValueError("No matching spot strategy after applying constraints")
 
-    # Tie-break via specificity; accept only if best is unique.
-    matches_sorted = sorted(matches, key=_specificity_score, reverse=True)
+    matches_hand: list[sqlite3.Row] = []
+    for r in matches:
+        hr = _row_text(r, "hand_range")
+        if hr and hand_in_range(hc, hr):
+            matches_hand.append(r)
+
+    if not matches_hand:
+        return None
+
+    if len(matches_hand) == 1:
+        return int(matches_hand[0]["id"])
+
+    matches_sorted = sorted(matches_hand, key=_specificity_score, reverse=True)
     best_score = _specificity_score(matches_sorted[0])
     best = [r for r in matches_sorted if _specificity_score(r) == best_score]
     if len(best) == 1:

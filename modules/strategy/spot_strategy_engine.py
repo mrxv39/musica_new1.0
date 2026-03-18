@@ -137,6 +137,11 @@ def _find_unique_scope_sheet(conn: sqlite3.Connection, inp: SpotDecisionInput) -
     return _pick_unique(rows, what="strategy scope")["sheet_name"]
 
 
+def _fold_no_strategy_row(sheet: str) -> dict[str, Any]:
+    """FOLD with no spots_strategies row id (hand not in any hand_range or invalid hand)."""
+    return {"ok": True, "move": "FOLD", "betmin": 0, "betmax": 0, "sheet": sheet}
+
+
 def decide_spot_strategy(conn: sqlite3.Connection, inp: SpotDecisionInput) -> dict[str, Any]:
     """
     Returns a strategy dict compatible with the worker routing:
@@ -148,9 +153,12 @@ def decide_spot_strategy(conn: sqlite3.Connection, inp: SpotDecisionInput) -> di
     p3_tipo = _tipo(inp.p3_tipo)
     p2_pos = _pos(inp.p2_pos)
     p3_pos = _pos(inp.p3_pos)
-    hc = normalize_hand_class(inp.hand_class)
 
     if sheet.strip().lower() == "nash push fold":
+        try:
+            hc = normalize_hand_class(inp.hand_class)
+        except ValueError:
+            return _fold_no_strategy_row(sheet)
         cur = conn.cursor()
         cur.execute(
             """
@@ -173,7 +181,7 @@ def decide_spot_strategy(conn: sqlite3.Connection, inp: SpotDecisionInput) -> di
             and _match_nullable_text(r["p3_pos"], p3_pos, normalizer=_pos)
         ]
         if not rows:
-            return {"ok": True, "move": "FOLD", "betmin": 0, "betmax": 0, "sheet": sheet}
+            return _fold_no_strategy_row(sheet)
         row = _pick_unique(rows, what="nash row")
         return {
             "ok": True,
@@ -183,6 +191,11 @@ def decide_spot_strategy(conn: sqlite3.Connection, inp: SpotDecisionInput) -> di
             "sheet": sheet,
             "spot_strategy_id": int(row["id"]),
         }
+
+    try:
+        hc = normalize_hand_class(inp.hand_class)
+    except ValueError:
+        return _fold_no_strategy_row(sheet)
 
     # Hoja1 -> spots_strategies
     cur = conn.cursor()
@@ -215,14 +228,19 @@ def decide_spot_strategy(conn: sqlite3.Connection, inp: SpotDecisionInput) -> di
             continue
         matched.append(r)
 
-    row = _pick_unique(matched, what="spots strategy row")
+    if not matched:
+        raise ValueError("No spots_strategies row matches structure (pos/tipo/bet)")
 
-    # decide based on hand_range
-    range_text = _t(row["hand_range"])
-    if range_text and hand_in_range(hc, range_text):
-        move = _t(row["move"]).upper() or "FOLD"
-    else:
-        move = "FOLD"
+    matched_hand = [
+        r
+        for r in matched
+        if _t(r["hand_range"]) and hand_in_range(hc, _t(r["hand_range"]))
+    ]
+    if not matched_hand:
+        return _fold_no_strategy_row(sheet)
+
+    row = _pick_unique(matched_hand, what="spots strategy row")
+    move = _t(row["move"]).upper() or "FOLD"
 
     if move == "FOLD":
         return {

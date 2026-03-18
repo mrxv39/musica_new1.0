@@ -176,14 +176,20 @@ def insert_spot_capture(
         return int(cur.lastrowid) if cur.lastrowid else None
 
 
-def update_spot_strategy_id(*, spot_id: int, strategy_id: int) -> bool:
+def update_spot_strategy_id(*, spot_id: int, strategy_id: Optional[int]) -> bool:
     init_db()
     with connect() as conn:
         cur = conn.cursor()
-        cur.execute(
-            "UPDATE spots SET strategy_id = ? WHERE id = ?",
-            (int(strategy_id), int(spot_id)),
-        )
+        if strategy_id is None:
+            cur.execute(
+                "UPDATE spots SET strategy_id = NULL WHERE id = ?",
+                (int(spot_id),),
+            )
+        else:
+            cur.execute(
+                "UPDATE spots SET strategy_id = ? WHERE id = ?",
+                (int(strategy_id), int(spot_id)),
+            )
         conn.commit()
         return cur.rowcount > 0
 

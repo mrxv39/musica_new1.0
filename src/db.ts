@@ -150,6 +150,7 @@ export type SpotRow = {
   strategy_bet_min?: number | string | null;
   strategy_bet_max?: number | string | null;
   created_at: string;
+  raw_json?: string;
   [k: string]: unknown;
 };
 
@@ -474,7 +475,8 @@ export async function fetchSpots(dbPath: string, limit = 500): Promise<SpotRow[]
        st.move    AS strategy_move,
        st.bet_min AS strategy_bet_min,
        st.bet_max AS strategy_bet_max,
-       s.created_at
+       s.created_at,
+       s.raw_json
      FROM spots s
      LEFT JOIN spots_strategies st
        ON st.id = s.strategy_id

@@ -7,6 +7,8 @@ import type { HandsSortKey } from "./sortHands";
 import type { ColumnConfigItem } from "./HandsColumnsConfigModal";
 import { HandsColumnsConfigModal } from "./HandsColumnsConfigModal";
 import { useVisibleColumns } from "./useVisibleColumns";
+import { getManoFromRawJson } from "./handsTableUtils";
+import { SpotDetailsModal } from "./SpotDetailsModal";
 import RealHandsTable from "./RealHandsTable";
 import HandsTable from "./HandsTable";
 import { makeHandsColumns } from "./handsColumns";
@@ -36,6 +38,8 @@ const SPOTS_COLUMNS: ColumnConfigItem[] = [
   { id: "image_path", label: "Image" },
   { id: "ts", label: "Ts" },
   { id: "time", label: "Time" },
+  { id: "mano", label: "Mano" },
+  { id: "stackefectivo", label: "SE" },
   { id: "p1stack", label: "P1 stack" },
   { id: "p2stack", label: "P2 stack" },
   { id: "p3stack", label: "P3 stack" },
@@ -245,9 +249,51 @@ export function TournamentsTable({ rows }: TournamentsTableProps) {
   );
 }
 
+function extractSpotStackEfectivo(rawJson: string | undefined): { value: number | null; path: string } {
+  if (!rawJson || !rawJson.trim()) return { value: null, path: "empty" };
+  let root: any;
+  try {
+    root = JSON.parse(rawJson);
+  } catch {
+    return { value: null, path: "invalid_json" };
+  }
+  const preflop = root?.preflop ?? null;
+  const candidates: Array<[string, any]> = [
+    ["preflop.ocr.stackefectivo.value", preflop?.ocr?.stackefectivo?.value],
+    ["preflop.ocr.stackefectivo", preflop?.ocr?.stackefectivo],
+    ["preflop.stackefectivo.value", preflop?.stackefectivo?.value],
+    ["preflop.stackefectivo", preflop?.stackefectivo],
+    // sometimes nested under modules
+    ["preflop.modules.stackefectivo.value", preflop?.modules?.stackefectivo?.value],
+    ["preflop.modules.stackefectivo", preflop?.modules?.stackefectivo],
+  ];
+  for (const [path, v] of candidates) {
+    const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : null;
+    if (n != null && Number.isFinite(n)) return { value: n, path };
+  }
+  return { value: null, path: "not_found" };
+}
+
 type SpotsTableProps = { rows: SpotRow[] };
 export function SpotsRealTable({ rows }: SpotsTableProps) {
   const [configOpen, setConfigOpen] = React.useState(false);
+  const [sortKey, setSortKey] = React.useState<string | null>(() => {
+    try {
+      return localStorage.getItem("hands.spots.sortKey");
+    } catch {
+      return null;
+    }
+  });
+  const [sortDir, setSortDir] = React.useState<"asc" | "desc">(() => {
+    try {
+      const v = localStorage.getItem("hands.spots.sortDir");
+      return v === "desc" ? "desc" : "asc";
+    } catch {
+      return "asc";
+    }
+  });
+  const [hoverRowId, setHoverRowId] = React.useState<number | null>(null);
+  const [selectedRow, setSelectedRow] = React.useState<SpotRow | null>(null);
   const [collapsed, setCollapsed] = React.useState<boolean>(() => {
     try {
       return localStorage.getItem(SPOTS_COLLAPSE_KEY) === "true";
@@ -262,11 +308,81 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
       // ignore
     }
   }, [collapsed]);
+  React.useEffect(() => {
+    try {
+      if (sortKey) localStorage.setItem("hands.spots.sortKey", sortKey);
+      localStorage.setItem("hands.spots.sortDir", sortDir);
+    } catch {
+      // ignore
+    }
+  }, [sortKey, sortDir]);
   const { visibleIds, visibleColumns, onChangeVisibleIds } = useVisibleColumns(
     SPOTS_COLUMNS,
     SPOTS_STORAGE_KEY
   );
   const cols = visibleColumns.length > 0 ? visibleColumns : SPOTS_COLUMNS;
+
+  function getCellValue(row: SpotRow, colId: string): string {
+    const isDerived = colId in SPOTS_DERIVED;
+    if (colId === "time") {
+      const val = (row as Record<string, unknown>)[colId];
+      return val != null && typeof val === "number" ? Number(val).toFixed(3) : "";
+    } else if (colId === "mano") {
+      return getManoFromRawJson((row as Record<string, unknown>).raw_json as string | undefined);
+    } else if (colId === "stackefectivo") {
+      const raw = (row as Record<string, unknown>).raw_json as string | undefined;
+      const out = extractSpotStackEfectivo(raw);
+      // #region agent log
+      fetch('http://127.0.0.1:7899/ingest/f11c7dac-a87c-4159-b25b-d97d70878eae',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'600e1f'},body:JSON.stringify({sessionId:'600e1f',runId:'pre-fix',hypothesisId:'H1',location:'HandsFourTables.tsx:getCellValue(stackefectivo)',message:'extractSpotStackEfectivo result',data:{spotId:(row as any).id,mesa:(row as any).mesa,path:out.path,value:out.value,hasRawJson:!!raw},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion agent log
+      return out.value != null ? String(Number(out.value).toFixed(1)) : "";
+    } else {
+      return isDerived
+        ? getDerivedSpotCell(row, colId)
+        : String((row as Record<string, unknown>)[colId] ?? "");
+    }
+  }
+
+  const sortedRows = React.useMemo(() => {
+    if (!sortKey) return rows;
+    const dir = sortDir === "desc" ? -1 : 1;
+    const isNumeric = (id: string) =>
+      id === "id" ||
+      id === "mesa" ||
+      id === "time" ||
+      id === "stackefectivo" ||
+      id === "strategy_id" ||
+      id.endsWith("stack") ||
+      id.endsWith("bet");
+    const toNum = (s: string): number => {
+      const n = Number(s);
+      return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY;
+    };
+    const copy = rows.slice();
+    copy.sort((a, b) => {
+      const va = getCellValue(a, sortKey);
+      const vb = getCellValue(b, sortKey);
+      if (isNumeric(sortKey)) {
+        const na = toNum(va);
+        const nb = toNum(vb);
+        return na === nb ? 0 : na < nb ? -1 * dir : 1 * dir;
+      }
+      // string compare
+      return va.localeCompare(vb) * dir;
+    });
+    return copy;
+  }, [rows, sortKey, sortDir]);
+
+  function onClickHeader(id: string) {
+    setSortKey((prev) => {
+      if (prev === id) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setSortDir("asc");
+      return id;
+    });
+  }
 
   return (
     <div style={tableBlockStyle}>
@@ -299,26 +415,48 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
           <table style={smallTableStyle}>
             <thead>
               <tr>
-                {cols.map((c) => (
-                  <th key={c.id} style={thStyle}>{c.label}</th>
-                ))}
+                {cols.map((c) => {
+                  const isActive = sortKey === c.id;
+                  const arrow = isActive ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+                  return (
+                    <th
+                      key={c.id}
+                      style={{ ...thStyle, cursor: "pointer", userSelect: "none" }}
+                      onClick={() => onClickHeader(c.id)}
+                      role="button"
+                      title="Ordenar"
+                    >
+                      {c.label}
+                      {arrow}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr><td colSpan={cols.length} style={tdStyle}>Rows: 0</td></tr>
               ) : (
-                rows.map((r) => (
-                  <tr key={r.id}>
-                    {cols.map((c) => {
-                      const isDerived = c.id in SPOTS_DERIVED;
-                      let cell: string;
-                      if (c.id === "time") {
-                        const val = (r as Record<string, unknown>)[c.id];
-                        cell = val != null && typeof val === "number" ? Number(val).toFixed(3) : "";
-                      } else {
-                        cell = isDerived ? getDerivedSpotCell(r, c.id) : String((r as Record<string, unknown>)[c.id] ?? "");
+                sortedRows.map((r) => (
+                  <tr
+                    key={r.id}
+                    style={{
+                      background: hoverRowId === r.id ? "#f5f7fa" : undefined,
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={() => setHoverRowId(r.id)}
+                    onMouseLeave={() => setHoverRowId((prev) => (prev === r.id ? null : prev))}
+                    onClick={() => setSelectedRow(r)}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedRow(r);
                       }
+                    }}
+                  >
+                    {cols.map((c) => {
+                      const cell = getCellValue(r, c.id);
                       return (
                         <td key={c.id} style={tdStyle}>
                           {cell || "–"}
@@ -332,6 +470,7 @@ export function SpotsRealTable({ rows }: SpotsTableProps) {
           </table>
         </div>
       )}
+      <SpotDetailsModal open={!!selectedRow} row={selectedRow} onClose={() => setSelectedRow(null)} />
     </div>
   );
 }

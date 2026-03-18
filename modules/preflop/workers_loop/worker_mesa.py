@@ -452,50 +452,59 @@ def run_worker_mesa_once(
     if profile_enabled:
         profile_times["strategy"] = time.perf_counter() - t_strategy0
 
-    # Link spot -> unique strategy (spots_strategies) when possible
+    # Link spot -> spots_strategies row only when hand is in that row's hand_range (Hoja1+)
     if spot_id and isinstance(strategy, dict):
         try:
-            se_used = strategy.get("se_used", None)
-            hero_pos = str((strategy.get("spot") or "")).strip()
-            # strategy.get("spot") isn't set by worker_strategy; derive from situacion or OCR
-            if not hero_pos:
-                situacion = str(strategy.get("situacion") or "")
-                # "{HERO}_vs_{P2POS}_{P3POS}_{P2TIPO}_{P3TIPO}"
-                hero_pos = (situacion.split("_vs_", 1)[0] if "_vs_" in situacion else "").strip()
+            sheet = str(strategy.get("sheet") or "").strip().lower()
+            if sheet == "nash push fold":
+                pass
+            else:
+                se_used = strategy.get("se_used", None)
+                hero_pos = str((strategy.get("spot") or "")).strip()
+                if not hero_pos:
+                    situacion = str(strategy.get("situacion") or "")
+                    hero_pos = (situacion.split("_vs_", 1)[0] if "_vs_" in situacion else "").strip()
 
-            if se_used is not None and hero_pos:
-                from modules.db.db import get_conn
-                from modules.db.repo_spots_capture import update_spot_strategy_id
-                from modules.strategy.spots_strategies_repo import (
-                    SpotStrategyMatchInput,
-                    find_unique_spot_strategy_id,
-                )
+                if se_used is not None and hero_pos:
+                    from modules.db.db import get_conn
+                    from modules.db.repo_spots_capture import update_spot_strategy_id
+                    from modules.strategy.spots_strategies_repo import (
+                        SpotStrategyMatchInput,
+                        find_unique_spot_strategy_id,
+                    )
 
-                # derive p2/p3 from situacion for consistency (worker_strategy uppercased tipos)
-                situacion = str(strategy.get("situacion") or "")
-                rest = situacion.split("_vs_", 1)[1] if "_vs_" in situacion else ""
-                parts = rest.split("_") if rest else []
-                p2_pos = parts[0] if len(parts) >= 1 else ""
-                p3_pos = parts[1] if len(parts) >= 2 else ""
-                p2_tipo = parts[2] if len(parts) >= 3 else ""
-                p3_tipo = parts[3] if len(parts) >= 4 else ""
+                    situacion = str(strategy.get("situacion") or "")
+                    rest = situacion.split("_vs_", 1)[1] if "_vs_" in situacion else ""
+                    parts = rest.split("_") if rest else []
+                    p2_pos = parts[0] if len(parts) >= 1 else ""
+                    p3_pos = parts[1] if len(parts) >= 2 else ""
+                    p2_tipo = parts[2] if len(parts) >= 3 else ""
+                    p3_tipo = parts[3] if len(parts) >= 4 else ""
 
-                inp = SpotStrategyMatchInput(
-                    spot_key=hero_pos,
-                    p1_se_bb=float(se_used),
-                    p1_bet_bb=float(strategy.get("bets_p1_used") or 0.0),
-                    p2_pos=p2_pos,
-                    p3_pos=p3_pos,
-                    p2_tipo=p2_tipo,
-                    p3_tipo=p3_tipo,
-                )
-                conn = get_conn()
-                try:
-                    sid = find_unique_spot_strategy_id(conn, inp)
-                finally:
-                    conn.close()
-                update_spot_strategy_id(spot_id=int(spot_id), strategy_id=int(sid))
-                strategy["spot_strategy_id"] = int(sid)
+                    hand_class = ""
+                    if isinstance(mano_result, dict):
+                        hand_class = str(mano_result.get("hand_class") or "").strip()
+
+                    inp = SpotStrategyMatchInput(
+                        spot_key=hero_pos,
+                        hand_class=hand_class,
+                        p1_se_bb=float(se_used),
+                        p1_bet_bb=float(strategy.get("bets_p1_used") or 0.0),
+                        p2_pos=p2_pos,
+                        p3_pos=p3_pos,
+                        p2_tipo=p2_tipo,
+                        p3_tipo=p3_tipo,
+                    )
+                    conn = get_conn()
+                    try:
+                        sid = find_unique_spot_strategy_id(conn, inp)
+                    finally:
+                        conn.close()
+                    update_spot_strategy_id(spot_id=int(spot_id), strategy_id=sid)
+                    if sid is not None:
+                        strategy["spot_strategy_id"] = int(sid)
+                    else:
+                        strategy.pop("spot_strategy_id", None)
         except Exception as e:
             strategy["spot_strategy_link_error"] = str(e)
 
