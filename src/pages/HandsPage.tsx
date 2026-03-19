@@ -1,5 +1,4 @@
 // C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\HandsPage.tsx
-import { invoke } from "@tauri-apps/api/core";
 import React from "react";
 import HandsToolbar from "./hands/HandsToolbar";
 import {
@@ -19,47 +18,15 @@ import {
   persistVisibleBlocks,
 } from "./hands/HandsBlocksConfigModal";
 
-const canUseTauriInvoke = () => {
-  try {
-    return typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__;
-  } catch {
-    return false;
-  }
-};
-
 export default function HandsPage() {
   const hp = useHandsPage();
   const [blocksConfigOpen, setBlocksConfigOpen] = React.useState(false);
   const [visibleBlocks, setVisibleBlocks] = React.useState<HandsVisibleBlocks>(() => loadInitialVisibleBlocks());
 
-  const canRunOne = hp.mode === "OBS" && hp.canLoad && !hp.busy;
-
-  const handleToggleWorkers = async () => {
-    const shouldStart = !hp.workersRunning;
-
-    await Promise.resolve(hp.onToggleWorkers());
-
-    if (!canUseTauriInvoke()) {
-      return;
-    }
-
-    try {
-      if (shouldStart) {
-        await invoke("show_overlay");
-      } else {
-        await invoke("hide_overlay");
-      }
-    } catch (e) {
-      console.error("overlay toggle failed", e);
-    }
-  };
-
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <HandsToolbar
-          mode={hp.mode}
-          onChangeMode={hp.setMode}
           canLoad={hp.canLoad}
           onRefresh={hp.loadOnce}
           auto={hp.auto}
@@ -67,18 +34,6 @@ export default function HandsPage() {
           status={hp.uiStatus}
           busy={hp.busy}
           onReset={hp.onReset}
-          onRunBatch={hp.onRunBatch}
-          workersRunning={hp.workersRunning}
-          onToggleWorkers={handleToggleWorkers}
-          stackEfRangeText={hp.stackEfRangeText}
-          onChangeStackEfRangeText={hp.setStackEfRangeText}
-          betRangeText={hp.betRangeText}
-          onChangeBetRangeText={hp.setBetRangeText}
-          rangeListText={hp.rangeListText}
-          onChangeRangeListText={hp.setRangeListText}
-          linkFilter={hp.linkFilter}
-          onChangeLinkFilter={hp.setLinkFilter}
-          onClearFilters={hp.onClearFilters}
         />
         <button
           style={{
@@ -109,21 +64,17 @@ export default function HandsPage() {
 
       <div style={{ height: 10 }} />
 
-      {hp.mode === "REAL" && (
-        <>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button disabled={!hp.canLoad} onClick={handleToggleWorkers} title="Lanza 4 instancias del worker">
-              {hp.workersRunning ? "Stop workers" : "Run workers (loop, 4 instances)"}
-            </button>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <button disabled={!hp.canLoad} onClick={hp.onToggleWorkers} title="Lanza 4 instancias del worker">
+          {hp.workersRunning ? "Stop workers" : "Run workers (loop, 4 instances)"}
+        </button>
 
-            <span style={{ fontSize: 12, opacity: 0.75 }}>
-              xml: {CHAMPION_XML_DIR} | archive: {XML_ARCHIVE_DIR}
-            </span>
-          </div>
+        <span style={{ fontSize: 12, opacity: 0.75 }}>
+          xml: {CHAMPION_XML_DIR} | archive: {XML_ARCHIVE_DIR}
+        </span>
+      </div>
 
-          <div style={{ height: 10 }} />
-        </>
-      )}
+      <div style={{ height: 10 }} />
 
       <div
         style={{
@@ -143,7 +94,7 @@ export default function HandsPage() {
             sortKey={hp.sortKey}
             sortAsc={hp.sortAsc}
             onSort={hp.onSort}
-            canRunOne={canRunOne}
+            canRunOne={false}
             onRunOneForImage={hp.onRunOneForImage}
             lastLog={hp.lastLog}
           />

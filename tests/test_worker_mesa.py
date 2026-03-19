@@ -262,7 +262,6 @@ def test_run_worker_mesa_once_strategy_ok_mueve_a_ok(monkeypatch, tmp_path):
     monkeypatch.setattr(wmod, "force_ok_on_default_fold", lambda strategy: strategy)
     monkeypatch.setattr(wmod, "has_strategy_move", lambda strategy: True)
     monkeypatch.setattr(wmod, "safe_move", lambda src, dst_dir: os.path.join(dst_dir, os.path.basename(src)))
-    monkeypatch.setattr(wmod, "process_one_image", lambda **kwargs: ({"ok": True}, "sig_new"))
 
     seen = {"route": None}
     dbmod = SimpleNamespace(
@@ -295,7 +294,7 @@ def test_run_worker_mesa_once_strategy_ok_mueve_a_ok(monkeypatch, tmp_path):
     assert seen["route"] is not None
     assert seen["route"]["status"] == "ok"
     assert seen["route"]["reason"] == "strategy_has_move_and_bets"
-    assert last_sig_by_mesa[1] == "sig_new"
+    assert last_sig_by_mesa[1] == "fp_ok"
     assert "OK -> ok:" in fp.getvalue()
 
 
@@ -314,7 +313,6 @@ def test_run_worker_mesa_once_no_strategy_mueve_a_errors(monkeypatch, tmp_path):
     monkeypatch.setattr(wmod, "force_ok_on_default_fold", lambda strategy: strategy)
     monkeypatch.setattr(wmod, "has_strategy_move", lambda strategy: False)
     monkeypatch.setattr(wmod, "safe_move", lambda src, dst_dir: os.path.join(dst_dir, os.path.basename(src)))
-    monkeypatch.setattr(wmod, "process_one_image", lambda **kwargs: ({"ok": False}, "sig_err"))
 
     seen = {"route": None}
     dbmod = SimpleNamespace(
@@ -362,7 +360,6 @@ def test_run_worker_mesa_once_si_falla_capture_ocr_loguea_y_sale(monkeypatch, tm
     monkeypatch.setattr(wmod, "preflop_fail", lambda preflop: False)
     monkeypatch.setattr(wmod, "has_strategy_move", lambda strategy: False)
     monkeypatch.setattr(wmod, "safe_move", lambda src, dst_dir: os.path.join(dst_dir, os.path.basename(src)))
-    monkeypatch.setattr(wmod, "process_one_image", lambda **kwargs: ({"ok": False}, "sig_err"))
 
     seen_ocr = {}
     dbmod = SimpleNamespace(
@@ -416,7 +413,6 @@ def test_run_worker_mesa_once_profiles_and_inserts_worker_profile(monkeypatch, t
     monkeypatch.setattr(wmod, "force_ok_on_default_fold", lambda strategy: {"ok": True})
     monkeypatch.setattr(wmod, "has_strategy_move", lambda strategy: True)
     monkeypatch.setattr(wmod, "safe_move", lambda src, dst_dir: os.path.join(dst_dir, os.path.basename(src)))
-    monkeypatch.setattr(wmod, "process_one_image", lambda **kwargs: ({"ok": True, "persisted": False}, "sig_prof"))
 
     captured_metrics = {}
 

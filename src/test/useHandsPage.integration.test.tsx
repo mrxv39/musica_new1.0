@@ -143,15 +143,13 @@ describe("useHandsPage integration", () => {
     expect(result.current.auto).toBe(false);
   });
 
-  it("persists mode/auto when changed; dbPath is fixed by config", async () => {
+  it("persists auto when changed; dbPath is fixed by config", async () => {
     const { result } = renderHook(() => useHandsPage());
 
     await act(async () => {
-      result.current.setMode("REAL");
       result.current.setAuto(false);
     });
 
-    expect(localStorage.getItem("hands.mode")).toBe("REAL");
     expect(localStorage.getItem("autoRefresh")).toBe("false");
   });
 
@@ -162,20 +160,7 @@ describe("useHandsPage integration", () => {
     expect(mockObsSetDbPath).toHaveBeenLastCalledWith("C:\\db\\default.db");
   });
 
-  it("loadOnce delegates to obs in OBS mode", async () => {
-    const { result } = renderHook(() => useHandsPage());
-
-    await act(async () => {
-      await result.current.loadOnce();
-    });
-
-    expect(mockObsLoadOnce).toHaveBeenCalledTimes(1);
-    expect(mockRealLoadOnce).not.toHaveBeenCalled();
-  });
-
-  it("loadOnce delegates to real in REAL mode", async () => {
-    localStorage.setItem("hands.mode", "REAL");
-
+  it("loadOnce delegates to real (mode is hardcoded REAL)", async () => {
     const { result } = renderHook(() => useHandsPage());
 
     await act(async () => {
@@ -207,12 +192,12 @@ describe("useHandsPage integration", () => {
     expect(result.current.uiStatus).toBe("real status here");
   });
 
-  it("uiStatus uses obs status in OBS mode when idle", () => {
-    mockObs.status = "obs status here";
+  it("uiStatus uses real status when workers are not running (mode is hardcoded REAL)", () => {
+    mockReal.status = "real idle status";
 
     const { result } = renderHook(() => useHandsPage());
 
-    expect(result.current.uiStatus).toBe("obs status here");
+    expect(result.current.uiStatus).toBe("real idle status");
   });
 
   it("exposes filtered rangeError as obsFooterText", () => {

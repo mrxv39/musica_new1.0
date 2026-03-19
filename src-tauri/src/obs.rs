@@ -129,6 +129,11 @@ pub struct MesaOverlayState {
     pub last_detected_at_ms: Option<i64>,
     pub preflop_ok: bool,
     pub frame_ref: Option<String>,
+    pub strategy_ready: bool,
+    pub hand_class: Option<String>,
+    pub move_: Option<String>,
+    pub betmin: Option<f64>,
+    pub betmax: Option<f64>,
 }
 
 #[tauri::command]
@@ -143,7 +148,10 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
 
         let mut stmt = con.prepare(
             "
-            SELECT detected_at_ms, preflop_ok, frame_ref
+            SELECT detected_at_ms, preflop_ok, frame_ref, hand_class,
+                   json_extract(ocr_json, '$.strategy.move') as strategy_move,
+                   json_extract(ocr_json, '$.strategy.betmin') as strategy_betmin,
+                   json_extract(ocr_json, '$.strategy.betmax') as strategy_betmax
             FROM hands_obs
             WHERE table_id = ?
             ORDER BY detected_at_ms DESC, obs_id DESC
@@ -158,6 +166,14 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
             let detected: Option<i64> = row.get(0).unwrap_or(None);
             let ok: i64 = row.get(1).unwrap_or(0);
             let frame: Option<String> = row.get(2).unwrap_or(None);
+            let hand_class: Option<String> = row.get(3).unwrap_or(None);
+            let strategy_move: Option<String> = row.get(4).unwrap_or(None);
+            let strategy_betmin: Option<f64> = row.get(5).unwrap_or(None);
+            let strategy_betmax: Option<f64> = row.get(6).unwrap_or(None);
+
+            let strategy_ready = strategy_move.as_ref()
+                .map(|m| !m.trim().is_empty())
+                .unwrap_or(false);
 
             out.push(MesaOverlayState {
                 mesa,
@@ -165,6 +181,11 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
                 last_detected_at_ms: detected,
                 preflop_ok: ok == 1,
                 frame_ref: frame,
+                strategy_ready,
+                hand_class,
+                move_: strategy_move,
+                betmin: strategy_betmin,
+                betmax: strategy_betmax,
             });
         } else {
             out.push(MesaOverlayState {
@@ -173,6 +194,11 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
                 last_detected_at_ms: None,
                 preflop_ok: false,
                 frame_ref: None,
+                strategy_ready: false,
+                hand_class: None,
+                move_: None,
+                betmin: None,
+                betmax: None,
             });
         }
     }

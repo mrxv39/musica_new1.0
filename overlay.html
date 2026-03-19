@@ -23,40 +23,73 @@
       background: transparent;
     }
 
-    .led {
+    .mesa-group {
       position: absolute;
-      width:20px;
-      height:20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .pill {
+      min-width: 54px;
+      height: 18px;
+      padding: 0 6px;
       border-radius: 4px;
-      border: 1px solid rgba(255,255,255,0.55);
-      box-shadow: 0 0 8px rgba(0,0,0,0.35);
-      background: #6b7280;
-      transition: background 120ms ease, box-shadow 120ms ease;
-    }
-
-    .led.on {
-      background: #22c55e;
-      box-shadow: 0 0 12px rgba(34,197,94,0.9);
-    }
-
-    .lbl {
-      position: absolute;
-      top: -14px;
-      left: -1px;
-      font-size: 9px;
-      color: rgba(255,255,255,0.9);
-      text-shadow: 0 1px 2px rgba(0,0,0,0.9);
-      user-select: none;
+      border: 1px solid rgba(255,255,255,0.65);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.4);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       white-space: nowrap;
+      user-select: none;
+      transition: opacity 150ms ease;
     }
+
+    .pill-move {
+      color: #fff;
+      background: rgba(17, 24, 39, 0.75);
+    }
+
+    .pill-move.fold { background: rgba(107, 114, 128, 0.80); }
+    .pill-move.raise { background: rgba(220, 38, 38, 0.85); }
+    .pill-move.call { background: rgba(22, 163, 74, 0.85); }
+    .pill-move.check { background: rgba(37, 99, 235, 0.85); }
+
+    .pill-hand {
+      color: #fff;
+      background: rgba(17, 24, 39, 0.70);
+      font-size: 10px;
+    }
+
+    .hidden { display: none; }
   </style>
 </head>
 <body>
   <div class="stage">
-    <div id="led-1" class="led" style="left:953px; top:681px;"><div class="lbl">M1</div></div>
-    <div id="led-2" class="led" style="left:953px; top:1278px;"><div class="lbl">M2</div></div>
-    <div id="led-3" class="led" style="left:1729px; top:681px;"><div class="lbl">M3</div></div>
-    <div id="led-4" class="led" style="left:1729px; top:1278px;"><div class="lbl">M4</div></div>
+    <!-- Mesa 1 -->
+    <div class="mesa-group" style="left:933px; top:655px;">
+      <div id="move-1" class="pill pill-move hidden"></div>
+      <div id="hand-1" class="pill pill-hand hidden"></div>
+    </div>
+    <!-- Mesa 2 -->
+    <div class="mesa-group" style="left:933px; top:1252px;">
+      <div id="move-2" class="pill pill-move hidden"></div>
+      <div id="hand-2" class="pill pill-hand hidden"></div>
+    </div>
+    <!-- Mesa 3 -->
+    <div class="mesa-group" style="left:1709px; top:655px;">
+      <div id="move-3" class="pill pill-move hidden"></div>
+      <div id="hand-3" class="pill pill-hand hidden"></div>
+    </div>
+    <!-- Mesa 4 -->
+    <div class="mesa-group" style="left:1709px; top:1252px;">
+      <div id="move-4" class="pill pill-move hidden"></div>
+      <div id="hand-4" class="pill pill-hand hidden"></div>
+    </div>
   </div>
 
   <script>
@@ -74,50 +107,87 @@
       return window.__TAURI_INTERNALS__.invoke(cmd, args || {});
     }
 
-    const lastLedState = { 1: false, 2: false, 3: false, 4: false };
+    function toNum(v) {
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      const s = String(v || "").trim().replace(",", ".");
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
+    }
 
-    function setLed(mesa, on) {
-      const el = document.getElementById(`led-${mesa}`);
-      if (!el) return;
+    function formatMove(move, betmin, betmax) {
+      const m = String(move || "").trim().toUpperCase();
+      if (!m) return "";
+      if (m === "FOLD") return "FOLD";
+      const a = toNum(betmin);
+      const b = toNum(betmax);
+      if (a != null && b != null && (a > 0 || b > 0)) {
+        const fa = a % 1 === 0 ? String(a) : a.toFixed(1);
+        const fb = b % 1 === 0 ? String(b) : b.toFixed(1);
+        return `${m} ${fa}/${fb}`;
+      }
+      return m;
+    }
 
-      const prev = !!lastLedState[mesa];
+    function getMoveClass(move) {
+      const m = String(move || "").trim().toLowerCase();
+      if (m === "fold") return "fold";
+      if (m === "raise" || m === "open" || m === "3bet" || m === "allin" || m === "push") return "raise";
+      if (m === "call" || m === "limp") return "call";
+      if (m === "check") return "check";
+      return "";
+    }
 
-      if (on) {
-        el.classList.add("on");
-        if (!prev) {
-          el.classList.remove("flash");
-          void el.offsetWidth;
-          el.classList.add("flash");
-          setTimeout(() => {
-            el.classList.remove("flash");
-          }, 260);
-        }
-      } else {
-        el.classList.remove("on");
-        el.classList.remove("flash");
+    function updateMesa(mesa, row) {
+      const moveEl = document.getElementById(`move-${mesa}`);
+      const handEl = document.getElementById(`hand-${mesa}`);
+      if (!moveEl || !handEl) return;
+
+      const now = Date.now();
+      const ready = !!row && !!row.strategy_ready;
+      const isFresh = ready &&
+        typeof row.last_detected_at_ms === "number" &&
+        (now - row.last_detected_at_ms) <= FRESH_MS;
+
+      if (!isFresh) {
+        moveEl.classList.add("hidden");
+        moveEl.textContent = "";
+        moveEl.className = "pill pill-move hidden";
+        handEl.classList.add("hidden");
+        handEl.textContent = "";
+        return;
       }
 
-      lastLedState[mesa] = !!on;
+      const move = String(row.move_ || row.move || "").trim();
+      const hand = String(row.hand_class || "").trim();
+      const moveText = formatMove(move, row.betmin, row.betmax);
+
+      if (moveText) {
+        moveEl.textContent = moveText;
+        moveEl.className = `pill pill-move ${getMoveClass(move)}`;
+        moveEl.classList.remove("hidden");
+      } else {
+        moveEl.classList.add("hidden");
+        moveEl.textContent = "";
+      }
+
+      if (hand) {
+        handEl.textContent = hand;
+        handEl.classList.remove("hidden");
+      } else {
+        handEl.classList.add("hidden");
+        handEl.textContent = "";
+      }
     }
 
     async function poll() {
       if (!isTauriAvailable()) return;
-
       try {
         const dbPath = localStorage.getItem("dbPath") || "poker_boss.db";
         const rows = await tauriInvoke("get_mesas_overlay_state", { dbPath });
 
-        const now = Date.now();
-
         for (let mesa = 1; mesa <= 4; mesa++) {
           const row = Array.isArray(rows) ? rows.find(x => Number(x.mesa) === mesa) : null;
-          const isFresh =
-            !!row &&
-            !!row.preflop_ok &&
-            typeof row.last_detected_at_ms === "number" &&
-            (now - row.last_detected_at_ms) <= FRESH_MS;
-
-          setLed(mesa, isFresh);
+          updateMesa(mesa, row);
         }
       } catch (e) {
         console.error("overlay poll failed", e);
@@ -129,5 +199,3 @@
   </script>
 </body>
 </html>
-
-

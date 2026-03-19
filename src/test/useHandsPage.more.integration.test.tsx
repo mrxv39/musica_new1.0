@@ -71,19 +71,6 @@ describe("useHandsPage more integration", () => {
     workersPollingMock.setWorkersRunning.mockReset();
   });
 
-  it("loadOnce usa obs.loadOnce en modo OBS", async () => {
-    localStorage.setItem("hands.mode", "OBS");
-
-    const { result } = renderHook(() => useHandsPage());
-
-    await act(async () => {
-      await result.current.loadOnce();
-    });
-
-    expect(obsMock.loadOnce).toHaveBeenCalledTimes(1);
-    expect(realMock.loadOnce).not.toHaveBeenCalled();
-  });
-
   it("loadOnce usa real.loadOnce en modo REAL", async () => {
     localStorage.setItem("hands.mode", "REAL");
 
@@ -95,18 +82,6 @@ describe("useHandsPage more integration", () => {
 
     expect(realMock.loadOnce).toHaveBeenCalledTimes(1);
     expect(obsMock.loadOnce).not.toHaveBeenCalled();
-  });
-
-  it("uiStatus usa obs.status en modo OBS cuando no hay busy ni workers", () => {
-    localStorage.setItem("hands.mode", "OBS");
-    obsMock.status = "obs listo";
-    realMock.status = "real listo";
-    workersPollingMock.workersRunning = false;
-    workersPollingMock.workersStatusText = "";
-
-    const { result } = renderHook(() => useHandsPage());
-
-    expect(result.current.uiStatus).toBe("obs listo");
   });
 
   it("uiStatus usa real.status en modo REAL cuando no hay busy ni workers", () => {

@@ -12,8 +12,6 @@ from typing import Any, Dict, Optional, TextIO, Tuple
 from PIL import Image
 
 from modules.ocr.ocr import run_ocr
-from modules.workers.worker_loop import process_one_image
-from modules.workers.worker_loop_types import LoopConfig
 from modules.workers.worker_utils import get_file_fingerprint
 
 from .config import CAPTURES_IMG_DIR
@@ -497,46 +495,7 @@ def run_worker_mesa_once(
             pass
 
 
-    cfg = LoopConfig(
-        worker_id=mesa,
-        interval_ms=int(interval_ms),
-        image_path=None,
-        images_dir=None,
-        loop_dir=False,
-        region=None,
-        max_ticks=None,
-        print_every_tick=False,
-        persist_without_stack=False,
-    )
-
-    def _rp(_p: str) -> Any:
-        return preflop
-
-    def _em(_pf: Any) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        return (mano_result, stacks_result)
-
-    def _run_ocr_fn(_p: str) -> Dict[str, Any]:
-        return ocr
-
-    def _cs(**_kw: Any) -> Dict[str, Any]:
-        return strategy
-
-    out, new_sig = process_one_image(
-        cfg=cfg,
-        mode="screen",
-        img_path=img_path,
-        image_ref=img_path,
-        dbmod=dbmod,
-        run_ocr_fn=_run_ocr_fn,
-        MatchInput=MatchInput,
-        select_move=select_move,
-        last_hand_sig=last_sig_by_mesa[mesa],
-        persist_to_db=False,
-        run_preflop_fn=_rp,
-        extract_modules_fn=_em,
-        compute_strategy_fn=_cs,
-    )
-    last_sig_by_mesa[mesa] = new_sig
+    last_sig_by_mesa[mesa] = image_fp
 
     if has_strategy_move(strategy):
         dst = safe_move(img_path, dirs.ok_dir)
@@ -560,11 +519,6 @@ def run_worker_mesa_once(
             except Exception:
                 logging.exception(f"[mesa {mesa}] update_obs_frame_ref (fp) failed")
 
-        if out.get("persisted") and new_sig and dst and new_sig != image_fp:
-            try:
-                update_obs_frame_ref(dbmod, new_sig, dst)
-            except Exception:
-                logging.exception(f"[mesa {mesa}] update_obs_frame_ref (new_sig) failed")
     else:
         dst = safe_move(img_path, dirs.err_dir)
         reason = None
@@ -591,12 +545,6 @@ def run_worker_mesa_once(
                 update_obs_frame_ref(dbmod, image_fp, dst)
             except Exception:
                 logging.exception(f"[mesa {mesa}] update_obs_frame_ref (fp, errors path) failed")
-
-        if out.get("persisted") and new_sig and dst and new_sig != image_fp:
-            try:
-                update_obs_frame_ref(dbmod, new_sig, dst)
-            except Exception:
-                logging.exception(f"[mesa {mesa}] update_obs_frame_ref (new_sig, errors path) failed")
 
         if dbg:
             try:

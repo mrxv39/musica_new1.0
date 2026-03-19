@@ -17,31 +17,9 @@ import type { LinkFilter } from "./handsFilters";
 import { useWorkersPolling } from "./useWorkersPolling";
 import { useHandsPageActions } from "./useHandsPageActions";
 
-type MesaOverlayState = {
-  mesa: number;
-  table_id: string;
-  last_detected_at_ms: number | null;
-  preflop_ok: boolean;
-  frame_ref: string | null;
-};
-
-function canUseTauriInvoke() {
-  try {
-    return typeof window !== "undefined" && !!(window as any).__TAURI_INTERNALS__?.invoke;
-  } catch {
-    return false;
-  }
-}
-
 export function useHandsPage() {
-  const [mode, setMode] = useState<HandsMode>(() => {
-    const saved = (localStorage.getItem("hands.mode") || "OBS").toUpperCase();
-    return saved === "REAL" ? "REAL" : "OBS";
-  });
-
-  useEffect(() => {
-    localStorage.setItem("hands.mode", mode);
-  }, [mode]);
+  const mode: HandsMode = "REAL";
+  const setMode = (_m: HandsMode) => {};
 
   const dbPath = getHandsDefaultDbPath();
   const setDbPath = () => {}; // no-op: DB fija por config, sin input en UI
@@ -67,47 +45,11 @@ export function useHandsPage() {
   const [busy, setBusy] = useState<boolean>(false);
   const [actionStatus, setActionStatus] = useState<string>("");
   const [lastLog, setLastLog] = useState<string>("");
-  const [mesaOverlay, setMesaOverlay] = useState<MesaOverlayState[]>([]);
-
   const {
     workersRunning,
     setWorkersRunning,
     workersStatusText,
   } = useWorkersPolling(500);
-
-  useEffect(() => {
-    if (!workersRunning) return;
-    if (!canUseTauriInvoke()) return;
-
-    let cancelled = false;
-
-    const tick = async () => {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-
-        if (!canUseTauriInvoke()) return;
-
-        const rows = await invoke<MesaOverlayState[]>(
-          "get_mesas_overlay_state",
-          { dbPath }
-        );
-
-        if (!cancelled) {
-          setMesaOverlay(Array.isArray(rows) ? rows : []);
-        }
-      } catch (err) {
-        console.error("overlay_state failed", err);
-      }
-    };
-
-    tick();
-    const id = setInterval(tick, 1000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [workersRunning, dbPath]);
 
   const { sortKey, sortAsc, onSort } = useHandsSort();
 
@@ -301,7 +243,6 @@ export function useHandsPage() {
     actionStatus,
     lastLog,
     workersRunning,
-    mesaOverlay,
     onToggleWorkers,
     sortKey,
     sortAsc,

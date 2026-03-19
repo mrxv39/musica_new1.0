@@ -1,74 +1,41 @@
-import HandsToolbarCommon from "./HandsToolbarCommon";
-import HandsToolbarObs from "./HandsToolbarObs";
-
 export type HandsMode = "OBS" | "REAL";
 
 type HandsToolbarProps = {
-  mode: HandsMode;
-  onChangeMode: (m: HandsMode) => void;
   canLoad: boolean;
   onRefresh: () => void;
   auto: boolean;
   onToggleAuto: (v: boolean) => void;
   status: string;
-
   busy: boolean;
   onReset: () => void;
-  onRunBatch: () => void;
-
-  workersRunning: boolean;
-  onToggleWorkers: () => void;
-
-  stackEfRangeText: string;
-  onChangeStackEfRangeText: (v: string) => void;
-
-  betRangeText: string;
-  onChangeBetRangeText: (v: string) => void;
-
-  rangeListText: string;
-  onChangeRangeListText: (v: string) => void;
-  linkFilter: "all" | "linked" | "unlinked";
-  onChangeLinkFilter: (v: "all" | "linked" | "unlinked") => void;
-
-  onClearFilters: () => void;
 };
 
 export default function HandsToolbar(props: HandsToolbarProps) {
-  const isObs = props.mode === "OBS";
-
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-      <HandsToolbarCommon
-        mode={props.mode}
-        onChangeMode={props.onChangeMode}
-        canLoad={props.canLoad}
-        onRefresh={props.onRefresh}
-        auto={props.auto}
-        onToggleAuto={props.onToggleAuto}
-        status={props.status}
-        busy={props.busy}
-        onReset={props.onReset}
-        isObs={isObs}
-      />
+      <button disabled={!props.canLoad || props.busy} onClick={props.onRefresh}>
+        Refresh
+      </button>
 
-      {isObs ? (
-        <HandsToolbarObs
-          canLoad={props.canLoad}
-          busy={props.busy}
-          onRunBatch={props.onRunBatch}
-          workersRunning={props.workersRunning}
-          onToggleWorkers={props.onToggleWorkers}
-          stackEfRangeText={props.stackEfRangeText}
-          onChangeStackEfRangeText={props.onChangeStackEfRangeText}
-          betRangeText={props.betRangeText}
-          onChangeBetRangeText={props.onChangeBetRangeText}
-          rangeListText={props.rangeListText}
-          onChangeRangeListText={props.onChangeRangeListText}
-          linkFilter={props.linkFilter}
-          onChangeLinkFilter={props.onChangeLinkFilter}
-          onClearFilters={props.onClearFilters}
+      <button
+        disabled={!props.canLoad || props.busy}
+        onClick={props.onReset}
+        title="DELETE FROM hands_real"
+      >
+        Reset
+      </button>
+
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+        <input
+          type="checkbox"
+          checked={props.auto}
+          onChange={(e) => props.onToggleAuto(e.target.checked)}
+          disabled={props.busy}
         />
-      ) : null}
+        Auto (3s)
+      </label>
+
+      <span style={{ fontSize: 13, opacity: 0.8 }}>{props.busy ? "running..." : props.status}</span>
     </div>
   );
 }

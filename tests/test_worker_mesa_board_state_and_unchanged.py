@@ -66,12 +66,6 @@ def test_run_worker_mesa_once_skip_unchanged_frame_in_memory(monkeypatch, tmp_pa
         "_run_preflop_direct",
         lambda _p: called.__setitem__("preflop", called["preflop"] + 1) or {"preflop_ok": True},
     )
-    monkeypatch.setattr(
-        wmod,
-        "process_one_image",
-        lambda **kwargs: called.__setitem__("process", called["process"] + 1) or ({"ok": True}, "sig_x"),
-    )
-
     dbmod = SimpleNamespace(
         find_recent_capture_by_fingerprint=lambda **k: None,
         insert_worker_capture=lambda **k: called.__setitem__("insert_capture", called["insert_capture"] + 1),
@@ -142,11 +136,6 @@ def test_run_worker_mesa_once_postflop_skips_preflop_processing(monkeypatch, tmp
         "persist": 0,
     }
 
-    monkeypatch.setattr(
-        wmod,
-        "process_one_image",
-        lambda **kwargs: called.__setitem__("process", called["process"] + 1) or ({"ok": True}, "sig_should_not_happen"),
-    )
     monkeypatch.setattr(
         wmod,
         "persist_preflop_obs",
