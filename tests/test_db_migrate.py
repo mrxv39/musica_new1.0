@@ -117,7 +117,7 @@ def test_init_db_agrega_captured_gamecode_a_hands_obs(temp_db_path):
 
     conn = sqlite3.connect(str(temp_db_path))
     try:
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(hands_obs)").fetchall()]
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(spots)").fetchall()]
         assert "captured_gamecode" in cols
     finally:
         conn.close()
@@ -142,12 +142,12 @@ def test_init_db_crea_tabla_tournaments(temp_db_path):
         conn.close()
 
 
-def test_init_db_migra_hands_real_con_tournament_id_si_existe(temp_db_path):
+def test_init_db_migra_hands_con_tournament_id_si_existe(temp_db_path):
     conn = sqlite3.connect(str(temp_db_path))
     try:
         conn.execute(
             """
-            CREATE TABLE hands_real (
+            CREATE TABLE hands (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 room TEXT NOT NULL,
                 hero TEXT NOT NULL,
@@ -163,7 +163,7 @@ def test_init_db_migra_hands_real_con_tournament_id_si_existe(temp_db_path):
 
     conn = sqlite3.connect(str(temp_db_path))
     try:
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(hands_real)").fetchall()]
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(hands)").fetchall()]
         assert "tournament_id" in cols
     finally:
         conn.close()

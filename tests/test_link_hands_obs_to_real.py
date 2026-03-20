@@ -3,10 +3,10 @@ import sqlite3
 from modules.preflop.link_hands_obs_to_real import link_hands_obs_to_real
 
 
-def _create_hands_real_table(conn):
+def _create_hands_table(conn):
     conn.execute(
         """
-        CREATE TABLE hands_real (
+        CREATE TABLE hands (
             id INTEGER PRIMARY KEY,
             gamecode TEXT NOT NULL,
             hero_cards TEXT NOT NULL DEFAULT '',
@@ -30,7 +30,7 @@ def _insert_obs(
 ):
     cur = conn.execute(
         """
-        INSERT INTO hands_obs (
+        INSERT INTO spots (
             fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
             preflop_ok, noboard_ok, ocr_json, captured_gamecode, frame_ref, created_at_ms
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -56,7 +56,7 @@ def _insert_obs(
 def _insert_real(conn, *, hand_id, gamecode, hero_cards, startdate="2026-03-06 10:00:00"):
     conn.execute(
         """
-        INSERT INTO hands_real (id, gamecode, hero_cards, startdate, hero, bb, players_json)
+        INSERT INTO hands (id, gamecode, hero_cards, startdate, hero, bb, players_json)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
@@ -74,7 +74,7 @@ def _insert_real(conn, *, hand_id, gamecode, hero_cards, startdate="2026-03-06 1
 def test_link_hands_obs_to_real_links_by_gamecode_ocr(initialized_db, temp_db_path):
     conn = sqlite3.connect(str(temp_db_path))
     try:
-        _create_hands_real_table(conn)
+        _create_hands_table(conn)
         obs_id = _insert_obs(conn, fingerprint="obs-gc-1", mano_raw="AhKh", captured_gamecode="GC1")
         _insert_real(conn, hand_id=1, gamecode="GC1", hero_cards="HA HK")
         conn.commit()
@@ -88,7 +88,7 @@ def test_link_hands_obs_to_real_links_by_gamecode_ocr(initialized_db, temp_db_pa
     conn = sqlite3.connect(str(temp_db_path))
     try:
         row = conn.execute(
-            "SELECT obs_id, gamecode, match_method FROM hand_links"
+            "SELECT spot_id, gamecode, match_method FROM hand_links"
         ).fetchone()
     finally:
         conn.close()
@@ -99,7 +99,7 @@ def test_link_hands_obs_to_real_links_by_gamecode_ocr(initialized_db, temp_db_pa
 def test_link_hands_obs_to_real_links_by_rank_only(initialized_db, temp_db_path):
     conn = sqlite3.connect(str(temp_db_path))
     try:
-        _create_hands_real_table(conn)
+        _create_hands_table(conn)
         obs_id = _insert_obs(conn, fingerprint="obs-rank-1", mano_raw="9c8h", captured_gamecode="")
         _insert_real(conn, hand_id=1, gamecode="GC9", hero_cards="9s 8h")
         conn.commit()
@@ -113,7 +113,7 @@ def test_link_hands_obs_to_real_links_by_rank_only(initialized_db, temp_db_path)
     conn = sqlite3.connect(str(temp_db_path))
     try:
         row = conn.execute(
-            "SELECT obs_id, gamecode, match_method FROM hand_links"
+            "SELECT spot_id, gamecode, match_method FROM hand_links"
         ).fetchone()
     finally:
         conn.close()
@@ -124,7 +124,7 @@ def test_link_hands_obs_to_real_links_by_rank_only(initialized_db, temp_db_path)
 def test_link_hands_obs_to_real_uses_each_gamecode_only_once(initialized_db, temp_db_path):
     conn = sqlite3.connect(str(temp_db_path))
     try:
-        _create_hands_real_table(conn)
+        _create_hands_table(conn)
         _insert_obs(conn, fingerprint="obs-gc-1", mano_raw="AhKh", captured_gamecode="GC1")
         _insert_obs(conn, fingerprint="obs-gc-2", mano_raw="AdKd", captured_gamecode="GC1")
         _insert_real(conn, hand_id=1, gamecode="GC1", hero_cards="HA HK")
@@ -148,7 +148,7 @@ def test_link_hands_obs_to_real_uses_each_gamecode_only_once(initialized_db, tem
 def test_link_hands_obs_to_real_no_match_when_no_candidate(initialized_db, temp_db_path):
     conn = sqlite3.connect(str(temp_db_path))
     try:
-        _create_hands_real_table(conn)
+        _create_hands_table(conn)
         _insert_obs(conn, fingerprint="obs-no-match-1", mano_raw="9c8h", captured_gamecode="")
         _insert_real(conn, hand_id=1, gamecode="GCX", hero_cards="HA HK")
         conn.commit()
@@ -172,7 +172,7 @@ def test_link_hands_obs_to_real_no_match_when_no_candidate(initialized_db, temp_
 def test_link_hands_obs_to_real_multiple_gamecodes_links_both(initialized_db, temp_db_path):
     conn = sqlite3.connect(str(temp_db_path))
     try:
-        _create_hands_real_table(conn)
+        _create_hands_table(conn)
         obs_id_1 = _insert_obs(conn, fingerprint="obs-gc-multi-1", mano_raw="AhKh", captured_gamecode="GC1")
         obs_id_2 = _insert_obs(conn, fingerprint="obs-gc-multi-2", mano_raw="AhKh", captured_gamecode="GC2")
         _insert_real(conn, hand_id=1, gamecode="GC1", hero_cards="HA HK")
@@ -188,7 +188,7 @@ def test_link_hands_obs_to_real_multiple_gamecodes_links_both(initialized_db, te
     conn = sqlite3.connect(str(temp_db_path))
     try:
         rows = conn.execute(
-            "SELECT obs_id, gamecode FROM hand_links ORDER BY obs_id ASC"
+            "SELECT spot_id, gamecode FROM hand_links ORDER BY spot_id ASC"
         ).fetchall()
     finally:
         conn.close()
@@ -199,7 +199,7 @@ def test_link_hands_obs_to_real_multiple_gamecodes_links_both(initialized_db, te
 def test_link_hands_obs_to_real_obs_ids_filter_only_links_requested(initialized_db, temp_db_path):
     conn = sqlite3.connect(str(temp_db_path))
     try:
-        _create_hands_real_table(conn)
+        _create_hands_table(conn)
         obs_id_1 = _insert_obs(conn, fingerprint="obs-filter-1", mano_raw="AhKh", captured_gamecode="GC1")
         _insert_obs(conn, fingerprint="obs-filter-2", mano_raw="AhKh", captured_gamecode="GC2")
         _insert_real(conn, hand_id=1, gamecode="GC1", hero_cards="HA HK")
@@ -215,7 +215,7 @@ def test_link_hands_obs_to_real_obs_ids_filter_only_links_requested(initialized_
     conn = sqlite3.connect(str(temp_db_path))
     try:
         rows = conn.execute(
-            "SELECT obs_id, gamecode FROM hand_links ORDER BY obs_id ASC"
+            "SELECT spot_id, gamecode FROM hand_links ORDER BY spot_id ASC"
         ).fetchall()
     finally:
         conn.close()

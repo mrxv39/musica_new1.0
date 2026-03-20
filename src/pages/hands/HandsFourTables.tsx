@@ -730,6 +730,7 @@ type HandsTableBlockProps = {
   onSort: (key: HandsSortKey) => void;
   canRunOne: boolean;
   onRunOneForImage: (imagePath: string) => Promise<string>;
+  onMarkReview?: (obsId: number, status: "ok" | "error" | null) => Promise<void>;
   lastLog: string;
 };
 export function HandsTableBlock({
@@ -742,6 +743,7 @@ export function HandsTableBlock({
   onSort,
   canRunOne,
   onRunOneForImage,
+  onMarkReview,
   lastLog,
 }: HandsTableBlockProps) {
   const [configOpen, setConfigOpen] = React.useState(false);
@@ -774,7 +776,7 @@ export function HandsTableBlock({
   return (
     <div style={{ ...tableBlockStyle, maxHeight: 420 }}>
       <div style={{ ...tableTitleStyle, display: "flex", alignItems: "center", gap: 8 }}>
-        Hands
+        Spots
         <button
           onClick={() => setCollapsed((v) => !v)}
           style={configButtonStyle}
@@ -795,7 +797,7 @@ export function HandsTableBlock({
           onChangeVisibleIds={obsVisible.onChangeVisibleIds}
           onClose={() => setConfigOpen(false)}
           storageKey={HANDS_OBS_STORAGE_KEY}
-          title="Hands – columnas"
+          title="Spots – columnas"
         />
       )}
       {mode === "REAL" && (
@@ -828,6 +830,7 @@ export function HandsTableBlock({
               sortAsc={sortAsc}
               canRunOne={canRunOne}
               onRunOneForImage={onRunOneForImage}
+              onMarkReview={onMarkReview}
               lastLog={lastLog}
               dbPath={dbPath}
               visibleIds={obsVisible.visibleIds}

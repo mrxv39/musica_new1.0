@@ -135,5 +135,5 @@ def test_copy_spot_to_hand_media_copia_png_y_json(tmp_path):
 
     assert os.path.exists(dst_png)
     assert os.path.exists(dst_json)
-    assert dst_png.endswith(os.path.join("hands_real_media", "game_123", "spot.png"))
-    assert dst_json.endswith(os.path.join("hands_real_media", "game_123", "spot.json"))
+    assert dst_png.endswith(os.path.join("hands_media", "game_123", "spot.png"))
+    assert dst_json.endswith(os.path.join("hands_media", "game_123", "spot.json"))

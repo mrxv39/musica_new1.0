@@ -101,6 +101,18 @@ export async function updatePlayerTipo(
   await db.execute(`UPDATE players SET tipo=?1 WHERE id=?2;`, [t, id]);
 }
 
+export async function updatePlayerTipoByName(
+  name: string,
+  tipo: string
+): Promise<void> {
+  await initPlayersDB();
+  const db = await getPlayersDB();
+  const n = String(name ?? "").trim();
+  const t = String(tipo ?? "").trim();
+  if (!n || !t) return;
+  await db.execute(`UPDATE players SET tipo=?1 WHERE name=?2;`, [t, n]);
+}
+
 /** Borra todos los registros de la tabla players. */
 export async function resetPlayersTable(): Promise<void> {
   await initPlayersDB();

@@ -5,7 +5,6 @@ export type HandsVisibleBlocks = {
   hands: boolean;
   spots: boolean;
   players: boolean;
-  workerProfile: boolean;
 };
 
 type Props = {
@@ -18,19 +17,17 @@ type Props = {
 const STORAGE_KEY = "hands.visibleBlocks";
 
 const ALL_KEYS: (keyof HandsVisibleBlocks)[] = [
-  "tournaments",
-  "hands",
   "spots",
+  "hands",
+  "tournaments",
   "players",
-  "workerProfile",
 ];
 
 const LABELS: Record<keyof HandsVisibleBlocks, string> = {
+  spots: "Spots (OCR)",
+  hands: "Hands (XML)",
   tournaments: "Tournaments",
-  hands: "Hands",
-  spots: "Spots",
   players: "Players",
-  workerProfile: "Worker profile",
 };
 
 export function loadInitialVisibleBlocks(): HandsVisibleBlocks {
@@ -43,7 +40,6 @@ export function loadInitialVisibleBlocks(): HandsVisibleBlocks {
         hands:       parsed.hands       !== false,
         spots:       parsed.spots       !== false,
         players:     parsed.players     !== false,
-        workerProfile: parsed.workerProfile !== false,
       };
     }
   } catch {
@@ -54,7 +50,6 @@ export function loadInitialVisibleBlocks(): HandsVisibleBlocks {
     hands: true,
     spots: true,
     players: true,
-    workerProfile: true,
   };
 }
 
@@ -90,7 +85,6 @@ export function HandsBlocksConfigModal({ open, visibleBlocks, onChangeVisibleBlo
       hands: true,
       spots: true,
       players: true,
-      workerProfile: true,
     };
     persistVisibleBlocks(next);
     onChangeVisibleBlocks(next);
@@ -102,7 +96,6 @@ export function HandsBlocksConfigModal({ open, visibleBlocks, onChangeVisibleBlo
       hands: false,
       spots: false,
       players: false,
-      workerProfile: false,
     };
     persistVisibleBlocks(next);
     onChangeVisibleBlocks(next);

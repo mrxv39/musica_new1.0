@@ -55,14 +55,14 @@ describe("useHandsPageDataActions", () => {
       await result.current.onReset();
     });
 
-    expect(invokeMock).toHaveBeenCalledWith("reset_hands_obs", {
+    expect(invokeMock).toHaveBeenCalledWith("reset_spots", {
       dbPath: "C:\\db\\poker_boss.db",
     });
     expect(loadObsOnce).toHaveBeenCalledTimes(1);
     expect(loadRealOnce).not.toHaveBeenCalled();
   });
 
-  it("onReset in REAL calls reset_hands_real and reloads real", async () => {
+  it("onReset in REAL calls reset_hands and reloads real", async () => {
     invokeMock.mockResolvedValue("reset real ok");
 
     const { result } = renderHook(() =>
@@ -81,7 +81,7 @@ describe("useHandsPageDataActions", () => {
       await result.current.onReset();
     });
 
-    expect(invokeMock).toHaveBeenCalledWith("reset_hands_real", {
+    expect(invokeMock).toHaveBeenCalledWith("reset_hands", {
       dbPath: "C:\\db\\poker_boss.db",
     });
     expect(loadRealOnce).toHaveBeenCalledTimes(1);

@@ -24,6 +24,7 @@ export type HandsObsRow = {
   captured_gamecode?: string | null;
   linked_gamecode?: string | null;
   frame_ref?: string;
+  review_status?: string | null;
 
   // allow dynamic columns
   [k: string]: any;
@@ -247,15 +248,37 @@ export async function dbExec(sql: string, params: any[] = [], dbPath?: string): 
 }
 
 /** ========== OBS helpers ========== */
-export async function fetchLatestHandsObs(dbPath: string, limit = 50): Promise<HandsObsRow[]> {
+export async function updateObsReviewStatus(
+  dbPath: string,
+  obsId: number,
+  status: string | null
+): Promise<void> {
   const db = await openDb(dbPath);
+  await (db as any).execute(
+    "UPDATE spots SET review_status = ?1 WHERE obs_id = ?2",
+    [status, obsId]
+  );
+}
+
+export async function fetchLatestHandsObs(
+  dbPath: string,
+  limit = 500,
+  reviewFilter?: "pending" | "ok" | "error" | null
+): Promise<HandsObsRow[]> {
+  const db = await openDb(dbPath);
+  let where = "";
+  if (reviewFilter === "pending") where = "WHERE ho.review_status IS NULL";
+  else if (reviewFilter === "ok") where = "WHERE ho.review_status = 'ok'";
+  else if (reviewFilter === "error") where = "WHERE ho.review_status = 'error'";
+
   const rows = await (db as any).select(
     `SELECT
        ho.*,
        l.gamecode AS linked_gamecode
-     FROM hands_obs ho
+     FROM spots ho
      LEFT JOIN hand_links l
        ON l.obs_id = ho.obs_id
+     ${where}
      ORDER BY detected_at_ms DESC
      LIMIT ?1`,
     [limit]
@@ -397,7 +420,7 @@ async function fetchSpotFramesMap(db: SqlDb, handIds: number[]): Promise<Map<num
      FROM spot_links sl
      JOIN spots_xml_real sx
        ON sx.spot_id = sl.spot_id
-     JOIN hands_obs h
+     JOIN spots h
        ON h.obs_id = sl.obs_id
      WHERE sx.hand_id IN (${placeholders})
        AND NULLIF(h.frame_ref, '') IS NOT NULL
@@ -453,12 +476,12 @@ export async function fetchLatestHandsReal(dbPath: string, limit = 200): Promise
        wc.dealer_errors_json AS dealer_errors_json,
        wc.table_state_ok AS table_state_ok,
        wc.table_state_errors_json AS table_state_errors_json
-     FROM hands_real hr
+     FROM hands hr
      LEFT JOIN tournaments t
        ON t.id = hr.tournament_id
      LEFT JOIN hand_links l
        ON l.gamecode = hr.gamecode
-     LEFT JOIN hands_obs h
+     LEFT JOIN spots h
        ON h.obs_id = l.obs_id
      LEFT JOIN workers_captures wc
        ON wc.final_image_path = h.frame_ref
@@ -508,20 +531,24 @@ export async function fetchSpots(dbPath: string, limit = 500): Promise<SpotRow[]
   const db = await openDb(dbPath);
   const rows = await (db as any).select(
     `SELECT
-       s.id, s.mesa, s.image_path, s.ts,
-       s.stacks_json, s.bets_json, s.names_json,
-       s.tipo_p2, s.tipo_p3,
-       s.time,
-       s.strategy_id,
-       st.move    AS strategy_move,
-       st.bet_min AS strategy_bet_min,
-       st.bet_max AS strategy_bet_max,
-       s.created_at,
-       s.raw_json
-     FROM spots s
-     LEFT JOIN spots_strategies st
-       ON st.id = s.strategy_id
-     ORDER BY s.id DESC
+       obs_id AS id,
+       table_id AS mesa,
+       frame_ref AS image_path,
+       '' AS ts,
+       json_extract(ocr_json, '$.stacks_preflop') AS stacks_json,
+       json_extract(ocr_json, '$.ocr.bets') AS bets_json,
+       json_extract(ocr_json, '$.ocr.villano') AS names_json,
+       json_extract(ocr_json, '$.ocr.villano.p2.tipo') AS tipo_p2,
+       json_extract(ocr_json, '$.ocr.villano.p3.tipo') AS tipo_p3,
+       json_extract(ocr_json, '$.tempo_s') AS time,
+       json_extract(ocr_json, '$.strategy.spot_strategy_id') AS strategy_id,
+       json_extract(ocr_json, '$.strategy.move') AS strategy_move,
+       json_extract(ocr_json, '$.strategy.betmin') AS strategy_bet_min,
+       json_extract(ocr_json, '$.strategy.betmax') AS strategy_bet_max,
+       created_at_ms AS created_at,
+       ocr_json AS raw_json
+     FROM spots
+     ORDER BY detected_at_ms DESC
      LIMIT ?1`,
     [limit]
   );

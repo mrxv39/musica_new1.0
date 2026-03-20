@@ -12,7 +12,7 @@ def update_obs_frame_ref(dbmod: Any, fingerprint: str, new_frame_ref: str) -> bo
         conn = dbmod.get_conn()
         cur = conn.cursor()
         cur.execute(
-            "UPDATE hands_obs SET frame_ref = ? WHERE fingerprint = ?",
+            "UPDATE spots SET frame_ref = ? WHERE fingerprint = ?",
             (new_frame_ref, fingerprint),
         )
         conn.commit()

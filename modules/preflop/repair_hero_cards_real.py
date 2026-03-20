@@ -88,7 +88,7 @@ def main():
     cur.execute(
         f"""
         SELECT id, room, hero, tournament_path, source_file, gamecode, hero_cards
-        FROM hands_real
+        FROM hands
         WHERE {where_sql}
         ORDER BY id DESC
         {limit_sql}
@@ -122,7 +122,7 @@ def main():
         if args.dry_run:
             print(f"[DRY] id={hand_id} gamecode={gamecode} hero={hero}  '{r['hero_cards']}' -> '{cards}'  ({os.path.basename(xml_path)})")
         else:
-            cur.execute("UPDATE hands_real SET hero_cards=? WHERE id=?", (cards, hand_id))
+            cur.execute("UPDATE hands SET hero_cards=? WHERE id=?", (cards, hand_id))
             fixed += 1
 
     if not args.dry_run:

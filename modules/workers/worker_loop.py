@@ -109,14 +109,14 @@ def _move_image(src_path: str, dst_dir: str) -> Optional[str]:
 
 def _update_db_frame_ref(dbmod: Any, fingerprint: str, new_frame_ref: str) -> bool:
     """
-    Update hands_obs.frame_ref after moving the image, so DB always points to the real file path.
+    Update spots.frame_ref after moving the image, so DB always points to the real file path.
     """
     conn = None
     try:
         conn = dbmod.get_conn()
         cur = conn.cursor()
         cur.execute(
-            "UPDATE hands_obs SET frame_ref = ? WHERE fingerprint = ?",
+            "UPDATE spots SET frame_ref = ? WHERE fingerprint = ?",
             (new_frame_ref, fingerprint),
         )
         conn.commit()

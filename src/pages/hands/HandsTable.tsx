@@ -18,6 +18,7 @@ type Props = {
 
   canRunOne: boolean;
   onRunOneForImage: (imagePath: string) => Promise<string>;
+  onMarkReview?: (obsId: number, status: "ok" | "error" | null) => Promise<void>;
 
   lastLog?: string;
   dbPath?: string;
@@ -40,6 +41,7 @@ export function HandsTable({
   onSort,
   canRunOne,
   onRunOneForImage,
+  onMarkReview,
   lastLog,
   dbPath: _dbPath,
   totalRows,
@@ -113,6 +115,7 @@ export function HandsTable({
           onRunOneForImage={onRunOneForImage}
           onSelectIndex={setPreviewIndex}
           onClose={closePreview}
+          onMarkReview={onMarkReview}
         />
       ) : null}
 

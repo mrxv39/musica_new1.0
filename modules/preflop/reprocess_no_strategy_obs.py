@@ -103,7 +103,7 @@ def _db_env(db_path: str) -> Iterator[None]:
 def _build_select_sql(limit: Optional[int], since_ms: Optional[int]) -> tuple[str, list[Any]]:
     sql = """
         SELECT obs_id, fingerprint, ocr_json, detected_at_ms
-        FROM hands_obs
+        FROM spots
         WHERE ocr_json LIKE ?
     """
     params: list[Any] = [f"%{NO_MATCH_PHRASE}%"]
@@ -191,7 +191,7 @@ def reprocess_no_strategy_obs(
                 p1_se_bb = _to_float((strategy or {}).get("se_used") if isinstance(strategy, dict) else None)
 
                 conn.execute(
-                    "UPDATE hands_obs SET ocr_json = ?, p1_se_bb = ? WHERE obs_id = ?",
+                    "UPDATE spots SET ocr_json = ?, p1_se_bb = ? WHERE obs_id = ?",
                     (new_ocr_json, p1_se_bb, int(row["obs_id"])),
                 )
                 stats["updated"] += 1

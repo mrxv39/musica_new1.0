@@ -15,20 +15,20 @@ def test_collect_and_delete_rows_only_for_requested_folder(temp_db_path):
     try:
         conn.execute(
             """
-            INSERT INTO hands_obs (fingerprint, frame_ref, created_at_ms)
+            INSERT INTO spots (fingerprint, frame_ref, created_at_ms)
             VALUES ('fp_target', ?, 1), ('fp_other', ?, 1)
             """,
             (folder + r"\a.png", other_folder + r"\b.png"),
         )
-        target_obs_id = conn.execute("SELECT obs_id FROM hands_obs WHERE fingerprint='fp_target'").fetchone()[0]
-        other_obs_id = conn.execute("SELECT obs_id FROM hands_obs WHERE fingerprint='fp_other'").fetchone()[0]
+        target_spot_id = conn.execute("SELECT spot_id FROM spots WHERE fingerprint='fp_target'").fetchone()[0]
+        other_spot_id = conn.execute("SELECT spot_id FROM spots WHERE fingerprint='fp_other'").fetchone()[0]
 
         conn.execute(
             """
-            INSERT INTO hand_links (obs_id, gamecode, match_score, match_method, created_at_ms)
+            INSERT INTO hand_links (spot_id, gamecode, match_score, match_method, created_at_ms)
             VALUES (?, 'gc_target', 1.0, 'test', 1), (?, 'gc_other', 1.0, 'test', 1)
             """,
-            (target_obs_id, other_obs_id),
+            (target_spot_id, other_spot_id),
         )
         conn.execute(
             """
@@ -43,7 +43,7 @@ def test_collect_and_delete_rows_only_for_requested_folder(temp_db_path):
         conn.commit()
 
         rows = _collect_rows_for_folder(conn, folder)
-        assert rows.obs_ids == [target_obs_id]
+        assert rows.obs_ids == [target_spot_id]
         assert len(rows.link_ids) == 1
         assert len(rows.capture_ids) == 1
 
@@ -56,11 +56,11 @@ def test_collect_and_delete_rows_only_for_requested_folder(temp_db_path):
             "deleted_workers_captures": 1,
         }
 
-        remaining_obs = conn.execute("SELECT fingerprint FROM hands_obs ORDER BY obs_id").fetchall()
+        remaining_obs = conn.execute("SELECT fingerprint FROM spots ORDER BY spot_id").fetchall()
         assert [row["fingerprint"] for row in remaining_obs] == ["fp_other"]
 
-        remaining_links = conn.execute("SELECT obs_id FROM hand_links").fetchall()
-        assert [row["obs_id"] for row in remaining_links] == [other_obs_id]
+        remaining_links = conn.execute("SELECT spot_id FROM hand_links").fetchall()
+        assert [row["spot_id"] for row in remaining_links] == [other_spot_id]
 
         remaining_caps = conn.execute("SELECT image_fingerprint FROM workers_captures").fetchall()
         assert [row["image_fingerprint"] for row in remaining_caps] == ["cap_other"]

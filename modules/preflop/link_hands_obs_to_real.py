@@ -287,7 +287,7 @@ def _compute_bet_distance(cur, actions_by_hand_id, obs_bet_profile, real):
 def _obs_query(obs_ids: Optional[Iterable[int]]) -> tuple[str, tuple[Any, ...]]:
     base_sql = (
         "SELECT obs_id, mano_raw, detected_at_ms, ocr_json, captured_gamecode "
-        "FROM hands_obs WHERE preflop_ok=1"
+        "FROM spots WHERE preflop_ok=1"
     )
     params: tuple[Any, ...] = ()
     if obs_ids is not None:
@@ -333,7 +333,7 @@ def link_hands_obs_to_real(
         obs_rows = cur.execute(obs_sql, obs_params).fetchall()
 
         real_rows = cur.execute(
-            "SELECT id, gamecode, hero_cards, startdate, hero, bb, players_json FROM hands_real ORDER BY startdate ASC"
+            "SELECT id, gamecode, hero_cards, startdate, hero, bb, players_json FROM hands ORDER BY startdate ASC"
         ).fetchall()
 
         real_prepared = []

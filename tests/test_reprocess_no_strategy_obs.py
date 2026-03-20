@@ -42,8 +42,8 @@ def test_reprocess_updates_only_no_match_rows_and_keeps_links(monkeypatch, temp_
     try:
         conn.execute(
             """
-            INSERT INTO hands_obs
-            (obs_id, fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
+            INSERT INTO spots
+            (spot_id, fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
              preflop_ok, noboard_ok, ocr_json, p2bet, p3bet, p1_se_bb, captured_gamecode, frame_ref, created_at_ms)
             VALUES (?, ?, '', ?, 'AhKs', 'AKo', '', 1, 1, ?, 0.5, 1.0, NULL, 'GC1', 'frame1.bmp', ?)
             """,
@@ -51,8 +51,8 @@ def test_reprocess_updates_only_no_match_rows_and_keeps_links(monkeypatch, temp_
         )
         conn.execute(
             """
-            INSERT INTO hands_obs
-            (obs_id, fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
+            INSERT INTO spots
+            (spot_id, fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
              preflop_ok, noboard_ok, ocr_json, p2bet, p3bet, p1_se_bb, captured_gamecode, frame_ref, created_at_ms)
             VALUES (?, ?, '', ?, 'AhKs', 'AKo', '', 1, 1, ?, 0.5, 1.0, NULL, 'GC2', 'frame2.bmp', ?)
             """,
@@ -68,7 +68,7 @@ def test_reprocess_updates_only_no_match_rows_and_keeps_links(monkeypatch, temp_
         )
         conn.execute(
             """
-            INSERT INTO hand_links (link_id, obs_id, gamecode, match_score, match_method, created_at_ms)
+            INSERT INTO hand_links (link_id, spot_id, gamecode, match_score, match_method, created_at_ms)
             VALUES (1, 1, 'GC1', 1.0, 'gamecode_ocr', ?)
             """,
             (now_ms(),),
@@ -108,13 +108,13 @@ def test_reprocess_updates_only_no_match_rows_and_keeps_links(monkeypatch, temp_
     conn = sqlite3.connect(str(temp_db_path))
     conn.row_factory = sqlite3.Row
     try:
-        row1 = conn.execute("SELECT ocr_json, p1_se_bb FROM hands_obs WHERE obs_id = 1").fetchone()
+        row1 = conn.execute("SELECT ocr_json, p1_se_bb FROM spots WHERE spot_id = 1").fetchone()
         payload1 = json.loads(row1["ocr_json"])
         assert payload1["strategy"]["ok"] is True
         assert payload1["strategy"]["move"] == "RAISE"
         assert row1["p1_se_bb"] == 18.0
 
-        row2 = conn.execute("SELECT ocr_json FROM hands_obs WHERE obs_id = 2").fetchone()
+        row2 = conn.execute("SELECT ocr_json FROM spots WHERE spot_id = 2").fetchone()
         payload2 = json.loads(row2["ocr_json"])
         assert payload2["strategy"]["error"] == "missing_inputs_or_preflop_not_ok"
 
@@ -122,7 +122,7 @@ def test_reprocess_updates_only_no_match_rows_and_keeps_links(monkeypatch, temp_
         wc_payload = json.loads(wc["ocr_json"])
         assert wc_payload["strategy"]["move"] == "RAISE"
 
-        link = conn.execute("SELECT gamecode, match_method FROM hand_links WHERE obs_id = 1").fetchone()
+        link = conn.execute("SELECT gamecode, match_method FROM hand_links WHERE spot_id = 1").fetchone()
         assert tuple(link) == ("GC1", "gamecode_ocr")
     finally:
         conn.close()
@@ -135,8 +135,8 @@ def test_reprocess_respects_limit(monkeypatch, temp_db_path):
     try:
         conn.execute(
             """
-            INSERT INTO hands_obs
-            (obs_id, fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
+            INSERT INTO spots
+            (spot_id, fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
              preflop_ok, noboard_ok, ocr_json, created_at_ms)
             VALUES (1, 'fp1', '', 1000, 'AhKs', 'AKo', '', 1, 1, ?, ?)
             """,
@@ -144,8 +144,8 @@ def test_reprocess_respects_limit(monkeypatch, temp_db_path):
         )
         conn.execute(
             """
-            INSERT INTO hands_obs
-            (obs_id, fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
+            INSERT INTO spots
+            (spot_id, fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
              preflop_ok, noboard_ok, ocr_json, created_at_ms)
             VALUES (2, 'fp2', '', 2000, 'AhKs', 'AKo', '', 1, 1, ?, ?)
             """,

@@ -5,15 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>overlay</title>
   <style>
+    * { margin: 0; padding: 0; }
+
     html, body {
-      margin: 0;
-      padding: 0;
       width: 100%;
       height: 100%;
       overflow: hidden;
       background: transparent;
       font-family: Arial, sans-serif;
-      pointer-events: none;
     }
 
     .stage {
@@ -29,6 +28,7 @@
       flex-direction: column;
       align-items: center;
       gap: 2px;
+      pointer-events: none;
     }
 
     .pill {
@@ -46,24 +46,42 @@
       justify-content: center;
       white-space: nowrap;
       user-select: none;
-      transition: opacity 150ms ease;
+      pointer-events: none;
     }
 
-    .pill-move {
-      color: #fff;
-      background: rgba(17, 24, 39, 0.75);
-    }
-
+    .pill-move { color: #fff; background: rgba(17, 24, 39, 0.75); }
     .pill-move.fold { background: rgba(107, 114, 128, 0.80); }
     .pill-move.raise { background: rgba(220, 38, 38, 0.85); }
     .pill-move.call { background: rgba(22, 163, 74, 0.85); }
     .pill-move.check { background: rgba(37, 99, 235, 0.85); }
+    .pill-bet { color: #fff; background: rgba(17, 24, 39, 0.70); font-size: 10px; }
+    .pill-hand { color: #fff; background: rgba(17, 24, 39, 0.70); font-size: 10px; }
+    .pill-se { color: #fff; background: rgba(17, 24, 39, 0.70); font-size: 10px; }
 
-    .pill-hand {
+    .pill-tipo {
+      position: absolute;
+      pointer-events: auto;
+      cursor: grab;
       color: #fff;
-      background: rgba(17, 24, 39, 0.70);
-      font-size: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 42px;
+      height: 20px;
+      padding: 0 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.65);
+      box-shadow: 0 0 8px rgba(0,0,0,0.4);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      user-select: none;
+      z-index: 10;
     }
+    .pill-tipo:active { cursor: grabbing; }
+    .pill-tipo.fish { background: rgba(40, 167, 69, 0.85); }
+    .pill-tipo.reg { background: rgba(220, 53, 69, 0.85); }
+    .pill-tipo.unknown { background: rgba(108, 117, 125, 0.85); }
 
     .hidden { display: none; }
   </style>
@@ -73,129 +91,271 @@
     <!-- Mesa 1 -->
     <div class="mesa-group" style="left:933px; top:655px;">
       <div id="move-1" class="pill pill-move hidden"></div>
+      <div id="bet-1" class="pill pill-bet hidden"></div>
       <div id="hand-1" class="pill pill-hand hidden"></div>
+      <div id="se-1" class="pill pill-se hidden"></div>
     </div>
+    <div id="p2tipo-1" class="pill pill-tipo hidden" style="left:833px; top:615px;"></div>
+    <div id="p3tipo-1" class="pill pill-tipo hidden" style="left:1033px; top:615px;"></div>
     <!-- Mesa 2 -->
     <div class="mesa-group" style="left:933px; top:1252px;">
       <div id="move-2" class="pill pill-move hidden"></div>
+      <div id="bet-2" class="pill pill-bet hidden"></div>
       <div id="hand-2" class="pill pill-hand hidden"></div>
+      <div id="se-2" class="pill pill-se hidden"></div>
     </div>
+    <div id="p2tipo-2" class="pill pill-tipo hidden" style="left:833px; top:1212px;"></div>
+    <div id="p3tipo-2" class="pill pill-tipo hidden" style="left:1033px; top:1212px;"></div>
     <!-- Mesa 3 -->
     <div class="mesa-group" style="left:1709px; top:655px;">
       <div id="move-3" class="pill pill-move hidden"></div>
+      <div id="bet-3" class="pill pill-bet hidden"></div>
       <div id="hand-3" class="pill pill-hand hidden"></div>
+      <div id="se-3" class="pill pill-se hidden"></div>
     </div>
+    <div id="p2tipo-3" class="pill pill-tipo hidden" style="left:1609px; top:615px;"></div>
+    <div id="p3tipo-3" class="pill pill-tipo hidden" style="left:1809px; top:615px;"></div>
     <!-- Mesa 4 -->
     <div class="mesa-group" style="left:1709px; top:1252px;">
       <div id="move-4" class="pill pill-move hidden"></div>
+      <div id="bet-4" class="pill pill-bet hidden"></div>
       <div id="hand-4" class="pill pill-hand hidden"></div>
+      <div id="se-4" class="pill pill-se hidden"></div>
     </div>
+    <div id="p2tipo-4" class="pill pill-tipo hidden" style="left:1609px; top:1212px;"></div>
+    <div id="p3tipo-4" class="pill pill-tipo hidden" style="left:1809px; top:1212px;"></div>
   </div>
 
   <script>
-    const FRESH_MS = 4000;
+    const TIPO_CYCLE = ["fish", "reg", "unknown"];
+    const tipoState = {};
+    const tipoLock = {};  // {pillId: timestamp} — don't overwrite from DB for 10s after click
+    const TIPO_LOCK_MS = 10000;
 
     function isTauriAvailable() {
-      try {
-        return !!window.__TAURI_INTERNALS__;
-      } catch {
-        return false;
-      }
+      try { return !!window.__TAURI_INTERNALS__; } catch { return false; }
     }
 
     async function tauriInvoke(cmd, args) {
       return window.__TAURI_INTERNALS__.invoke(cmd, args || {});
     }
 
-    function toNum(v) {
-      if (typeof v === "number" && Number.isFinite(v)) return v;
-      const s = String(v || "").trim().replace(",", ".");
-      const n = Number(s);
-      return Number.isFinite(n) ? n : null;
+    // --- Drag + Click for tipo pills ---
+    function loadPos(key, defX, defY) {
+      try {
+        const s = localStorage.getItem(key);
+        if (s) { const p = JSON.parse(s); if (typeof p.x === "number") return p; }
+      } catch {}
+      return { x: defX, y: defY };
     }
 
+    function makeDraggable(el) {
+      let dragging = false, wasDragged = false, ox = 0, oy = 0;
+      const defX = parseInt(el.style.left) || 0;
+      const defY = parseInt(el.style.top) || 0;
+      const pos = loadPos("overlay_" + el.id, defX, defY);
+      el.style.left = pos.x + "px";
+      el.style.top = pos.y + "px";
+
+      el.addEventListener("mousedown", (e) => {
+        dragging = true; wasDragged = false;
+        ox = e.clientX - parseInt(el.style.left);
+        oy = e.clientY - parseInt(el.style.top);
+        el.style.cursor = "grabbing";
+        e.preventDefault(); e.stopPropagation();
+      });
+      window.addEventListener("mousemove", (e) => {
+        if (!dragging) return;
+        wasDragged = true;
+        el.style.left = (e.clientX - ox) + "px";
+        el.style.top = (e.clientY - oy) + "px";
+      });
+      window.addEventListener("mouseup", () => {
+        if (!dragging) return;
+        dragging = false; el.style.cursor = "grab";
+        if (wasDragged) localStorage.setItem("overlay_" + el.id, JSON.stringify({ x: parseInt(el.style.left), y: parseInt(el.style.top) }));
+      });
+      el.addEventListener("click", (e) => {
+        if (wasDragged) { wasDragged = false; return; }
+        cycleTipo(el);
+      });
+    }
+
+    async function cycleTipo(el) {
+      const st = tipoState[el.id];
+      if (!st || !st.name) return;
+      const cur = getTipoClass(el.textContent);
+      const next = TIPO_CYCLE[(TIPO_CYCLE.indexOf(cur) + 1) % TIPO_CYCLE.length];
+      el.textContent = next.toUpperCase();
+      el.className = "pill pill-tipo " + next;
+      tipoLock[el.id] = Date.now();
+      if (isTauriAvailable()) {
+        try {
+          const dbPath = localStorage.getItem("dbPath") || "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\poker_boss.db";
+          await tauriInvoke("update_player_tipo", { dbPath, playerName: st.name, tipo: next });
+        } catch (e) { console.error("update_player_tipo failed", e); }
+      }
+    }
+
+    for (let m = 1; m <= 4; m++) {
+      const p2 = document.getElementById("p2tipo-" + m);
+      const p3 = document.getElementById("p3tipo-" + m);
+      if (p2) makeDraggable(p2);
+      if (p3) makeDraggable(p3);
+    }
+
+    // --- Formatting helpers ---
+    function toNum(v) {
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      const n = Number(String(v || "").trim().replace(",", "."));
+      return Number.isFinite(n) ? n : null;
+    }
     function formatMove(move, betmin, betmax) {
       const m = String(move || "").trim().toUpperCase();
       if (!m) return "";
       if (m === "FOLD") return "FOLD";
-      const a = toNum(betmin);
-      const b = toNum(betmax);
-      if (a != null && b != null && (a > 0 || b > 0)) {
-        const fa = a % 1 === 0 ? String(a) : a.toFixed(1);
-        const fb = b % 1 === 0 ? String(b) : b.toFixed(1);
-        return `${m} ${fa}/${fb}`;
-      }
+      const a = toNum(betmin), b = toNum(betmax);
+      if (a != null && b != null && (a > 0 || b > 0)) return `${m} ${a % 1 === 0 ? a : a.toFixed(1)}/${b % 1 === 0 ? b : b.toFixed(1)}`;
       return m;
     }
-
+    function formatBet(betmin, betmax) {
+      const a = toNum(betmin), b = toNum(betmax);
+      if (a == null && b == null) return "";
+      const fa = a != null ? (a % 1 === 0 ? String(a) : a.toFixed(1)) : "?";
+      const fb = b != null ? (b % 1 === 0 ? String(b) : b.toFixed(1)) : "?";
+      return fa === fb ? fa : `${fa} / ${fb}`;
+    }
+    function formatSe(se) {
+      const v = toNum(se);
+      return v == null ? "" : `SE ${v % 1 === 0 ? v : v.toFixed(1)}`;
+    }
     function getMoveClass(move) {
       const m = String(move || "").trim().toLowerCase();
       if (m === "fold") return "fold";
-      if (m === "raise" || m === "open" || m === "3bet" || m === "allin" || m === "push") return "raise";
+      if (["raise","open","3bet","allin","push","or"].includes(m)) return "raise";
       if (m === "call" || m === "limp") return "call";
       if (m === "check") return "check";
       return "";
     }
+    function getTipoClass(tipo) {
+      const t = String(tipo || "").trim().toLowerCase();
+      if (t === "fish") return "fish";
+      if (t === "reg") return "reg";
+      return "unknown";
+    }
 
+    // --- Update logic ---
     function updateMesa(mesa, row) {
-      const moveEl = document.getElementById(`move-${mesa}`);
-      const handEl = document.getElementById(`hand-${mesa}`);
-      if (!moveEl || !handEl) return;
+      const moveEl = document.getElementById("move-" + mesa);
+      const betEl = document.getElementById("bet-" + mesa);
+      const handEl = document.getElementById("hand-" + mesa);
+      const seEl = document.getElementById("se-" + mesa);
+      const p2tipoEl = document.getElementById("p2tipo-" + mesa);
+      const p3tipoEl = document.getElementById("p3tipo-" + mesa);
+      if (!moveEl || !betEl || !handEl || !seEl) return;
 
-      const now = Date.now();
       const ready = !!row && !!row.strategy_ready;
-      const isFresh = ready &&
-        typeof row.last_detected_at_ms === "number" &&
-        (now - row.last_detected_at_ms) <= FRESH_MS;
 
-      if (!isFresh) {
-        moveEl.classList.add("hidden");
-        moveEl.textContent = "";
-        moveEl.className = "pill pill-move hidden";
-        handEl.classList.add("hidden");
-        handEl.textContent = "";
+      if (row) {
+        const now = Date.now();
+        const p2t = String(row.p2_tipo || "").trim();
+        const p3t = String(row.p3_tipo || "").trim();
+        if (p2tipoEl && p2t) {
+          tipoState[p2tipoEl.id] = { name: row.p2_name || "", tipo: p2t };
+          const p2lockTs = tipoLock[p2tipoEl.id] || 0;
+          const p2locked = p2lockTs > 0 && (now - p2lockTs) < TIPO_LOCK_MS;
+          if (!p2locked) {
+            p2tipoEl.textContent = p2t.toUpperCase();
+            p2tipoEl.className = "pill pill-tipo " + getTipoClass(p2t);
+          }
+        }
+        if (p3tipoEl && p3t) {
+          tipoState[p3tipoEl.id] = { name: row.p3_name || "", tipo: p3t };
+          const p3lockTs = tipoLock[p3tipoEl.id] || 0;
+          const p3locked = p3lockTs > 0 && (now - p3lockTs) < TIPO_LOCK_MS;
+          if (!p3locked) {
+            p3tipoEl.textContent = p3t.toUpperCase();
+            p3tipoEl.className = "pill pill-tipo " + getTipoClass(p3t);
+          }
+        }
+      }
+
+      if (!ready) {
+        moveEl.className = "pill pill-move hidden"; moveEl.textContent = "";
+        betEl.className = "pill pill-bet hidden"; betEl.textContent = "";
+        handEl.className = "pill pill-hand hidden"; handEl.textContent = "";
+        seEl.className = "pill pill-se hidden"; seEl.textContent = "";
         return;
       }
 
       const move = String(row.move_ || row.move || "").trim();
       const hand = String(row.hand_class || "").trim();
       const moveText = formatMove(move, row.betmin, row.betmax);
+      const betText = formatBet(row.betmin, row.betmax);
+      const seText = formatSe(row.se || row.p1_se_bb || row.stack_effective);
 
-      if (moveText) {
-        moveEl.textContent = moveText;
-        moveEl.className = `pill pill-move ${getMoveClass(move)}`;
-        moveEl.classList.remove("hidden");
-      } else {
-        moveEl.classList.add("hidden");
-        moveEl.textContent = "";
-      }
-
-      if (hand) {
-        handEl.textContent = hand;
-        handEl.classList.remove("hidden");
-      } else {
-        handEl.classList.add("hidden");
-        handEl.textContent = "";
-      }
+      if (moveText) { moveEl.textContent = moveText; moveEl.className = "pill pill-move " + getMoveClass(move); }
+      else { moveEl.className = "pill pill-move hidden"; moveEl.textContent = ""; }
+      if (betText) { betEl.textContent = betText; betEl.className = "pill pill-bet"; }
+      else { betEl.className = "pill pill-bet hidden"; betEl.textContent = ""; }
+      if (hand) { handEl.textContent = hand; handEl.className = "pill pill-hand"; }
+      else { handEl.className = "pill pill-hand hidden"; handEl.textContent = ""; }
+      if (seText) { seEl.textContent = seText; seEl.className = "pill pill-se"; }
+      else { seEl.className = "pill pill-se hidden"; seEl.textContent = ""; }
     }
 
     async function poll() {
       if (!isTauriAvailable()) return;
       try {
-        const dbPath = localStorage.getItem("dbPath") || "poker_boss.db";
+        const dbPath = localStorage.getItem("dbPath") || "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\poker_boss.db";
         const rows = await tauriInvoke("get_mesas_overlay_state", { dbPath });
-
         for (let mesa = 1; mesa <= 4; mesa++) {
           const row = Array.isArray(rows) ? rows.find(x => Number(x.mesa) === mesa) : null;
           updateMesa(mesa, row);
         }
-      } catch (e) {
-        console.error("overlay poll failed", e);
-      }
+      } catch (e) { console.error("overlay poll failed", e); }
     }
 
     setInterval(poll, 800);
     poll();
+
+    // --- Auto-toggle interactivity based on cursor position ---
+    let isInteractive = false;
+    const PILL_IDS = [];
+    for (let m = 1; m <= 4; m++) { PILL_IDS.push("p2tipo-" + m, "p3tipo-" + m); }
+    const HIT_MARGIN = 6;
+
+    function getPillRects() {
+      const rects = [];
+      for (const id of PILL_IDS) {
+        const el = document.getElementById(id);
+        if (!el || el.classList.contains("hidden")) continue;
+        const x = parseInt(el.style.left) || 0;
+        const y = parseInt(el.style.top) || 0;
+        const w = el.offsetWidth || 50;
+        const h = el.offsetHeight || 22;
+        rects.push({ x: x - HIT_MARGIN, y: y - HIT_MARGIN, w: w + HIT_MARGIN * 2, h: h + HIT_MARGIN * 2 });
+      }
+      return rects;
+    }
+
+    async function cursorHitCheck() {
+      if (!isTauriAvailable()) return;
+      try {
+        const [cx, cy] = await tauriInvoke("get_cursor_position");
+        const rects = getPillRects();
+        const hit = rects.some(r => cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h);
+        if (hit && !isInteractive) {
+          isInteractive = true;
+          tauriInvoke("overlay_set_interactive", { interactive: true });
+        } else if (!hit && isInteractive) {
+          isInteractive = false;
+          tauriInvoke("overlay_set_interactive", { interactive: false });
+        }
+      } catch {}
+    }
+
+    setInterval(cursorHitCheck, 100);
   </script>
 </body>
 </html>

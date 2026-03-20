@@ -58,7 +58,7 @@ export function useHandsPageDataActions({
         }
         await loadAllFourTables();
       } else {
-        const cmd = mode === "REAL" ? "reset_hands_real" : "reset_hands_obs";
+        const cmd = mode === "REAL" ? "reset_hands" : "reset_hands_obs";
         const msg = await invoke<string>(cmd, { dbPath: p });
         const m = String(msg || "");
         setLastLog(m);

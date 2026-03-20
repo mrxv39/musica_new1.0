@@ -9,7 +9,7 @@ PRE = ROOT / "modules" / "preflop"
 if str(PRE) not in sys.path:
     sys.path.insert(0, str(PRE))
 
-import link_hands_real_to_spots as sut
+import link_hands_to_spots as sut
 from link_spots_utils import parse_startdate_to_ms
 
 
@@ -19,7 +19,7 @@ def _create_db(db_path: Path):
 
     cur.execute(
         """
-        CREATE TABLE hands_real (
+        CREATE TABLE hands (
             id INTEGER PRIMARY KEY,
             room TEXT NOT NULL,
             hero TEXT NOT NULL,
@@ -43,7 +43,7 @@ def _create_db(db_path: Path):
 
     cur.execute(
         """
-        INSERT INTO hands_real (
+        INSERT INTO hands (
             id, room, hero, tournament_path, source_file, gamecode, startdate,
             sb, bb, hero_cards, flop, turn, river, players_json, spot_png, spot_json
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -70,7 +70,7 @@ def _create_db(db_path: Path):
 
     cur.execute(
         """
-        INSERT INTO hands_real (
+        INSERT INTO hands (
             id, room, hero, tournament_path, source_file, gamecode, startdate,
             sb, bb, hero_cards, flop, turn, river, players_json, spot_png, spot_json
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -130,7 +130,7 @@ def test_e2e_creates_gamecode_folder_and_updates_db(tmp_path, monkeypatch):
         sys,
         "argv",
         [
-            "link_hands_real_to_spots.py",
+            "link_hands_to_spots.py",
             "--db",
             str(db_path),
             "--spots_dir",
@@ -144,22 +144,22 @@ def test_e2e_creates_gamecode_folder_and_updates_db(tmp_path, monkeypatch):
     rc = sut.main()
     assert rc == 0
 
-    gamecode_dir = tmp_path / "hands_real_media" / "12089117851"
+    gamecode_dir = tmp_path / "hands_media" / "12089117851"
     assert gamecode_dir.exists()
     assert (gamecode_dir / "spot.png").exists()
     assert (gamecode_dir / "spot.json").exists()
 
     con = sqlite3.connect(str(db_path))
     cur = con.cursor()
-    cur.execute("SELECT spot_png, spot_json FROM hands_real WHERE id = 85")
+    cur.execute("SELECT spot_png, spot_json FROM hands WHERE id = 85")
     row = cur.fetchone()
     con.close()
 
     assert row is not None
     spot_png, spot_json = row
 
-    assert spot_png.endswith(os.path.join("hands_real_media", "12089117851", "spot.png"))
-    assert spot_json.endswith(os.path.join("hands_real_media", "12089117851", "spot.json"))
+    assert spot_png.endswith(os.path.join("hands_media", "12089117851", "spot.png"))
+    assert spot_json.endswith(os.path.join("hands_media", "12089117851", "spot.json"))
 
 
 def test_e2e_dry_run_no_modifica_db(tmp_path, monkeypatch):
@@ -173,7 +173,7 @@ def test_e2e_dry_run_no_modifica_db(tmp_path, monkeypatch):
         sys,
         "argv",
         [
-            "link_hands_real_to_spots.py",
+            "link_hands_to_spots.py",
             "--db",
             str(db_path),
             "--spots_dir",
@@ -190,7 +190,7 @@ def test_e2e_dry_run_no_modifica_db(tmp_path, monkeypatch):
 
     con = sqlite3.connect(str(db_path))
     cur = con.cursor()
-    cur.execute("SELECT spot_png, spot_json FROM hands_real WHERE id = 85")
+    cur.execute("SELECT spot_png, spot_json FROM hands WHERE id = 85")
     row = cur.fetchone()
     con.close()
 
@@ -207,7 +207,7 @@ def test_e2e_force_false_no_sobrescribe_si_ya_hay_spot(tmp_path, monkeypatch):
     con = sqlite3.connect(str(db_path))
     cur = con.cursor()
     cur.execute(
-        "UPDATE hands_real SET spot_png=?, spot_json=? WHERE id=85",
+        "UPDATE hands SET spot_png=?, spot_json=? WHERE id=85",
         ("ya_existe.png", "ya_existe.json"),
     )
     con.commit()
@@ -217,7 +217,7 @@ def test_e2e_force_false_no_sobrescribe_si_ya_hay_spot(tmp_path, monkeypatch):
         sys,
         "argv",
         [
-            "link_hands_real_to_spots.py",
+            "link_hands_to_spots.py",
             "--db",
             str(db_path),
             "--spots_dir",
@@ -232,7 +232,7 @@ def test_e2e_force_false_no_sobrescribe_si_ya_hay_spot(tmp_path, monkeypatch):
 
     con = sqlite3.connect(str(db_path))
     cur = con.cursor()
-    cur.execute("SELECT spot_png, spot_json FROM hands_real WHERE id = 85")
+    cur.execute("SELECT spot_png, spot_json FROM hands WHERE id = 85")
     row = cur.fetchone()
     con.close()
 

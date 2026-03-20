@@ -10,7 +10,7 @@ use crate::python::{
 pub async fn reset_hands_obs(db_path: String) -> Result<String, String> {
     let dbp = db_path;
     tauri::async_runtime::spawn_blocking(move || {
-        let code = "import sqlite3,sys; p=sys.argv[1]; con=sqlite3.connect(p); con.execute('DELETE FROM hands_obs'); con.commit(); print('hands_obs vaciada correctamente')";
+        let code = "import sqlite3,sys; p=sys.argv[1]; con=sqlite3.connect(p); con.execute('DELETE FROM spots'); con.commit(); print('spots vaciada correctamente')";
         let out = run_python_with_env(&["-c", code, &dbp], None)?;
         Ok(out.trim().to_string())
     })
@@ -105,8 +105,8 @@ pub fn get_hand_obs_image(db_path: String, gamecode: String) -> Result<Option<St
         SELECT
             NULLIF(h.frame_ref, '') AS img_path
         FROM hand_links l
-        JOIN hands_obs h
-          ON h.obs_id = l.obs_id
+        JOIN spots h
+          ON h.spot_id = l.spot_id
         WHERE l.gamecode = ?
         LIMIT 1
         "
@@ -134,6 +134,10 @@ pub struct MesaOverlayState {
     pub move_: Option<String>,
     pub betmin: Option<f64>,
     pub betmax: Option<f64>,
+    pub p2_tipo: Option<String>,
+    pub p3_tipo: Option<String>,
+    pub p2_name: Option<String>,
+    pub p3_name: Option<String>,
 }
 
 #[tauri::command]
@@ -151,8 +155,12 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
             SELECT detected_at_ms, preflop_ok, frame_ref, hand_class,
                    json_extract(ocr_json, '$.strategy.move') as strategy_move,
                    json_extract(ocr_json, '$.strategy.betmin') as strategy_betmin,
-                   json_extract(ocr_json, '$.strategy.betmax') as strategy_betmax
-            FROM hands_obs
+                   json_extract(ocr_json, '$.strategy.betmax') as strategy_betmax,
+                   json_extract(ocr_json, '$.ocr.villano.p2.tipo') as p2_tipo,
+                   json_extract(ocr_json, '$.ocr.villano.p3.tipo') as p3_tipo,
+                   json_extract(ocr_json, '$.ocr.villano.p2.name') as p2_name,
+                   json_extract(ocr_json, '$.ocr.villano.p3.name') as p3_name
+            FROM spots
             WHERE table_id = ?
             ORDER BY detected_at_ms DESC, obs_id DESC
             LIMIT 1
@@ -170,6 +178,10 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
             let strategy_move: Option<String> = row.get(4).unwrap_or(None);
             let strategy_betmin: Option<f64> = row.get(5).unwrap_or(None);
             let strategy_betmax: Option<f64> = row.get(6).unwrap_or(None);
+            let p2_tipo: Option<String> = row.get(7).unwrap_or(None);
+            let p3_tipo: Option<String> = row.get(8).unwrap_or(None);
+            let p2_name: Option<String> = row.get(9).unwrap_or(None);
+            let p3_name: Option<String> = row.get(10).unwrap_or(None);
 
             let strategy_ready = strategy_move.as_ref()
                 .map(|m| !m.trim().is_empty())
@@ -186,6 +198,10 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
                 move_: strategy_move,
                 betmin: strategy_betmin,
                 betmax: strategy_betmax,
+                p2_tipo,
+                p3_tipo,
+                p2_name,
+                p3_name,
             });
         } else {
             out.push(MesaOverlayState {
@@ -199,6 +215,10 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
                 move_: None,
                 betmin: None,
                 betmax: None,
+                p2_tipo: None,
+                p3_tipo: None,
+                p2_name: None,
+                p3_name: None,
             });
         }
     }
@@ -249,4 +269,17 @@ print(out_path)
     })
     .await
     .map_err(|e| format!("spawn_blocking error: {e}"))?
+}
+
+#[tauri::command]
+pub fn update_player_tipo(db_path: String, player_name: String, tipo: String) -> Result<bool, String> {
+    let con = rusqlite::Connection::open(db_path)
+        .map_err(|e| e.to_string())?;
+
+    let affected = con.execute(
+        "UPDATE players SET tipo = ? WHERE name = ?",
+        rusqlite::params![tipo, player_name],
+    ).map_err(|e| e.to_string())?;
+
+    Ok(affected > 0)
 }

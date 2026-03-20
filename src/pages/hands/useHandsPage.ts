@@ -18,7 +18,7 @@ import { useWorkersPolling } from "./useWorkersPolling";
 import { useHandsPageActions } from "./useHandsPageActions";
 
 export function useHandsPage() {
-  const mode: HandsMode = "REAL";
+  const mode: HandsMode = "OBS";
   const setMode = (_m: HandsMode) => {};
 
   const dbPath = getHandsDefaultDbPath();
@@ -270,5 +270,8 @@ export function useHandsPage() {
     onRunOneForImage,
     onImportXml,
     onWorkersTick,
+    markReview: obs.markReview,
+    reviewFilter: obs.reviewFilter,
+    setReviewFilter: obs.setReviewFilter,
   };
 }

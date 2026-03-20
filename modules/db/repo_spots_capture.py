@@ -43,7 +43,7 @@ def insert_spot_capture(
             cur.execute(
                 f"""
                 SELECT id, ts, created_at
-                FROM spots
+                FROM spots_captures
                 WHERE spot_fingerprint = ?
                   AND created_at >= datetime('now', '-{SPOT_DEDUPE_WINDOW_SEC} seconds')
                 LIMIT 1
@@ -56,7 +56,7 @@ def insert_spot_capture(
                 return int(row[0])
         cur.execute(
             """
-            INSERT INTO spots
+            INSERT INTO spots_captures
             (mesa, image_path, ts, stacks_json, bets_json, names_json, tipo_p2, tipo_p3, raw_json, time, spot_fingerprint, strategy_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -85,12 +85,12 @@ def update_spot_strategy_id(*, spot_id: int, strategy_id: Optional[int]) -> bool
         cur = conn.cursor()
         if strategy_id is None:
             cur.execute(
-                "UPDATE spots SET strategy_id = NULL WHERE id = ?",
+                "UPDATE spots_captures SET strategy_id = NULL WHERE id = ?",
                 (int(spot_id),),
             )
         else:
             cur.execute(
-                "UPDATE spots SET strategy_id = ? WHERE id = ?",
+                "UPDATE spots_captures SET strategy_id = ? WHERE id = ?",
                 (int(strategy_id), int(spot_id)),
             )
         conn.commit()
@@ -108,7 +108,7 @@ def update_spot_decision(
     with connect() as conn:
         cur = conn.cursor()
         cur.execute(
-            "UPDATE spots SET decision_move = ?, decision_betmin = ?, decision_betmax = ? WHERE id = ?",
+            "UPDATE spots_captures SET decision_move = ?, decision_betmin = ?, decision_betmax = ? WHERE id = ?",
             (str(move or ""), betmin, betmax, int(spot_id)),
         )
         conn.commit()

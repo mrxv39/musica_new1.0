@@ -44,6 +44,27 @@ fn hide_overlay(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn overlay_set_interactive(app: tauri::AppHandle, interactive: bool) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("overlay") {
+        let _ = w.set_ignore_cursor_events(!interactive);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_cursor_position() -> Result<(i32, i32), String> {
+    use std::mem::MaybeUninit;
+    #[repr(C)]
+    struct POINT { x: i32, y: i32 }
+    extern "system" { fn GetCursorPos(lp: *mut POINT) -> i32; }
+    let mut pt = MaybeUninit::<POINT>::uninit();
+    let ok = unsafe { GetCursorPos(pt.as_mut_ptr()) };
+    if ok == 0 { return Err("GetCursorPos failed".into()); }
+    let pt = unsafe { pt.assume_init() };
+    Ok((pt.x, pt.y))
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -79,6 +100,8 @@ fn main() {
             // overlay
             show_overlay,
             hide_overlay,
+            overlay_set_interactive,
+            get_cursor_position,
 
             // OBS tools (dev/CLI only: run_worker_one, run_worker_batch, capture_test_images)
             obs::reset_hands_obs,
@@ -88,9 +111,10 @@ fn main() {
             obs::get_hand_obs_image,
             obs::get_mesas_overlay_state,
             obs::capture_single_mesa,
+            obs::update_player_tipo,
 
             // REAL reset
-            reset_real::reset_hands_real,
+            reset_real::reset_hands,
             reset_real::reset_four_tables,
 
             // workers loop/tick

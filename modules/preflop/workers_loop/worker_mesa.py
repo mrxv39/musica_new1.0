@@ -168,30 +168,15 @@ def run_worker_mesa_once(
 
         _LAST_CAPTURE_FP_BY_MESA[mesa] = image_fp
 
-        since_ms = int(time.time() * 1000) - RECENT_CAPTURE_WINDOW_MS
-
-        recent = dbmod.find_recent_capture_by_fingerprint(
-            image_fingerprint=image_fp,
-            since_ms=since_ms,
-        )
-
-        if recent:
+        # DB-level dedup via spots.fingerprint UNIQUE constraint
+        existing = dbmod.get_obs_by_fingerprint(image_fp)
+        if existing:
             _safe_remove(img_path)
             if dbg or verbose:
-                log(
-                    fp,
-                    f"[mesa {mesa}] DUPLICATE CAPTURE -> skip | fp={image_fp} | prev_capture_id={recent.get('capture_id')} | prev_status={recent.get('status')} | window_ms={RECENT_CAPTURE_WINDOW_MS}",
-                )
+                log(fp, f"[mesa {mesa}] DUPLICATE CAPTURE (spots) -> skip | fp={image_fp}")
             return
 
-        capture_id = dbmod.insert_worker_capture(
-            mesa=mesa,
-            image_path=os.path.abspath(img_path),
-            image_fingerprint=image_fp,
-            image_size_bytes=image_size_bytes,
-            status="captured",
-            reason="time_gate_passed",
-        )
+        capture_id = None
         if profile_enabled:
             profile_times["fp_db"] = time.perf_counter() - t_fpdb0
 
@@ -246,16 +231,7 @@ def run_worker_mesa_once(
             if profile_enabled:
                 profile_times["preflop"] = time.perf_counter() - t_pre0
 
-        def _deferred_ocr_and_candidate() -> None:
-            try:
-                if capture_id is not None:
-                    dbmod.update_worker_capture_ocr(
-                        capture_id=capture_id,
-                        ocr_ok=bool((ocr or {}).get("ok")),
-                        ocr_json=json.dumps(ocr or {}, ensure_ascii=False),
-                    )
-            except Exception:
-                logging.exception(f"[mesa {mesa}] update_worker_capture_ocr failed")
+        def _deferred_candidate() -> None:
             try:
                 write_time_mano_candidate(
                     dirs=dirs,
@@ -268,9 +244,7 @@ def run_worker_mesa_once(
             except Exception:
                 logging.exception(f"[mesa {mesa}] write_time_mano_candidate failed")
 
-        # Non-daemon thread ensures OCR/candidate writes complete before worker exits.
-        # This prevents data loss if the process is killed or workers stop suddenly.
-        t = threading.Thread(target=_deferred_ocr_and_candidate, daemon=False)
+        t = threading.Thread(target=_deferred_candidate, daemon=False)
         t.start()
     except Exception as e:
         _safe_remove(img_path)
@@ -287,17 +261,6 @@ def run_worker_mesa_once(
             _write_preflop_fail_debug(dst, mesa, preflop)
         except Exception as e:
             log(fp, f"[mesa {mesa}] preflop FAIL debug write error: {e}")
-
-        if capture_id is not None:
-            try:
-                dbmod.update_worker_capture_route(
-                    capture_id=capture_id,
-                    final_image_path=dst,
-                    status="borrar",
-                    reason=reason_text,
-                )
-            except Exception:
-                logging.exception(f"[mesa {mesa}] update_worker_capture_route (preflop fail) failed")
 
         return
 
@@ -323,61 +286,17 @@ def run_worker_mesa_once(
 
     time_sec = (time.perf_counter() - time_spot_t0) if time_spot_t0 is not None else None
 
-    # Introducir todos los datos en la tabla spots.
-    t_insert_spot0 = time.perf_counter() if profile_enabled else 0.0
-    try:
-        spot_fingerprint = _build_spot_fingerprint(
-            mesa=mesa,
-            ts=ts,
-            stacks_result=stacks_result,
-            ocr=ocr,
-        )
-        spot_id = dbmod.insert_spot_capture_from_data(
-            mesa=mesa,
-            image_path=dest_capture_path,
-            ts=ts,
-            stacks_result=stacks_result,
-            ocr=ocr,
-            preflop=preflop,
-            mano_result=mano_result,
-            time_sec=time_sec,
-            spot_fingerprint=spot_fingerprint,
-        )
-        if spot_id and (dbg or verbose):
-            log(fp, f"[mesa {mesa}] spots persisted -> id={spot_id}")
-    except Exception as e:
-        log(fp, f"[mesa {mesa}] spots persist error: {e}")
-
-    if profile_enabled:
-        profile_times["insert_spot"] = time.perf_counter() - t_insert_spot0
-
     t_strategy0 = time.perf_counter() if profile_enabled else 0.0
     strategy, err = compute_strategy_safe_fn(preflop, mano_result, ocr)
     strategy = force_ok_on_default_fold(strategy)
     if profile_enabled:
         profile_times["strategy"] = time.perf_counter() - t_strategy0
 
-    # Persist the effective decision (even when there is no linked strategy row).
-    if spot_id and isinstance(strategy, dict) and has_strategy_move(strategy):
-        try:
-            from modules.db.repo_spots_capture import update_spot_decision
-
-            update_spot_decision(
-                spot_id=int(spot_id),
-                move=str(strategy.get("move") or ""),
-                betmin=strategy.get("betmin", None),
-                betmax=strategy.get("betmax", None),
-            )
-        except Exception:
-            pass
-
-    # Link spot -> spots_strategies row only when hand is in that row's hand_range (Hoja1+)
-    if spot_id and isinstance(strategy, dict):
+    # Enrich strategy with spot_strategy_id (for ocr_json persistence in spots table)
+    if isinstance(strategy, dict):
         try:
             sheet = str(strategy.get("sheet") or "").strip().lower()
-            if sheet == "nash push fold":
-                pass
-            else:
+            if sheet != "nash push fold":
                 se_used = strategy.get("se_used", None)
                 hero_pos = str((strategy.get("spot") or "")).strip()
                 if not hero_pos:
@@ -386,7 +305,6 @@ def run_worker_mesa_once(
 
                 if se_used is not None and hero_pos:
                     from modules.db.db import get_conn
-                    from modules.db.repo_spots_capture import update_spot_strategy_id
                     from modules.strategy.spots_strategies_repo import (
                         SpotStrategyMatchInput,
                         find_unique_spot_strategy_id,
@@ -419,7 +337,6 @@ def run_worker_mesa_once(
                         sid = find_unique_spot_strategy_id(conn, inp)
                     finally:
                         conn.close()
-                    update_spot_strategy_id(spot_id=int(spot_id), strategy_id=sid)
                     if sid is not None:
                         strategy["spot_strategy_id"] = int(sid)
                     else:
@@ -442,9 +359,9 @@ def run_worker_mesa_once(
             tempo_s=round(time.perf_counter() - tick_t0, 3),
         )
         if obs_id and (dbg or verbose):
-            log(fp, f"[mesa {mesa}] hands_obs persisted -> obs_id={obs_id} | fp={image_fp}")
+            log(fp, f"[mesa {mesa}] spots persisted -> spot_id={obs_id} | fp={image_fp}")
     except Exception as e:
-        log(fp, f"[mesa {mesa}] hands_obs persist error: {e}")
+        log(fp, f"[mesa {mesa}] spots persist error: {e}")
     if profile_enabled:
         profile_times["obs"] = time.perf_counter() - t_obs0
 
@@ -479,20 +396,6 @@ def run_worker_mesa_once(
         parts = " ".join(f"{k}={profile_times.get(k, 0.0):.4f}" for k in parts_keys)
         cur_spot_id = spot_id if "spot_id" in locals() else None
         log(fp, f"[mesa {mesa}] PROFILE ts={ts} capture_id={capture_id} spot_id={cur_spot_id} {parts}")
-        # Persist metrics to DB for historical analysis
-        metrics = {k: float(profile_times.get(k, 0.0)) for k in parts_keys}
-        try:
-            if hasattr(dbmod, "insert_worker_profile"):
-                dbmod.insert_worker_profile(
-                    ts=ts,
-                    mesa=mesa,
-                    capture_id=capture_id,
-                    spot_id=cur_spot_id,
-                    metrics=metrics,
-                )
-        except Exception:
-            # Profiling should never break la ejecución principal del worker
-            pass
 
 
     last_sig_by_mesa[mesa] = image_fp
@@ -501,17 +404,6 @@ def run_worker_mesa_once(
         dst = safe_move(img_path, dirs.ok_dir)
         if verbose:
             log(fp, f"[mesa {mesa}] OK -> ok: {dst}")
-
-        if capture_id is not None:
-            try:
-                dbmod.update_worker_capture_route(
-                    capture_id=capture_id,
-                    final_image_path=dst,
-                    status="ok",
-                    reason="strategy_has_move_and_bets",
-                )
-            except Exception:
-                logging.exception(f"[mesa {mesa}] update_worker_capture_route (ok) failed")
 
         if image_fp and dst:
             try:
@@ -528,17 +420,6 @@ def run_worker_mesa_once(
 
         if verbose:
             log(fp, f"[mesa {mesa}] NO STRATEGY -> errors: {dst} | reason={reason_text}")
-
-        if capture_id is not None:
-            try:
-                dbmod.update_worker_capture_route(
-                    capture_id=capture_id,
-                    final_image_path=dst,
-                    status="errors",
-                    reason=reason_text,
-                )
-            except Exception:
-                logging.exception(f"[mesa {mesa}] update_worker_capture_route (errors) failed")
 
         if image_fp and dst:
             try:

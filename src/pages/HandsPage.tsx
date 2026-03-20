@@ -4,13 +4,10 @@ import HandsToolbar from "./hands/HandsToolbar";
 import {
   TournamentsTable,
   HandsTableBlock,
-  SpotsRealTable,
   PlayersTableBlock,
-  WorkerProfileTableBlock,
 } from "./hands/HandsFourTables";
-
 import { useHandsPage } from "./hands/useHandsPage";
-import { CHAMPION_XML_DIR, XML_ARCHIVE_DIR } from "./hands/handsPagePaths";
+import type { ReviewFilter } from "./hands/useHandsObs";
 import {
   HandsBlocksConfigModal,
   HandsVisibleBlocks,
@@ -22,7 +19,6 @@ export default function HandsPage() {
   const hp = useHandsPage();
   const [blocksConfigOpen, setBlocksConfigOpen] = React.useState(false);
   const [visibleBlocks, setVisibleBlocks] = React.useState<HandsVisibleBlocks>(() => loadInitialVisibleBlocks());
-
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -68,11 +64,11 @@ export default function HandsPage() {
         <button disabled={!hp.canLoad} onClick={hp.onToggleWorkers} title="Lanza 4 instancias del worker">
           {hp.workersRunning ? "Stop workers" : "Run workers (loop, 4 instances)"}
         </button>
-
-        <span style={{ fontSize: 12, opacity: 0.75 }}>
-          xml: {CHAMPION_XML_DIR} | archive: {XML_ARCHIVE_DIR}
-        </span>
       </div>
+
+      <div style={{ height: 10 }} />
+
+      <ReviewFilterBar filter={hp.reviewFilter} onChange={hp.setReviewFilter} />
 
       <div style={{ height: 10 }} />
 
@@ -85,10 +81,10 @@ export default function HandsPage() {
         }}
       >
         {visibleBlocks.tournaments && <TournamentsTable rows={hp.tournaments ?? []} />}
-        {visibleBlocks.hands && (
+        {visibleBlocks.spots && (
           <HandsTableBlock
-            mode={hp.mode}
-            realRows={hp.sortedRealRows}
+            mode="OBS"
+            realRows={[]}
             obsRows={hp.sortedObsRows}
             dbPath={hp.dbPath}
             sortKey={hp.sortKey}
@@ -96,12 +92,26 @@ export default function HandsPage() {
             onSort={hp.onSort}
             canRunOne={false}
             onRunOneForImage={hp.onRunOneForImage}
+            onMarkReview={hp.markReview}
             lastLog={hp.lastLog}
           />
         )}
-        {visibleBlocks.spots && <SpotsRealTable rows={hp.spotsReal ?? []} />}
+        {visibleBlocks.hands && (
+          <HandsTableBlock
+            mode="REAL"
+            realRows={hp.sortedRealRows}
+            obsRows={[]}
+            dbPath={hp.dbPath}
+            sortKey={hp.sortKey}
+            sortAsc={hp.sortAsc}
+            onSort={hp.onSort}
+            canRunOne={false}
+            onRunOneForImage={hp.onRunOneForImage}
+            onMarkReview={hp.markReview}
+            lastLog={hp.lastLog}
+          />
+        )}
         {visibleBlocks.players && <PlayersTableBlock rows={hp.players ?? []} />}
-        {visibleBlocks.workerProfile && <WorkerProfileTableBlock rows={hp.workerProfile ?? []} />}
       </div>
 
       {hp.obsFooterText ? (
@@ -112,6 +122,45 @@ export default function HandsPage() {
         {hp.actionStatus ? <div>{hp.actionStatus}</div> : null}
         {hp.lastLog ? <pre style={{ whiteSpace: "pre-wrap" }}>{hp.lastLog}</pre> : null}
       </div>
+    </div>
+  );
+}
+
+const REVIEW_OPTIONS: { value: ReviewFilter; label: string }[] = [
+  { value: "all", label: "Todas" },
+  { value: "pending", label: "Pendientes" },
+  { value: "ok", label: "OK" },
+  { value: "error", label: "Errores" },
+];
+
+function ReviewFilterBar({
+  filter,
+  onChange,
+}: {
+  filter: ReviewFilter;
+  onChange: (f: ReviewFilter) => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, marginRight: 4 }}>Review:</span>
+      {REVIEW_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          style={{
+            padding: "4px 12px",
+            borderRadius: 6,
+            border: filter === opt.value ? "2px solid #333" : "1px solid #ccc",
+            background: filter === opt.value ? "#333" : "#fff",
+            color: filter === opt.value ? "#fff" : "#333",
+            fontWeight: filter === opt.value ? 700 : 400,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
     </div>
   );
 }

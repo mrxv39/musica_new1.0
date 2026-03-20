@@ -33,13 +33,13 @@ def test_importer_creates_tables_and_imports_one_fixture():
             c.execute("SELECT COUNT(*) FROM tournaments")
             assert c.fetchone()[0] == 1
 
-            c.execute("SELECT COUNT(*) FROM hands_real")
+            c.execute("SELECT COUNT(*) FROM hands")
             assert c.fetchone()[0] >= 1
 
             c.execute(
                 """
                 SELECT hr.tournament_id, t.tournamentname, t.tournamentcode, t.buyin
-                FROM hands_real hr
+                FROM hands hr
                 JOIN tournaments t ON t.id = hr.tournament_id
                 LIMIT 1
                 """

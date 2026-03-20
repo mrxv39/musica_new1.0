@@ -20,7 +20,7 @@ export default function HandsToolbar(props: HandsToolbarProps) {
       <button
         disabled={!props.canLoad || props.busy}
         onClick={props.onReset}
-        title="DELETE FROM hands_real"
+        title="DELETE FROM hands"
       >
         Reset
       </button>

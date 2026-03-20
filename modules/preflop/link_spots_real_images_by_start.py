@@ -66,9 +66,9 @@ def main():
     ensure_col(con, "spots_real", "img_dt", "TEXT")
     ensure_col(con, "spots_real", "img_score", "REAL")
 
-    hands = con.execute("SELECT id, startdate FROM hands_real ORDER BY id").fetchall()
+    hands = con.execute("SELECT id, startdate FROM hands ORDER BY id").fetchall()
     if not hands:
-        print({"error": "hands_real empty"})
+        print({"error": "hands empty"})
         return 2
 
     used_paths = set()

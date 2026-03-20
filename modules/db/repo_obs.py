@@ -29,7 +29,7 @@ def insert_obs(
         cur = conn.cursor()
         cur.execute(
             '''
-            INSERT OR IGNORE INTO hands_obs
+            INSERT OR IGNORE INTO spots
             (fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
              preflop_ok, noboard_ok, ocr_json, p2bet, p3bet, p1_se_bb, captured_gamecode, frame_ref, created_at_ms)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -53,7 +53,7 @@ def insert_obs(
             ),
         )
         conn.commit()
-        cur.execute("SELECT obs_id FROM hands_obs WHERE fingerprint = ?", (fingerprint,))
+        cur.execute("SELECT obs_id FROM spots WHERE fingerprint = ?", (fingerprint,))
         row = cur.fetchone()
         return int(row["obs_id"]) if row else None
 
@@ -62,6 +62,6 @@ def get_obs_by_fingerprint(fingerprint: str) -> Optional[Dict[str, Any]]:
     init_db()
     with connect() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM hands_obs WHERE fingerprint = ?", (fingerprint,))
+        cur.execute("SELECT * FROM spots WHERE fingerprint = ?", (fingerprint,))
         row = cur.fetchone()
         return dict(row) if row else None

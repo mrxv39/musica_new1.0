@@ -12,6 +12,7 @@ import {
   extractTempoS,
 } from "../../db";
 import { extractLocalImagePath, formatTempoS } from "./handsUtils";
+import { updatePlayerTipoByName, listPlayers, type PlayerRow } from "../../db/players";
 
 type Props = {
   rows: HandsObsRow[];
@@ -20,6 +21,7 @@ type Props = {
   onRunOneForImage: (imagePath: string) => Promise<string>;
   onSelectIndex: (nextIndex: number) => void;
   onClose: () => void;
+  onMarkReview?: (obsId: number, status: "ok" | "error" | null) => Promise<void>;
 };
 
 function safeJson<T = any>(s?: string): T | null {
@@ -34,7 +36,6 @@ function tryParseWorkerOutputToJson(output: string): any | null {
   const t = (output || "").trim();
   if (!t) return null;
 
-  // Caso ideal: output es JSON puro
   try {
     return JSON.parse(t);
   } catch {
@@ -216,7 +217,128 @@ function FailureBlock({
   );
 }
 
-export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForImage, onSelectIndex, onClose }: Props) {
+function InfoCard({ label, value, color, large }: { label: string; value: string; color?: string; large?: boolean }) {
+  return (
+    <div
+      style={{
+        padding: "4px 10px",
+        background: "rgba(0,0,0,0.75)",
+        borderRadius: 6,
+        textAlign: "center",
+        minWidth: 60,
+      }}
+    >
+      <div style={{ fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: 1 }}>{label}</div>
+      <div style={{ fontSize: large ? 18 : 14, fontWeight: 700, color: color || "#fff", marginTop: 1 }}>{value}</div>
+    </div>
+  );
+}
+
+function DraggableOverlay({
+  storageKey,
+  defaultX,
+  defaultY,
+  children,
+}: {
+  storageKey: string;
+  defaultX: number;
+  defaultY: number;
+  children: React.ReactNode;
+}) {
+  const [pos, setPos] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) return JSON.parse(saved) as { x: number; y: number };
+    } catch {}
+    return { x: defaultX, y: defaultY };
+  });
+  const dragging = React.useRef(false);
+  const offset = React.useRef({ x: 0, y: 0 });
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    dragging.current = true;
+    offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+    e.preventDefault();
+  };
+
+  React.useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const next = { x: e.clientX - offset.current.x, y: e.clientY - offset.current.y };
+      setPos(next);
+    };
+    const onMouseUp = () => {
+      if (dragging.current) {
+        dragging.current = false;
+        setPos((p) => { localStorage.setItem(storageKey, JSON.stringify(p)); return p; });
+      }
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => { window.removeEventListener("mousemove", onMouseMove); window.removeEventListener("mouseup", onMouseUp); };
+  }, [storageKey]);
+
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      style={{ position: "absolute", left: pos.x, top: pos.y, cursor: "grab", pointerEvents: "auto", zIndex: 10 }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function PlayerTipoOverlay({ label, name, tipo }: { label: string; name: string; tipo: string }) {
+  const CYCLE = ["fish", "reg", "unknown"] as const;
+  const initial = CYCLE.includes(tipo as any) ? tipo : "unknown";
+  const [current, setCurrent] = React.useState(initial);
+  React.useEffect(() => { setCurrent(CYCLE.includes(tipo as any) ? tipo : "unknown"); }, [tipo]);
+
+  const handleToggle = async () => {
+    if (!name) return;
+    const idx = CYCLE.indexOf(current as any);
+    const next = CYCLE[(idx + 1) % CYCLE.length];
+    setCurrent(next);
+    try {
+      await updatePlayerTipoByName(name, next);
+    } catch (e) {
+      console.error("updatePlayerTipo failed", e);
+    }
+  };
+
+  return (
+    <div
+      onClick={handleToggle}
+      style={{
+        background: current === "fish" ? "rgba(40,167,69,0.85)" : current === "reg" ? "rgba(220,53,69,0.85)" : "rgba(108,117,125,0.85)",
+        borderRadius: 6,
+        padding: "4px 10px",
+        textAlign: "center",
+        cursor: "pointer",
+        minWidth: 50,
+      }}
+    >
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>
+        {current.toUpperCase()}
+      </div>
+    </div>
+  );
+}
+
+const REVIEW_BADGE: Record<string, { bg: string; fg: string; label: string }> = {
+  ok: { bg: "#d4edda", fg: "#155724", label: "OK" },
+  error: { bg: "#f8d7da", fg: "#721c24", label: "ERROR" },
+};
+
+export function ImagePreviewModal({
+  rows,
+  currentIndex,
+  canRunOne,
+  onRunOneForImage,
+  onSelectIndex,
+  onClose,
+  onMarkReview,
+}: Props) {
   const row = rows[currentIndex] ?? null;
   const path = row ? extractLocalImagePath(row) ?? "" : "";
   const [busy, setBusy] = React.useState(false);
@@ -245,9 +367,11 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
   const workerStrategyErr = getStrategyFailureText(workerStrategy);
   const workerStrategyDetails = React.useMemo(() => collectStrategyDetails(workerStrategy), [workerStrategy]);
 
-  const okChecked = runJson ? workerOk : rowOk;
   const canGoPrev = currentIndex > 0;
   const canGoNext = currentIndex < rows.length - 1;
+
+  const reviewStatus = (row as any)?.review_status ?? null;
+  const obsId = (row as any)?.obs_id ?? (row as any)?.id ?? null;
 
   const onRun = async () => {
     if (!path) return;
@@ -261,6 +385,22 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleMarkOk = async () => {
+    if (!onMarkReview || obsId == null) return;
+    await onMarkReview(obsId, "ok");
+    if (canGoNext) onSelectIndex(currentIndex + 1);
+  };
+
+  const handleMarkError = async () => {
+    if (!onMarkReview || obsId == null) return;
+    await onMarkReview(obsId, "error");
+  };
+
+  const handleClearReview = async () => {
+    if (!onMarkReview || obsId == null) return;
+    await onMarkReview(obsId, null);
   };
 
   React.useEffect(() => {
@@ -279,16 +419,21 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
         e.preventDefault();
         onSelectIndex(currentIndex + 1);
       }
+      // Space = mark OK + next
+      if (e.key === " " && onMarkReview && obsId != null) {
+        e.preventDefault();
+        handleMarkOk();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [canGoNext, canGoPrev, currentIndex, onClose, onSelectIndex]);
+  }, [canGoNext, canGoPrev, currentIndex, onClose, onSelectIndex, obsId, onMarkReview]);
 
   if (!path) return null;
 
-  // Valores “relevantes” desde la fila (DB)
+  // Valores "relevantes" desde la fila (DB)
   const hand = (row as any)?.hand_class || (row as any)?.mano_raw || "";
-  const stackef = extractStackEfectivo((row as any)?.ocr_json);
+  const stackef = (row as any)?.p1_se_bb ?? extractStackEfectivo((row as any)?.ocr_json);
   const p1bet = extractP1Bet((row as any)?.ocr_json);
   const p2bet = (row as any)?.p2bet ?? rowOcrJson?.ocr?.bets?.P2 ?? rowOcrJson?.bets?.P2 ?? null;
   const p3bet = (row as any)?.p3bet ?? rowOcrJson?.ocr?.bets?.P3 ?? rowOcrJson?.bets?.P3 ?? null;
@@ -303,11 +448,29 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
       ? `${rowOcrJson.ocr.posiciones.p1} / ${rowOcrJson.ocr.posiciones.p2} / ${rowOcrJson.ocr.posiciones.p3}`
       : "";
 
+  const p2Name = rowOcrJson?.ocr?.villano?.p2?.name || rowOcrJson?.ocr?.names?.p2_name || "";
+  const p3Name = rowOcrJson?.ocr?.villano?.p3?.name || rowOcrJson?.ocr?.names?.p3_name || "";
+
+  // Load tipo from players table (live, not snapshot)
+  const [playersMap, setPlayersMap] = React.useState<Record<string, string>>({});
+  const refreshPlayers = React.useCallback(() => {
+    listPlayers().then((rows) => {
+      const m: Record<string, string> = {};
+      for (const r of rows) m[r.name] = r.tipo;
+      setPlayersMap(m);
+    }).catch(() => {});
+  }, []);
+  React.useEffect(() => { refreshPlayers(); }, [currentIndex, refreshPlayers]);
+  const p2Tipo = playersMap[p2Name] || "unknown";
+  const p3Tipo = playersMap[p3Name] || "unknown";
+
   const requestedSituacion =
     rowOcrJson?.strategy?.requested_situacion ??
     rowOcrJson?.ocr?.strategy?.requested_situacion ??
     rowOcrJson?.strategy?.requested ??
     "";
+
+  const badge = reviewStatus ? REVIEW_BADGE[reviewStatus] : null;
 
   return (
     <div
@@ -347,11 +510,27 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
             gap: 12,
           }}
         >
-          <div style={{ fontSize: 12, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {path}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden" }}>
+            {badge && (
+              <span
+                style={{
+                  padding: "3px 10px",
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  background: badge.bg,
+                  color: badge.fg,
+                }}
+              >
+                {badge.label}
+              </span>
+            )}
+            <span style={{ fontSize: 12, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {path}
+            </span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <button
               onClick={() => onSelectIndex(currentIndex - 1)}
               disabled={!canGoPrev}
@@ -384,10 +563,63 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
               Siguiente
             </button>
 
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-              <input type="checkbox" checked={okChecked} readOnly />
-              ok
-            </label>
+            <div style={{ width: 1, height: 24, background: "#ddd" }} />
+
+            {onMarkReview && (
+              <>
+                <button
+                  onClick={handleMarkOk}
+                  title="Marcar OK y avanzar (Espacio)"
+                  style={{
+                    border: "1px solid #28a745",
+                    background: reviewStatus === "ok" ? "#28a745" : "#fff",
+                    color: reviewStatus === "ok" ? "#fff" : "#28a745",
+                    borderRadius: 8,
+                    padding: "6px 14px",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    fontSize: 13,
+                  }}
+                >
+                  OK
+                </button>
+                <button
+                  onClick={handleMarkError}
+                  title="Marcar como error"
+                  style={{
+                    border: "1px solid #dc3545",
+                    background: reviewStatus === "error" ? "#dc3545" : "#fff",
+                    color: reviewStatus === "error" ? "#fff" : "#dc3545",
+                    borderRadius: 8,
+                    padding: "6px 10px",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    fontSize: 13,
+                  }}
+                >
+                  Error
+                </button>
+                {reviewStatus && (
+                  <button
+                    onClick={handleClearReview}
+                    title="Limpiar estado de review"
+                    style={{
+                      border: "1px solid #999",
+                      background: "#fff",
+                      color: "#666",
+                      borderRadius: 8,
+                      padding: "6px 8px",
+                      cursor: "pointer",
+                      fontSize: 11,
+                    }}
+                  >
+                    Limpiar
+                  </button>
+                )}
+              </>
+            )}
+
+            <div style={{ width: 1, height: 24, background: "#ddd" }} />
 
             <button
               onClick={onRun}
@@ -421,22 +653,42 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
 
         {/* Body: imagen izquierda + panel derecha */}
         <div style={{ display: "flex", flex: 1, minHeight: 0, background: "#111" }}>
-          {/* Imagen */}
-          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
+          {/* Imagen — tamaño original con overlay cards */}
+          <div style={{ flex: 1, minWidth: 0, overflow: "auto", padding: 12, position: "relative" }}>
             {src ? (
-              <img
-                src={src}
-                alt="preview"
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                  background: "#111",
-                }}
-                onError={(e) => {
-                  console.error("img load error", e);
-                }}
-              />
+              <>
+                <img
+                  src={src}
+                  alt="preview"
+                  style={{ background: "#111" }}
+                  onError={(e) => {
+                    console.error("img load error", e);
+                  }}
+                />
+                {/* Overlay info cards — next to hero cards / time area */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "58%",
+                    left: "calc(66% - 160px)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 3,
+                    pointerEvents: "none",
+                  }}
+                >
+                  <InfoCard label="MOVE" value={move || "--"} color={move === "FOLD" ? "#ff4444" : move === "PUSH" ? "#44cc44" : move === "OR" ? "#44aaff" : "#fff"} />
+                  <InfoCard label="BET" value={betmin != null && betmax != null ? `${betmin} / ${betmax}` : "--"} />
+                  <InfoCard label="HAND" value={hand || "--"} large />
+                  <InfoCard label="SE" value={stackef != null ? String(stackef) : "--"} />
+                </div>
+                <DraggableOverlay storageKey="overlay_p2_pos" defaultX={10} defaultY={100}>
+                  <PlayerTipoOverlay label="P2" name={p2Name} tipo={p2Tipo} />
+                </DraggableOverlay>
+                <DraggableOverlay storageKey="overlay_p3_pos" defaultX={600} defaultY={100}>
+                  <PlayerTipoOverlay label="P3" name={p3Name} tipo={p3Tipo} />
+                </DraggableOverlay>
+              </>
             ) : (
               <div style={{ color: "#fff" }}>No se pudo convertir la ruta.</div>
             )}
@@ -480,7 +732,7 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
                 ) : null}
                 {!rowOk ? (
                   <FailureBlock
-                    title="Diagnóstico de estrategia (rangos preflop)"
+                    title="Diagnostico de estrategia (rangos preflop)"
                     summary={getStrategyDiagnosticSummary("db")}
                     details={rowStrategyDetails}
                     rawText={rowStrategyErr}
@@ -495,7 +747,7 @@ export function ImagePreviewModal({ rows, currentIndex, canRunOne, onRunOneForIm
                 </div>
                 {!workerOk ? (
                   <FailureBlock
-                    title="Diagnóstico de estrategia (1 hand)"
+                    title="Diagnostico de estrategia (1 hand)"
                     summary={getStrategyDiagnosticSummary("worker")}
                     details={workerStrategyDetails}
                     rawText={workerStrategyErr}

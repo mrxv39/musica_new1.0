@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS tournaments (
 
 CREATE INDEX IF NOT EXISTS idx_tournaments_source_file ON tournaments(source_file);
 
-CREATE TABLE IF NOT EXISTS hands_real (
+CREATE TABLE IF NOT EXISTS hands (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tournament_id INTEGER DEFAULT NULL,
     room TEXT NOT NULL,
@@ -161,8 +161,8 @@ CREATE TABLE IF NOT EXISTS hands_real (
     FOREIGN KEY(tournament_id) REFERENCES tournaments(id) ON DELETE SET NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_hands_real_unique ON hands_real(room, hero, gamecode);
-CREATE INDEX IF NOT EXISTS idx_hands_real_tournament_id ON hands_real(tournament_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_hands_unique ON hands(room, hero, gamecode);
+CREATE INDEX IF NOT EXISTS idx_hands_tournament_id ON hands(tournament_id);
 
 CREATE TABLE IF NOT EXISTS actions_real (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,7 +176,7 @@ CREATE TABLE IF NOT EXISTS actions_real (
     sum_chips REAL NOT NULL DEFAULT 0,
     sum_bb REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY(hand_id) REFERENCES hands_real(id) ON DELETE CASCADE
+    FOREIGN KEY(hand_id) REFERENCES hands(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_actions_real_hand_round_no ON actions_real(hand_id, round_no, action_no);
@@ -201,7 +201,7 @@ CREATE TABLE IF NOT EXISTS spots_xml_real (
     action_history_json TEXT,
     spot_kind TEXT,
     created_at INTEGER NOT NULL,
-    FOREIGN KEY(hand_id) REFERENCES hands_real(id) ON DELETE CASCADE
+    FOREIGN KEY(hand_id) REFERENCES hands(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_spots_xml_real_hand_id
@@ -220,8 +220,8 @@ ON spots_xml_real(street, spot_index);
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_SQL)
-    if table_exists(conn, "hands_real"):
-        add_column_if_missing(conn, "hands_real", "tournament_id", "INTEGER REFERENCES tournaments(id)")
+    if table_exists(conn, "hands"):
+        add_column_if_missing(conn, "hands", "tournament_id", "INTEGER REFERENCES tournaments(id)")
     conn.commit()
 
 
@@ -459,7 +459,7 @@ def _insert_hand(conn: sqlite3.Connection, hand: ImportedHand, tournament_id: Op
 
     cur.execute(
         """
-        INSERT INTO hands_real(
+        INSERT INTO hands(
             tournament_id, room, hero, tournament_path, source_file, gamecode, startdate,
             sb, bb, hero_cards, flop, turn, river, players_json
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -496,12 +496,12 @@ def _insert_hand(conn: sqlite3.Connection, hand: ImportedHand, tournament_id: Op
 
     # If existed, fetch id
     cur.execute(
-        "SELECT id FROM hands_real WHERE room=? AND hero=? AND gamecode=?",
+        "SELECT id FROM hands WHERE room=? AND hero=? AND gamecode=?",
         (hand.room, hand.hero, hand.gamecode),
     )
     row = cur.fetchone()
     if not row:
-        raise RuntimeError("Failed to insert/fetch hands_real row")
+        raise RuntimeError("Failed to insert/fetch hands row")
     return int(row[0])
 
 

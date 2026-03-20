@@ -62,7 +62,7 @@ describe("HandsTable image preview", () => {
 
     expect(screen.getByText("2 / 2")).toBeTruthy();
     expect(screen.getByText("Motivo por el cual no se pudo relacionar")).toBeTruthy();
-    expect(screen.getByText("Diagnóstico de estrategia (rangos preflop)")).toBeTruthy();
+    expect(screen.getByText("Diagnostico de estrategia (rangos preflop)")).toBeTruthy();
     expect(screen.getByText(/Detalle del fallo de estrategia \(no afecta al enlace OBSREAL\)\./)).toBeTruthy();
     expect(screen.getByText(/el enlace OBSREAL se diagnostica en el bloque 'Motivo por el cual no se pudo relacionar'/)).toBeTruthy();
     expect(screen.getByText(/No candidate in hand_links/)).toBeTruthy();
@@ -77,7 +77,7 @@ describe("HandsTable image preview", () => {
     expect(screen.getByText("1 / 2")).toBeTruthy();
     expect(screen.getAllByText("C:\\tmp\\img-1.bmp").length).toBeGreaterThan(0);
     expect(screen.queryByText("Motivo por el cual no se pudo relacionar")).toBeNull();
-    expect(screen.getByText("Diagnóstico de estrategia (rangos preflop)")).toBeTruthy();
+    expect(screen.getByText("Diagnostico de estrategia (rangos preflop)")).toBeTruthy();
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
 
@@ -112,7 +112,7 @@ describe("HandsTable image preview", () => {
     await user.click(screen.getByText("view"));
     await user.click(screen.getByRole("button", { name: "1 hand" }));
 
-    expect(screen.getByText("Diagnóstico de estrategia (1 hand)")).toBeTruthy();
+    expect(screen.getByText("Diagnostico de estrategia (1 hand)")).toBeTruthy();
     expect(screen.getByText(/Detalle del fallo de estrategia para esta imagen\./)).toBeTruthy();
     expect(screen.getByText(/el enlace OBSREAL se diagnostica en el bloque 'Motivo por el cual no se pudo relacionar'/)).toBeTruthy();
     expect(screen.queryByText("Motivo por el cual no se pudo relacionar")).toBeNull();

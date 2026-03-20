@@ -100,12 +100,12 @@ def link_obs_to_game(
         cur.execute(
             '''
             INSERT OR IGNORE INTO hand_links
-            (obs_id, gamecode, match_score, match_method, created_at_ms)
+            (spot_id, gamecode, match_score, match_method, created_at_ms)
             VALUES (?, ?, ?, ?, ?)
             ''',
             (int(obs_id), gamecode, float(match_score), match_method or "", now_ms()),
         )
         conn.commit()
-        cur.execute("SELECT link_id FROM hand_links WHERE obs_id = ?", (int(obs_id),))
+        cur.execute("SELECT link_id FROM hand_links WHERE spot_id = ?", (int(obs_id),))
         row = cur.fetchone()
         return int(row["link_id"]) if row else None

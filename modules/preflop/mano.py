@@ -201,11 +201,77 @@ def match_card_opencv(crop_gray: np.ndarray, templates: dict):
     return top_matches[0]
 
 
+def _disambiguate_6_9(crop_gray: np.ndarray) -> str:
+    """Distinguish 6 from 9 by finding the 'neck' (narrowest row between the
+    stem and the loop). In a 6 the neck is in the upper third; in a 9 it's
+    in the lower third. We only analyze the left ~60% of the crop to exclude
+    the suit symbol."""
+    import cv2  # type: ignore
+
+    gray = crop_gray
+    if gray.ndim == 3:
+        gray = cv2.cvtColor(gray, cv2.COLOR_RGB2GRAY)
+    h, w = gray.shape[:2]
+    if h < 10:
+        return "6"
+    # Use only the left portion (digit, not suit)
+    digit_w = int(w * 0.6)
+    digit_crop = gray[:, :digit_w]
+    _, bw = cv2.threshold(digit_crop, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Compute row spans (width of white pixels per row)
+    spans = []
+    for r in range(h):
+        row_pixels = np.where(bw[r, :] > 128)[0]
+        spans.append(int(row_pixels[-1] - row_pixels[0]) if len(row_pixels) >= 2 else 0)
+    # Find the active rows (non-zero span) to define the digit bounds
+    active = [r for r in range(h) if spans[r] > 0]
+    if len(active) < 5:
+        return "6"
+    top_row, bot_row = active[0], active[-1]
+    digit_h = bot_row - top_row + 1
+    # Find the neck: the row with the minimum span AMONG active rows
+    # in the middle 60% of the digit
+    margin = int(digit_h * 0.2)
+    search_start = top_row + margin
+    search_end = bot_row - margin
+    neck_row = search_start
+    neck_span = 9999
+    for r in range(search_start, search_end + 1):
+        if spans[r] > 0 and spans[r] < neck_span:
+            neck_span = spans[r]
+            neck_row = r
+    # Compare neck position relative to digit center
+    digit_center = (top_row + bot_row) / 2.0
+    return "6" if neck_row < digit_center else "9"
+
+
 def match_rank_opencv(crop_gray: np.ndarray, templates: Dict[Tuple[str, str], np.ndarray]) -> Tuple[str, float]:
-    top_matches = debug_match_rank_opencv(crop_gray, templates, top_n=1)
+    top_matches = debug_match_rank_opencv(crop_gray, templates, top_n=5)
     if not top_matches:
         return "UNKNOWN", 0.0
     rank, score = top_matches[0]
+    scores = dict(top_matches)
+    score_6 = scores.get("6", 0.0)
+    score_9 = scores.get("9", 0.0)
+
+    # Case 1: winner is 6 or 9 — disambiguate if the other is close
+    if rank in ("6", "9"):
+        other = "9" if rank == "6" else "6"
+        other_score = scores.get(other, 0.0)
+        if other_score > 0.55 and (score - other_score) < 0.15:
+            resolved = _disambiguate_6_9(crop_gray)
+            return resolved, float(scores.get(resolved, score))
+
+    # Case 2: winner is NOT 6/9 but both 6 and 9 are close to the winner
+    # (e.g. Q=0.71, 9=0.70, 6=0.67 — the real card might be 6 misread)
+    if score_6 > 0.55 and score_9 > 0.55:
+        best_69 = max(score_6, score_9)
+        if (score - best_69) < 0.05:  # very close to winner
+            resolved = _disambiguate_6_9(crop_gray)
+            resolved_score = scores.get(resolved, best_69)
+            if resolved_score > 0.55:
+                return resolved, float(resolved_score)
+
     return rank, float(score)
 
 

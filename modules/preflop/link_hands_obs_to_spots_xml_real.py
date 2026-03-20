@@ -108,7 +108,7 @@ def ensure_schema(con: sqlite3.Connection) -> None:
       match_score REAL,
       match_method TEXT,
       created_at INTEGER NOT NULL,
-      FOREIGN KEY (obs_id) REFERENCES hands_obs(obs_id),
+      FOREIGN KEY (obs_id) REFERENCES spots(obs_id),
       FOREIGN KEY (spot_id) REFERENCES spots_xml_real(spot_id)
     )
     """)
@@ -137,7 +137,7 @@ def load_obs(con: sqlite3.Connection) -> List[Dict[str, Any]]:
       p2bet,
       p3bet,
       frame_ref
-    FROM hands_obs
+    FROM spots
     ORDER BY detected_at_ms ASC, obs_id ASC
     """).fetchall()
 
@@ -146,6 +146,7 @@ def load_obs(con: sqlite3.Connection) -> List[Dict[str, Any]]:
         hc = r[4] or cards_to_hand_class(r[3] or "")
         out.append({
             "obs_id": int(r[0]),
+            "obs_id": int(r[0]),  # alias for backward compat with spot_links.obs_id
             "table_id": r[1],
             "detected_at_ms": int(r[2] or 0),
             "mano_raw": r[3] or "",
@@ -182,7 +183,7 @@ def load_spots(con: sqlite3.Connection) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for r in rows:
         out.append({
-            "spot_id": int(r[0]),
+            "obs_id": int(r[0]),
             "hand_id": int(r[1]),
             "gamecode": r[2] or "",
             "hero_name": r[3] or "",
@@ -241,7 +242,7 @@ def link_obs_to_spots(db_path: str, verbose: bool = True) -> Dict[str, Any]:
             best_score = -1.0
 
             for spot in spot_rows:
-                if spot["spot_id"] in used_spot_ids:
+                if spot["obs_id"] in used_spot_ids:
                     continue
 
                 s = score_pair(obs, spot)
@@ -255,10 +256,10 @@ def link_obs_to_spots(db_path: str, verbose: bool = True) -> Dict[str, Any]:
             if best is None:
                 continue
 
-            used_spot_ids.add(best["spot_id"])
+            used_spot_ids.add(best["obs_id"])
             links.append((
                 int(obs["obs_id"]),
-                int(best["spot_id"]),
+                int(best["obs_id"]),
                 float(best_score),
                 "v1_hand_class_players_seq",
                 int(time.time() * 1000),

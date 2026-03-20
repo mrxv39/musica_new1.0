@@ -42,7 +42,7 @@ def test_linker_crea_link_por_gamecode_ocr(temp_db_path, monkeypatch):
         cur = con.cursor()
         cur.execute(
             """
-            CREATE TABLE hands_real (
+            CREATE TABLE hands (
                 id INTEGER PRIMARY KEY,
                 room TEXT NOT NULL DEFAULT '',
                 hero TEXT NOT NULL DEFAULT '',
@@ -64,7 +64,7 @@ def test_linker_crea_link_por_gamecode_ocr(temp_db_path, monkeypatch):
 
         cur.execute(
             """
-            INSERT INTO hands_obs (
+            INSERT INTO spots (
                 fingerprint, table_id, detected_at_ms, mano_raw, hand_class, time_str,
                 preflop_ok, noboard_ok, ocr_json, captured_gamecode, frame_ref, created_at_ms
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -87,7 +87,7 @@ def test_linker_crea_link_por_gamecode_ocr(temp_db_path, monkeypatch):
 
         cur.execute(
             """
-            INSERT INTO hands_real (
+            INSERT INTO hands (
                 id, room, hero, tournament_path, source_file, gamecode, startdate,
                 sb, bb, hero_cards, flop, turn, river, players_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -125,7 +125,7 @@ def test_linker_crea_link_por_gamecode_ocr(temp_db_path, monkeypatch):
     con = sqlite3.connect(str(temp_db_path))
     try:
         row = con.execute(
-            "SELECT obs_id, gamecode, match_method FROM hand_links"
+            "SELECT spot_id, gamecode, match_method FROM hand_links"
         ).fetchone()
     finally:
         con.close()

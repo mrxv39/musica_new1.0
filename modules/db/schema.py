@@ -1,13 +1,11 @@
 # C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\db\schema.py
 
-# NOTA:
-# - Aquí solo dejamos CREATE TABLE (sin índices que dependan de columnas),
-#   porque podemos estar migrando desde esquemas antiguos.
-# - Los índices se crean desde init_db() cuando ya sabemos que las columnas existen.
-
 SCHEMA_TABLES_SQL = """
+PRAGMA journal_mode=WAL;
+PRAGMA synchronous=NORMAL;
+
 -- =========================
--- Player classification table for villano OCR
+-- Players (villano classification)
 -- =========================
 CREATE TABLE IF NOT EXISTS players (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,23 +13,11 @@ CREATE TABLE IF NOT EXISTS players (
     tipo TEXT NOT NULL DEFAULT 'fish',
     created_at TEXT DEFAULT (datetime('now'))
 );
-PRAGMA journal_mode=WAL;
-PRAGMA synchronous=NORMAL;
 
 -- =========================
--- Legacy table (tests antiguos)
+-- Spots (OCR observations from worker)
 -- =========================
-CREATE TABLE IF NOT EXISTS hands (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fingerprint TEXT NOT NULL UNIQUE,
-    data_json TEXT DEFAULT ''
-    -- created_at_ms puede no existir en instalaciones antiguas; se añade por migración
-);
-
--- =========================
--- Nuevo modelo (observaciones OCR + verdad XML + links)
--- =========================
-CREATE TABLE IF NOT EXISTS hands_obs (
+CREATE TABLE IF NOT EXISTS spots (
     obs_id INTEGER PRIMARY KEY AUTOINCREMENT,
 
     fingerprint TEXT NOT NULL UNIQUE,
@@ -46,7 +32,6 @@ CREATE TABLE IF NOT EXISTS hands_obs (
 
     ocr_json TEXT DEFAULT '',
 
-    -- 🆕 denormalized bets (for UI sorting/filtering)
     p2bet REAL DEFAULT NULL,
     p3bet REAL DEFAULT NULL,
     p1_se_bb REAL DEFAULT NULL,
@@ -56,148 +41,47 @@ CREATE TABLE IF NOT EXISTS hands_obs (
     created_at_ms INTEGER DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS hands_xml (
-    gamecode TEXT PRIMARY KEY,
-    sessioncode TEXT DEFAULT '',
-    startdate TEXT DEFAULT '',
-    smallblind TEXT DEFAULT '',
-    bigblind TEXT DEFAULT '',
-
-    hero_reg_code TEXT DEFAULT '',
-    hero_name TEXT DEFAULT '',
-    hero_seat TEXT DEFAULT '',
-    hero_cards TEXT DEFAULT '',
-
-    board_flop TEXT DEFAULT '',
-    board_turn TEXT DEFAULT '',
-    board_river TEXT DEFAULT '',
-
-    players_json TEXT DEFAULT '',
-    actions_json TEXT DEFAULT '',
-
-    created_at_ms INTEGER DEFAULT 0
+-- =========================
+-- Hands real (imported from XML hand histories)
+-- =========================
+CREATE TABLE IF NOT EXISTS hands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tournament_id INTEGER REFERENCES tournaments(id),
+    room TEXT NOT NULL DEFAULT '',
+    hero TEXT NOT NULL DEFAULT '',
+    tournament_path TEXT NOT NULL DEFAULT '',
+    source_file TEXT NOT NULL DEFAULT '',
+    gamecode TEXT NOT NULL DEFAULT '',
+    startdate TEXT NOT NULL DEFAULT '',
+    sb REAL NOT NULL DEFAULT 0,
+    bb REAL NOT NULL DEFAULT 0,
+    hero_cards TEXT NOT NULL DEFAULT '',
+    flop TEXT NOT NULL DEFAULT '',
+    turn TEXT NOT NULL DEFAULT '',
+    river TEXT NOT NULL DEFAULT '',
+    players_json TEXT NOT NULL DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(room, hero, gamecode)
 );
 
+-- =========================
+-- Tournaments (imported from XML)
+-- =========================
 CREATE TABLE IF NOT EXISTS tournaments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     room TEXT NOT NULL DEFAULT '',
     hero TEXT NOT NULL DEFAULT '',
     tournament_path TEXT NOT NULL DEFAULT '',
     source_file TEXT NOT NULL DEFAULT '',
-    client_version TEXT NOT NULL DEFAULT '',
-    mode TEXT NOT NULL DEFAULT '',
-    gametype TEXT NOT NULL DEFAULT '',
-    tablename TEXT NOT NULL DEFAULT '',
-    tournament_currency TEXT NOT NULL DEFAULT '',
-    duration TEXT NOT NULL DEFAULT '',
-    game_count TEXT NOT NULL DEFAULT '',
-    startdate TEXT NOT NULL DEFAULT '',
-    currency TEXT NOT NULL DEFAULT '',
-    nickname TEXT NOT NULL DEFAULT '',
-    bets TEXT NOT NULL DEFAULT '',
-    wins TEXT NOT NULL DEFAULT '',
-    chipsin TEXT NOT NULL DEFAULT '',
-    chipsout TEXT NOT NULL DEFAULT '',
-    statuspoints TEXT NOT NULL DEFAULT '',
-    awardpoints TEXT NOT NULL DEFAULT '',
-    ipoints TEXT NOT NULL DEFAULT '',
-    tablesize TEXT NOT NULL DEFAULT '',
     tournamentcode TEXT NOT NULL DEFAULT '',
     tournamentname TEXT NOT NULL DEFAULT '',
-    rewarddrawn TEXT NOT NULL DEFAULT '',
-    place TEXT NOT NULL DEFAULT '',
-    buyin TEXT NOT NULL DEFAULT '',
-    totalbuyin TEXT NOT NULL DEFAULT '',
-    win TEXT NOT NULL DEFAULT '',
-    smallblind TEXT NOT NULL DEFAULT '',
-    bigblind TEXT NOT NULL DEFAULT '',
+    startdate TEXT NOT NULL DEFAULT '',
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(room, hero, source_file)
 );
 
-CREATE TABLE IF NOT EXISTS hand_links (
-    link_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    obs_id INTEGER NOT NULL,
-    gamecode TEXT NOT NULL,
-
-    match_score REAL DEFAULT 0.0,
-    match_method TEXT DEFAULT '',
-    created_at_ms INTEGER DEFAULT 0,
-
-    UNIQUE(obs_id),
-
-    FOREIGN KEY(obs_id) REFERENCES hands_obs(obs_id),
-    FOREIGN KEY(gamecode) REFERENCES hands_xml(gamecode)
-);
-
 -- =========================
--- Workers captures (dedupe persistente entre ticks / reinicios)
--- =========================
-CREATE TABLE IF NOT EXISTS workers_captures (
-    capture_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    mesa INTEGER NOT NULL DEFAULT 0,
-    image_path TEXT DEFAULT '',
-    final_image_path TEXT DEFAULT '',
-    image_fingerprint TEXT NOT NULL,
-    image_size_bytes INTEGER DEFAULT 0,
-    status TEXT DEFAULT '',
-    reason TEXT DEFAULT '',
-    ocr_ok INTEGER DEFAULT 0,
-    ocr_json TEXT DEFAULT '',
-    created_at_ms INTEGER DEFAULT 0,
-    updated_at_ms INTEGER DEFAULT 0
-);
-
--- Spots (rellenada por el worker: time + mano + noboard confirmado)
-CREATE TABLE IF NOT EXISTS spots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    mesa INTEGER NOT NULL,
-    image_path TEXT NOT NULL DEFAULT '',
-    ts TEXT NOT NULL DEFAULT '',
-    stacks_json TEXT DEFAULT '{}',
-    bets_json TEXT DEFAULT '{}',
-    names_json TEXT DEFAULT '{}',
-    tipo_p2 TEXT DEFAULT '',
-    tipo_p3 TEXT DEFAULT '',
-    raw_json TEXT DEFAULT '{}',
-    time REAL DEFAULT NULL,
-    spot_fingerprint TEXT DEFAULT '',
-    strategy_id INTEGER DEFAULT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
-);
-
--- =========================
--- Worker profiling (optional, filled only when POKER_BOSS_WORKER_PROFILE=1)
--- =========================
-CREATE TABLE IF NOT EXISTS worker_profile (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts TEXT NOT NULL,
-    mesa INTEGER NOT NULL,
-    capture_id INTEGER NULL,
-    spot_id INTEGER NULL,
-    time_gate REAL DEFAULT 0,
-    capture REAL DEFAULT 0,
-    fp_db REAL DEFAULT 0,
-    ocr REAL DEFAULT 0,
-    preflop REAL DEFAULT 0,
-    ocr_preflop_parallel REAL DEFAULT 0,
-    copy_capture REAL DEFAULT 0,
-    extract REAL DEFAULT 0,
-    insert_spot REAL DEFAULT 0,
-    strategy REAL DEFAULT 0,
-    obs REAL DEFAULT 0,
-    time_sec REAL DEFAULT 0,
-    total REAL DEFAULT 0,
-    ocr_bets REAL DEFAULT 0,
-    ocr_stacks REAL DEFAULT 0,
-    ocr_names REAL DEFAULT 0,
-    ocr_dealer REAL DEFAULT 0,
-    ocr_gamecode REAL DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now'))
-);
-
--- =========================
--- Spot strategies (Excel -> DB)
+-- Spot strategies (imported from Excel)
 -- =========================
 CREATE TABLE IF NOT EXISTS spots_strategy_scopes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

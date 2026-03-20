@@ -59,7 +59,7 @@ class TestWorkerDedupeAndPersist(unittest.TestCase):
         conn = dbmod.get_conn()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT COUNT(*) FROM hands_obs")
+            cur.execute("SELECT COUNT(*) FROM spots")
             return int(cur.fetchone()[0])
         finally:
             conn.close()

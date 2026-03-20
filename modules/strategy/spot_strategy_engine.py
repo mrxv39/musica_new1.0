@@ -123,7 +123,7 @@ def _find_unique_scope_sheet(conn: sqlite3.Connection, inp: SpotDecisionInput) -
         FROM spots_strategy_scopes
         WHERE spot_key = ?
           AND scope_se_min <= ?
-          AND scope_se_max >= ?
+          AND scope_se_max > ?
         """,
         (_pos(inp.spot_key), float(inp.p1_se_bb), float(inp.p1_se_bb)),
     )
@@ -167,7 +167,7 @@ def decide_spot_strategy(conn: sqlite3.Connection, inp: SpotDecisionInput) -> di
             WHERE spot_key = ?
               AND hand_class = ?
               AND stack_effective_min <= ?
-              AND stack_effective_max >= ?
+              AND stack_effective_max > ?
             """,
             (spot_key, hc, float(inp.p1_se_bb), float(inp.p1_se_bb)),
         )
@@ -205,7 +205,7 @@ def decide_spot_strategy(conn: sqlite3.Connection, inp: SpotDecisionInput) -> di
         FROM spots_strategies
         WHERE spot_key = ?
           AND stack_effective_min <= ?
-          AND stack_effective_max >= ?
+          AND stack_effective_max > ?
         """,
         (spot_key, float(inp.p1_se_bb), float(inp.p1_se_bb)),
     )
@@ -224,7 +224,7 @@ def decide_spot_strategy(conn: sqlite3.Connection, inp: SpotDecisionInput) -> di
             continue
         if not _match_nullable_text(r["p3_pos"], p3_pos, normalizer=_pos):
             continue
-        if not _match_range(_f(r["bet_min"]), _f(r["bet_max"]), float(inp.p1_bet_bb)):
+        if not _match_range(_f(r["p1bet_min"]), _f(r["p1bet_max"]), float(inp.p1_bet_bb)):
             continue
         matched.append(r)
 

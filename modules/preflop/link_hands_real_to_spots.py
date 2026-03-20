@@ -1,4 +1,4 @@
-# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\preflop\link_hands_real_to_spots.py
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\preflop\link_hands_to_spots.py
 
 import argparse
 import sqlite3
@@ -37,7 +37,7 @@ def main():
 
     cur.execute(
         "SELECT id, gamecode, room, startdate, spot_png, spot_json "
-        "FROM hands_real ORDER BY id ASC"
+        "FROM hands ORDER BY id ASC"
     )
     rows = cur.fetchall()
 
@@ -73,7 +73,7 @@ def main():
 
         if args.dry_run:
             from os.path import dirname, join
-            hand_dir_preview = join(dirname(args.db), "hands_real_media", str(gamecode))
+            hand_dir_preview = join(dirname(args.db), "hands_media", str(gamecode))
             print(
                 f"[DRY] id={hid} gamecode={gamecode} room={room} start={startdate!r} -> "
                 f"{sp['png_path']} (dt_ms={dt}) => {hand_dir_preview}"
@@ -89,7 +89,7 @@ def main():
             )
 
             cur.execute(
-                "UPDATE hands_real SET spot_png=?, spot_json=? WHERE id=?",
+                "UPDATE hands SET spot_png=?, spot_json=? WHERE id=?",
                 (new_png, new_json, hid),
             )
             updated += 1

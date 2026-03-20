@@ -1,25 +1,41 @@
 import unittest
-# [test_id:BASE_DB_Structured]
-import os
-import json
 from modules.db import db
+
 
 class TestDB(unittest.TestCase):
     def setUp(self):
         db.init_db()
-    def test_insert_hand(self):
-        fingerprint = 'test_fp_123'
-        data = json.dumps({'test': 1})
-        hand_id1 = db.insert_hand(fingerprint, data)
-        hand_id2 = db.insert_hand(fingerprint, data)
-        self.assertEqual(hand_id1, hand_id2)
-        self.assertIsInstance(hand_id1, int)
-    def test_schema(self):
+
+    def test_schema_spots_exists(self):
         conn = db.get_conn()
         cur = conn.cursor()
-        cur.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="hands"')
+        cur.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="spots"')
         self.assertIsNotNone(cur.fetchone())
         conn.close()
 
-if __name__ == '__main__':
+    def test_insert_obs(self):
+        obs_id = db.insert_obs(
+            fingerprint="test_fp_123",
+            table_id="mesa_1",
+            detected_at_ms=1000,
+            mano_raw="AcKd",
+            hand_class="AKo",
+            preflop_ok=True,
+            ocr_json='{"test": 1}',
+        )
+        self.assertIsInstance(obs_id, int)
+        # Inserting same fingerprint returns same id
+        obs_id2 = db.insert_obs(
+            fingerprint="test_fp_123",
+            table_id="mesa_1",
+            detected_at_ms=1000,
+            mano_raw="AcKd",
+            hand_class="AKo",
+            preflop_ok=True,
+            ocr_json='{"test": 1}',
+        )
+        self.assertEqual(obs_id, obs_id2)
+
+
+if __name__ == "__main__":
     unittest.main()

@@ -149,7 +149,7 @@ def sanitize_folder_name(value: str) -> str:
 
 def copy_spot_to_hand_media(db_path: str, gamecode: str, src_png: str, src_json: str):
     data_dir = os.path.dirname(db_path)
-    media_root = os.path.join(data_dir, "hands_real_media")
+    media_root = os.path.join(data_dir, "hands_media")
     hand_dir = os.path.join(media_root, sanitize_folder_name(gamecode))
 
     ensure_dir(media_root)

@@ -9,7 +9,7 @@ def test_link_obs_to_spots_links_two_preflop_spots_for_one_hand(temp_db_path):
     try:
         conn.executescript(
             """
-            CREATE TABLE hands_real (
+            CREATE TABLE hands (
                 id INTEGER PRIMARY KEY,
                 gamecode TEXT NOT NULL
             );
@@ -27,8 +27,8 @@ def test_link_obs_to_spots_links_two_preflop_spots_for_one_hand(temp_db_path):
                 spot_kind TEXT
             );
 
-            CREATE TABLE hands_obs (
-                obs_id INTEGER PRIMARY KEY,
+            CREATE TABLE spots (
+                spot_id INTEGER PRIMARY KEY,
                 table_id TEXT,
                 detected_at_ms INTEGER,
                 mano_raw TEXT,
@@ -44,7 +44,7 @@ def test_link_obs_to_spots_links_two_preflop_spots_for_one_hand(temp_db_path):
         ensure_schema(conn)
 
         conn.execute(
-            "INSERT INTO hands_real(id, gamecode) VALUES (?, ?)",
+            "INSERT INTO hands(id, gamecode) VALUES (?, ?)",
             (77, "G-77"),
         )
         conn.executemany(
@@ -63,8 +63,8 @@ def test_link_obs_to_spots_links_two_preflop_spots_for_one_hand(temp_db_path):
         ocr_payload = json.dumps({"ocr": {"table_state": {"players": 3}}})
         conn.executemany(
             """
-            INSERT INTO hands_obs(
-                obs_id, table_id, detected_at_ms, mano_raw, hand_class,
+            INSERT INTO spots(
+                spot_id, table_id, detected_at_ms, mano_raw, hand_class,
                 preflop_ok, ocr_json, p2bet, p3bet, frame_ref
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
