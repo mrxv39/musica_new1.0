@@ -51,6 +51,59 @@ def _is_valid_card(rank: str, suit: str, score: float) -> bool:
     return _is_valid_rank(rank) and _is_valid_suit(suit) and float(score) >= CARD_SCORE_MIN
 
 
+def run_board_state(image_path: str, templates=None) -> dict:
+    """Direct-call entry point (no subprocess). Returns the same dict as main()."""
+    abs_image_path = os.path.abspath(image_path)
+    try:
+        if not os.path.exists(abs_image_path):
+            raise Exception("Image not found")
+
+        if templates is None:
+            templates = load_templates()
+
+        img = Image.open(abs_image_path).convert("L")
+        arr = np.array(img, dtype=np.uint8)
+
+        cards = []
+        valid_count = 0
+
+        for idx, (x, y, w, h) in enumerate(FLOP_CARD_ROIS, start=1):
+            if arr.shape[0] < y + h or arr.shape[1] < x + w:
+                raise Exception(f"ROI out of bounds for flop_{idx}")
+
+            crop = arr[y : y + h, x : x + w]
+            label, rank, suit, score = match_card_opencv(crop, templates)
+
+            valid = _is_valid_card(rank, suit, score)
+            if valid:
+                valid_count += 1
+
+            cards.append({
+                "idx": idx, "roi": [x, y, w, h], "label": str(label),
+                "rank": str(rank), "suit": str(suit), "score": float(score),
+                "valid": bool(valid),
+            })
+
+        if valid_count >= 3:
+            street_state = "postflop"
+        elif valid_count == 0:
+            street_state = "preflop"
+        else:
+            street_state = "unknown"
+
+        return {
+            "street_state": street_state, "valid_count": int(valid_count),
+            "cards": cards, "score_min": float(CARD_SCORE_MIN),
+            "fingerprint": _fingerprint(abs_image_path),
+        }
+    except Exception as e:
+        return {
+            "street_state": "unknown", "valid_count": 0, "cards": [],
+            "score_min": float(CARD_SCORE_MIN),
+            "fingerprint": _fingerprint(image_path), "error": str(e),
+        }
+
+
 def main() -> None:
     try:
         if "--image" not in sys.argv:

@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import subprocess
-import sys
 from typing import Any, Dict
 
 
@@ -73,96 +71,32 @@ def write_preflop_fail_debug(dst_img_path: str, mesa: int, preflop: Any) -> None
         json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
 
 
+_cached_rank_templates = None
+_cached_suit_templates = None
+
+
+def _get_templates():
+    global _cached_rank_templates, _cached_suit_templates
+    if _cached_rank_templates is None:
+        from modules.preflop.mano import load_templates, load_suit_templates
+        _cached_rank_templates = load_templates()
+        _cached_suit_templates = load_suit_templates()
+    return _cached_rank_templates, _cached_suit_templates
+
+
 def run_preflop_direct(img_path: str, timeout_sec: int = 30) -> Dict[str, Any]:
-    script_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "preflop.py")
-    )
-
-    cmd = [
-        sys.executable,
-        script_path,
-        "--image",
-        img_path,
-    ]
+    """Run preflop pipeline via direct imports with cached templates."""
+    from modules.preflop.preflop import run_preflop
 
     try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            encoding="utf-8",
-            errors="replace",
-        )
-    except subprocess.TimeoutExpired as e:
-        return {
-            "preflop_ok": False,
-            "error": "preflop_timeout",
-            "timeout_sec": timeout_sec,
-            "script_path": script_path,
-            "image_path": img_path,
-            "stdout": (e.stdout or ""),
-            "stderr": (e.stderr or ""),
-        }
+        rt, st = _get_templates()
+        data = run_preflop(img_path, rank_templates=rt, suit_templates=st)
+        data.setdefault("preflop_ok", False)
+        data.setdefault("image_path", img_path)
+        return data
     except Exception as e:
         return {
             "preflop_ok": False,
-            "error": "preflop_spawn_exception",
-            "exception": str(e),
-            "script_path": script_path,
+            "error": f"run_preflop_exception: {type(e).__name__}: {e}",
             "image_path": img_path,
         }
-
-    stdout = (proc.stdout or "").strip()
-    stderr = (proc.stderr or "").strip()
-
-    if proc.returncode != 0:
-        return {
-            "preflop_ok": False,
-            "error": "preflop_process_failed",
-            "returncode": proc.returncode,
-            "stdout": stdout,
-            "stderr": stderr,
-            "script_path": script_path,
-            "image_path": img_path,
-        }
-
-    if not stdout:
-        return {
-            "preflop_ok": False,
-            "error": "preflop_empty_stdout",
-            "stderr": stderr,
-            "script_path": script_path,
-            "image_path": img_path,
-        }
-
-    try:
-        data = json.loads(stdout)
-    except Exception as e:
-        return {
-            "preflop_ok": False,
-            "error": "preflop_invalid_json",
-            "exception": str(e),
-            "stdout": stdout,
-            "stderr": stderr,
-            "script_path": script_path,
-            "image_path": img_path,
-        }
-
-    if not isinstance(data, dict):
-        return {
-            "preflop_ok": False,
-            "error": "preflop_json_not_dict",
-            "payload": data,
-            "stderr": stderr,
-            "script_path": script_path,
-            "image_path": img_path,
-        }
-
-    data.setdefault("preflop_ok", False)
-    data.setdefault("script_path", script_path)
-    data.setdefault("image_path", img_path)
-    if stderr:
-        data.setdefault("stderr", stderr)
-
-    return data

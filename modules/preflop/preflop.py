@@ -5,17 +5,15 @@ import json
 import time as t
 import hashlib
 import concurrent.futures
-import subprocess
 
-MANO_PATH = os.path.join(os.path.dirname(__file__), "mano.py")
-TIME_PATH = os.path.join(os.path.dirname(__file__), "time.py")
-BOARD_STATE_PATH = os.path.join(os.path.dirname(__file__), "board_state.py")
+# Ensure project root is on sys.path for both import and subprocess modes
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
-MODULES = {
-    "mano": (MANO_PATH, "mano_ok"),
-    "time": (TIME_PATH, "time_ok"),
-    "board_state": (BOARD_STATE_PATH, "street_state"),
-}
+from modules.preflop.mano import run_mano, load_templates, load_suit_templates
+from modules.preflop.time import run_time
+from modules.preflop.board_state import run_board_state
 
 
 def _sha1(s: str) -> str:
@@ -25,52 +23,6 @@ def _sha1(s: str) -> str:
 def _fingerprint(image_path: str) -> str:
     abs_image_path = os.path.abspath(image_path or "")
     return _sha1(abs_image_path + "|preflop|" + str(int(t.time()) // 2))
-
-
-def run_module(name: str, path: str, image_path: str):
-    try:
-        proc = subprocess.run(
-            ["python", path, "--image", image_path],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-
-        # Check for subprocess errors first
-        if proc.returncode != 0:
-            stderr_msg = (proc.stderr or "").strip()
-            return (
-                {"error": f"nonzero_exit_{proc.returncode}"},
-                f"{name}: nonzero exit code {proc.returncode}" + (f": {stderr_msg}" if stderr_msg else ""),
-            )
-
-        # Check for empty output
-        stdout = (proc.stdout or "").strip()
-        if not stdout:
-            return (
-                {"error": "empty_stdout"},
-                f"{name}: subprocess produced no output",
-            )
-
-        # Try to parse JSON
-        try:
-            data = json.loads(stdout)
-            if not isinstance(data, dict):
-                return (
-                    {"error": "invalid_json_not_dict"},
-                    f"{name}: JSON output is not a dictionary",
-                )
-            return data, None
-        except json.JSONDecodeError as je:
-            return (
-                {"error": f"json_parse_error"},
-                f"{name}: JSON parse failed at line {je.lineno}: {je.msg}",
-            )
-
-    except subprocess.TimeoutExpired:
-        return ({"error": "subprocess_timeout"}, f"{name}: subprocess timed out after 5s")
-    except Exception as e:
-        return ({"error": f"exception_{type(e).__name__}"}, f"{name}: {type(e).__name__}: {str(e)}")
 
 
 def extract_ok_flag(name: str, data: dict) -> bool:
@@ -91,32 +43,38 @@ def extract_ok_flag(name: str, data: dict) -> bool:
     return False
 
 
-def main():
+def run_preflop(image_path: str, rank_templates=None, suit_templates=None) -> dict:
+    """Run the full preflop pipeline via direct function calls (no subprocess)."""
     try:
-        if "--image" not in sys.argv:
-            raise Exception("Missing --image argument")
-
-        image_path = sys.argv[sys.argv.index("--image") + 1]
-
-        if not os.path.exists(image_path):
+        abs_image_path = os.path.abspath(image_path)
+        if not os.path.exists(abs_image_path):
             raise Exception("Image not found")
 
-        fp = _fingerprint(image_path)
+        fp = _fingerprint(abs_image_path)
+
+        # Preload templates once (shared across mano + board_state)
+        if rank_templates is None:
+            rank_templates = load_templates()
+        if suit_templates is None:
+            suit_templates = load_suit_templates()
 
         results = {}
         errors = []
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futs = {
-                name: executor.submit(run_module, name, path, image_path)
-                for name, (path, _) in MODULES.items()
-            }
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            fut_mano = executor.submit(run_mano, abs_image_path, rank_templates, suit_templates)
+            fut_time = executor.submit(run_time, abs_image_path)
+            fut_board = executor.submit(run_board_state, abs_image_path, rank_templates)
 
-            for name, future in futs.items():
-                data, err = future.result()
-                results[name] = data
-                if err:
-                    errors.append(err)
+            for name, fut in [("mano", fut_mano), ("time", fut_time), ("board_state", fut_board)]:
+                try:
+                    data = fut.result(timeout=10)
+                    results[name] = data
+                    if data.get("error"):
+                        errors.append(f"{name}: {data['error']}")
+                except Exception as e:
+                    results[name] = {"error": f"{type(e).__name__}: {e}"}
+                    errors.append(f"{name}: {type(e).__name__}: {e}")
 
         mano_ok = extract_ok_flag("mano", results.get("mano", {}))
         time_ok = extract_ok_flag("time", results.get("time", {}))
@@ -124,25 +82,17 @@ def main():
 
         preflop_ok = bool(mano_ok and time_ok and board_preflop_ok)
 
-        out = {
+        return {
             "preflop_ok": preflop_ok,
             "fingerprint": fp,
             "modules": results,
             "errors": errors,
         }
-        print(json.dumps(out))
-        return
 
     except Exception as e:
-        try:
-            image_path = sys.argv[sys.argv.index("--image") + 1] if "--image" in sys.argv else ""
-        except Exception:
-            image_path = ""
-
         fp = _fingerprint(image_path)
         msg = str(e)
-
-        out = {
+        return {
             "preflop_ok": False,
             "fingerprint": fp,
             "modules": {
@@ -152,8 +102,30 @@ def main():
             },
             "errors": [msg],
         }
+
+
+def main():
+    """CLI entry point — still works as subprocess for backward compat."""
+    try:
+        if "--image" not in sys.argv:
+            raise Exception("Missing --image argument")
+        image_path = sys.argv[sys.argv.index("--image") + 1]
+        out = run_preflop(image_path)
         print(json.dumps(out))
-        return
+    except Exception as e:
+        image_path = ""
+        try:
+            image_path = sys.argv[sys.argv.index("--image") + 1]
+        except Exception:
+            pass
+        fp = _fingerprint(image_path)
+        out = {
+            "preflop_ok": False,
+            "fingerprint": fp,
+            "modules": {},
+            "errors": [str(e)],
+        }
+        print(json.dumps(out))
 
 
 if __name__ == "__main__":

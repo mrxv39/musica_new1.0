@@ -353,6 +353,73 @@ def classify_hand(card1: str, card2: str):
     return mano_raw, hand_rank, hand_class, bool(suited)
 
 
+def run_mano(image_path: str, templates=None, suit_templates=None) -> dict:
+    """Direct-call entry point (no subprocess). Returns the same dict as main()."""
+    abs_image_path = os.path.abspath(image_path)
+    try:
+        if not os.path.exists(abs_image_path):
+            raise Exception("Image not found")
+
+        if templates is None:
+            templates = load_templates()
+        if not templates:
+            raise Exception("Templates missing")
+        if suit_templates is None:
+            suit_templates = load_suit_templates()
+
+        raw_img = Image.open(abs_image_path)
+        gray_img = raw_img.convert("L")
+        rgb_img = raw_img.convert("RGB")
+
+        crop1, crop2 = extract_card_crops(gray_img)
+        suit_crop1, suit_crop2 = extract_suit_crops(rgb_img)
+
+        card1, rank1, suit1, rank_score1, suit_score1 = detect_card(crop1, suit_crop1, templates, suit_templates)
+        card2, rank2, suit2, rank_score2, suit_score2 = detect_card(crop2, suit_crop2, templates, suit_templates)
+
+        score1 = min(rank_score1, suit_score1) if suit_templates else rank_score1
+        score2 = min(rank_score2, suit_score2) if suit_templates else rank_score2
+        mano_raw, hand_rank, hand_class, suited = classify_hand(card1, card2)
+
+        suits_ok = True
+        if suit_templates:
+            suits_ok = bool(
+                (suit1 != "UNKNOWN") and (suit2 != "UNKNOWN")
+                and (float(suit_score1) >= SUIT_THRESHOLD)
+                and (float(suit_score2) >= SUIT_THRESHOLD)
+            )
+
+        valid = bool(
+            (rank1 != "UNKNOWN") and (rank2 != "UNKNOWN")
+            and (float(rank_score1) >= THRESHOLD)
+            and (float(rank_score2) >= THRESHOLD)
+            and suits_ok
+        )
+
+        fingerprint = _sha1(abs_image_path + "|" + mano_raw + "|" + str(int(time.time()) // 2))
+
+        return {
+            "valid": bool(valid),
+            "card1": str(card1),
+            "card2": str(card2),
+            "score1": float(score1),
+            "score2": float(score2),
+            "fingerprint": str(fingerprint),
+            "mano_raw": str(mano_raw),
+            "hand_rank": str(hand_rank),
+            "hand_class": str(hand_class),
+            "suited": bool(suited),
+        }
+    except Exception as e:
+        fp = _fingerprint_fallback(image_path)
+        return {
+            "valid": False, "card1": "UNKNOWN", "card2": "UNKNOWN",
+            "score1": 0.0, "score2": 0.0, "fingerprint": fp,
+            "mano_raw": "UNKNOWNUNKNOWN", "hand_rank": "??",
+            "hand_class": "??", "suited": False, "error": str(e),
+        }
+
+
 def main():
     # SIEMPRE un JSON en stdout
     try:
