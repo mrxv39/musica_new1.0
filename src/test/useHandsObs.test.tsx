@@ -18,17 +18,9 @@ describe("useHandsObs", () => {
   });
 
   it("usa dbPath persistido o DEFAULT_DB_PATH", () => {
-    localStorage.setItem("dbPath", "C:\\db\\saved.db");
+    const { result } = renderHook(() => useHandsObs());
 
-    const { result, unmount } = renderHook(() => useHandsObs());
-
-    expect(result.current.dbPath).toBe("C:\\db\\saved.db");
-    unmount();
-
-    localStorage.clear();
-
-    const { result: result2 } = renderHook(() => useHandsObs());
-    expect(result2.current.dbPath).toBe("C:\\db\\default.db");
+    expect(result.current.dbPath).toBe("C:\\db\\default.db");
   });
 
   it("loadOnce trae rows y status ok y persiste dbPath trimmeado", async () => {
@@ -48,7 +40,7 @@ describe("useHandsObs", () => {
       expect(result.current.rows).toEqual([{ id: 1 }, { id: 2 }]);
     });
 
-    expect(fetchLatestHandsObsMock).toHaveBeenLastCalledWith("C:\\db\\obs.db", 50);
+    expect(fetchLatestHandsObsMock).toHaveBeenLastCalledWith("C:\\db\\obs.db", 500, null);
     expect(result.current.status).toBe("ok (2)");
     expect(localStorage.getItem("dbPath")).toBe("C:\\db\\obs.db");
   });

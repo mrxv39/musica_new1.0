@@ -55,7 +55,7 @@ describe("useHandsPageDataActions", () => {
       await result.current.onReset();
     });
 
-    expect(invokeMock).toHaveBeenCalledWith("reset_spots", {
+    expect(invokeMock).toHaveBeenCalledWith("reset_hands_obs", {
       dbPath: "C:\\db\\poker_boss.db",
     });
     expect(loadObsOnce).toHaveBeenCalledTimes(1);

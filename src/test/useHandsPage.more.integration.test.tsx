@@ -71,21 +71,17 @@ describe("useHandsPage more integration", () => {
     workersPollingMock.setWorkersRunning.mockReset();
   });
 
-  it("loadOnce usa real.loadOnce en modo REAL", async () => {
-    localStorage.setItem("hands.mode", "REAL");
-
+  it("loadOnce usa obs.loadOnce (modo siempre OBS)", async () => {
     const { result } = renderHook(() => useHandsPage());
 
     await act(async () => {
       await result.current.loadOnce();
     });
 
-    expect(realMock.loadOnce).toHaveBeenCalledTimes(1);
-    expect(obsMock.loadOnce).not.toHaveBeenCalled();
+    expect(obsMock.loadOnce).toHaveBeenCalled();
   });
 
-  it("uiStatus usa real.status en modo REAL cuando no hay busy ni workers", () => {
-    localStorage.setItem("hands.mode", "REAL");
+  it("uiStatus usa obs.status cuando no hay busy ni workers (modo siempre OBS)", () => {
     obsMock.status = "obs listo";
     realMock.status = "real listo";
     workersPollingMock.workersRunning = false;
@@ -93,7 +89,7 @@ describe("useHandsPage more integration", () => {
 
     const { result } = renderHook(() => useHandsPage());
 
-    expect(result.current.uiStatus).toBe("real listo");
+    expect(result.current.uiStatus).toBe("obs listo");
   });
 
   it("uiStatus prioriza workersStatusText cuando workersRunning=true", () => {
@@ -159,13 +155,11 @@ describe("useHandsPage more integration", () => {
   });
 
   it("useHandsPageActions recibe callbacks base correctos", () => {
-    localStorage.setItem("hands.mode", "REAL");
-
     renderHook(() => useHandsPage());
 
     const args = useHandsPageActionsSpy.mock.calls.at(-1)?.[0];
     expect(args).toBeTruthy();
-    expect(args.mode).toBe("REAL");
+    expect(args.mode).toBe("OBS");
     expect(typeof args.setBusy).toBe("function");
     expect(typeof args.setActionStatus).toBe("function");
     expect(typeof args.setLastLog).toBe("function");

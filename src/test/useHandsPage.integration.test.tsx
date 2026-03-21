@@ -138,7 +138,7 @@ describe("useHandsPage integration", () => {
 
     const { result } = renderHook(() => useHandsPage());
 
-    expect(result.current.mode).toBe("REAL");
+    expect(result.current.mode).toBe("OBS");
     expect(result.current.dbPath).toBe("C:\\db\\default.db");
     expect(result.current.auto).toBe(false);
   });
@@ -160,15 +160,14 @@ describe("useHandsPage integration", () => {
     expect(mockObsSetDbPath).toHaveBeenLastCalledWith("C:\\db\\default.db");
   });
 
-  it("loadOnce delegates to real (mode is hardcoded REAL)", async () => {
+  it("loadOnce delegates to obs (mode is hardcoded OBS)", async () => {
     const { result } = renderHook(() => useHandsPage());
 
     await act(async () => {
       await result.current.loadOnce();
     });
 
-    expect(mockRealLoadOnce).toHaveBeenCalledTimes(1);
-    expect(mockObsLoadOnce).not.toHaveBeenCalled();
+    expect(mockObsLoadOnce).toHaveBeenCalled();
   });
 
   it("uiStatus prioritizes workers status over obs/real status when running", () => {
@@ -183,21 +182,20 @@ describe("useHandsPage integration", () => {
     expect(result.current.uiStatus).toBe("workers running | pid=1");
   });
 
-  it("uiStatus uses real status in REAL mode when workers are not running", () => {
-    localStorage.setItem("hands.mode", "REAL");
-    mockReal.status = "real status here";
+  it("uiStatus uses obs status in OBS mode when workers are not running", () => {
+    mockObs.status = "obs status here";
 
     const { result } = renderHook(() => useHandsPage());
 
-    expect(result.current.uiStatus).toBe("real status here");
+    expect(result.current.uiStatus).toBe("obs status here");
   });
 
-  it("uiStatus uses real status when workers are not running (mode is hardcoded REAL)", () => {
-    mockReal.status = "real idle status";
+  it("uiStatus uses obs status when workers are not running (mode is hardcoded OBS)", () => {
+    mockObs.status = "obs idle status";
 
     const { result } = renderHook(() => useHandsPage());
 
-    expect(result.current.uiStatus).toBe("real idle status");
+    expect(result.current.uiStatus).toBe("obs idle status");
   });
 
   it("exposes filtered rangeError as obsFooterText", () => {

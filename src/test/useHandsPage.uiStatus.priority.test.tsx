@@ -150,8 +150,8 @@ describe("useHandsPage uiStatus priority", () => {
     expect(result.current.uiStatus).toBe("workers corriendo");
   });
 
-  it("si busy=false y workers no corren vuelve a real.status", () => {
-    mockReal.status = "real listo";
+  it("si busy=false y workers no corren vuelve a obs.status", () => {
+    mockObs.status = "obs listo";
     mockWorkersPolling = {
       workersRunning: false,
       setWorkersRunning: vi.fn(),
@@ -171,7 +171,7 @@ describe("useHandsPage uiStatus priority", () => {
       lastActionsArgs.setBusy(false);
     });
 
-    expect(result.current.uiStatus).toBe("real listo");
+    expect(result.current.uiStatus).toBe("obs listo");
   });
 
   it("lastLog se actualiza desde los setters que recibe useHandsPageActions", () => {
