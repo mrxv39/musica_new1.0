@@ -256,7 +256,12 @@
 
       const ready = !!row && !!row.strategy_ready;
 
-      if (row) {
+      // Only show tipo pills if the spot is recent (last 15 seconds)
+      const STALE_MS = 15000;
+      const detectedAt = row ? Number(row.last_detected_at_ms || 0) : 0;
+      const isRecent = detectedAt > 0 && (Date.now() - detectedAt) < STALE_MS;
+
+      if (row && isRecent) {
         const now = Date.now();
         const p2t = String(row.p2_tipo || "").trim();
         const p3t = String(row.p3_tipo || "").trim();
@@ -268,6 +273,8 @@
             p2tipoEl.textContent = p2t.toUpperCase();
             p2tipoEl.className = "pill pill-tipo " + getTipoClass(p2t);
           }
+        } else if (p2tipoEl) {
+          p2tipoEl.className = "pill pill-tipo hidden";
         }
         if (p3tipoEl && p3t) {
           tipoState[p3tipoEl.id] = { name: row.p3_name || "", tipo: p3t };
@@ -277,7 +284,13 @@
             p3tipoEl.textContent = p3t.toUpperCase();
             p3tipoEl.className = "pill pill-tipo " + getTipoClass(p3t);
           }
+        } else if (p3tipoEl) {
+          p3tipoEl.className = "pill pill-tipo hidden";
         }
+      } else {
+        // No recent data: hide tipo pills
+        if (p2tipoEl) p2tipoEl.className = "pill pill-tipo hidden";
+        if (p3tipoEl) p3tipoEl.className = "pill pill-tipo hidden";
       }
 
       if (!ready) {

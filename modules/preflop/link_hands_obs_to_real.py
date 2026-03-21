@@ -333,7 +333,7 @@ def link_hands_obs_to_real(
         obs_rows = cur.execute(obs_sql, obs_params).fetchall()
 
         real_rows = cur.execute(
-            "SELECT id, gamecode, hero_cards, startdate, hero, bb, players_json FROM hands ORDER BY startdate ASC"
+            "SELECT id, gamecode, hero_cards, startdate, hero, bb, players_json FROM hands_real ORDER BY startdate ASC"
         ).fetchall()
 
         real_prepared = []

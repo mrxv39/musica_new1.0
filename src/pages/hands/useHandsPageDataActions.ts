@@ -8,6 +8,7 @@ import {
 } from "./handsPagePaths";
 
 import { getErrorMessage } from "./handsPageUtils";
+import { openDb } from "../../db";
 
 type LoadOnceFn = () => Promise<void>;
 
@@ -49,10 +50,17 @@ export function useHandsPageDataActions({
           setBusy(false);
           return;
         }
-        const msg = await invoke<string>("reset_four_tables", { dbPath: p });
-        const m = String(msg || "");
-        setLastLog(m);
-        setActionStatus("reset: " + (summarize(m) || "ok"));
+        const db = await openDb(p);
+        // Disable FK checks temporarily so we can delete parents
+        // without needing to delete children tables.
+        await (db as any).execute("PRAGMA foreign_keys = OFF");
+        await (db as any).execute("DELETE FROM spots");
+        await (db as any).execute("DELETE FROM hands");
+        await (db as any).execute("DELETE FROM tournaments");
+        await (db as any).execute("DELETE FROM players");
+        await (db as any).execute("PRAGMA foreign_keys = ON");
+        setLastLog("spots, hands, tournaments, players vaciadas correctamente");
+        setActionStatus("reset: ok");
         if (clearWorkerProfile) {
           clearWorkerProfile();
         }

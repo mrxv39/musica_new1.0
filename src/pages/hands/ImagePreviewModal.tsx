@@ -12,7 +12,7 @@ import {
   extractTempoS,
 } from "../../db";
 import { extractLocalImagePath, formatTempoS } from "./handsUtils";
-import { updatePlayerTipoByName, listPlayers, type PlayerRow } from "../../db/players";
+import { updatePlayerTipoByName, listPlayers } from "../../db/players";
 
 type Props = {
   rows: HandsObsRow[];
@@ -288,7 +288,7 @@ function DraggableOverlay({
   );
 }
 
-function PlayerTipoOverlay({ label, name, tipo }: { label: string; name: string; tipo: string }) {
+function PlayerTipoOverlay({ name, tipo }: { label: string; name: string; tipo: string }) {
   const CYCLE = ["fish", "reg", "unknown"] as const;
   const initial = CYCLE.includes(tipo as any) ? tipo : "unknown";
   const [current, setCurrent] = React.useState(initial);

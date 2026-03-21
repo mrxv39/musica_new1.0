@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover
     pytesseract = None  # type: ignore
 
 
-ROI_DEFAULT: Tuple[int, int, int, int] = (132, 28, 74, 30)
+ROI_DEFAULT: Tuple[int, int, int, int] = (48, 33, 165, 17)
 
 _ID_AFTER_LABEL_RE = re.compile(r"\bID\b\s*[:;#-]?\s*(\d{10,14})", re.IGNORECASE)
 _LONG_DIGITS_RE = re.compile(r"(\d{10,14})")
@@ -141,29 +141,23 @@ def _normalize_twister_gamecode(raw: str) -> Optional[str]:
     if not digits:
         return None
 
-    if len(digits) == 11 and digits.startswith("12109"):
+    # Exact 11 digits starting with "121"
+    if len(digits) == 11 and digits.startswith("121"):
         return digits
 
-    if len(digits) == 12 and digits.startswith("12109"):
-        return digits[:11]
+    # 12 digits: spurious leading digit, try removing it
+    if len(digits) == 12 and digits[1:].startswith("121"):
+        return digits[1:]
 
-    if len(digits) == 12 and digits.startswith("127"):
-        candidate = "121" + digits[3:11]
-        if len(candidate) == 11 and candidate.startswith("12109"):
-            return candidate
-
-    if len(digits) >= 13:
-        pivot = digits.find("12109")
-        if pivot >= 0 and pivot + 11 <= len(digits):
-            candidate = digits[pivot : pivot + 11]
-            if len(candidate) == 11 and candidate.startswith("12109"):
-                return candidate
-
+    # Longer: find "121" substring and extract 11 digits from there
     if len(digits) > 11:
-        for index in range(0, len(digits) - 10):
-            candidate = digits[index : index + 11]
-            if candidate.startswith("12109"):
-                return candidate
+        pivot = -1
+        for i in range(len(digits) - 10):
+            if digits[i:i+3] == "121":
+                pivot = i
+                break
+        if pivot >= 0 and pivot + 11 <= len(digits):
+            return digits[pivot : pivot + 11]
 
     return None
 
@@ -385,12 +379,39 @@ def read_gamecode(
     refine_psm: int = 8,
     img: Optional["np.ndarray"] = None,
 ) -> Dict[str, Any]:
-    config_obj = _OCRConfig(
-        roi_rel=roi_rel,
-        full_psm=full_psm,
-        refine_psm=refine_psm,
-    )
-    return _read_gamecode_impl(image_path, x1, y1, config_obj, img=img)
+    """Fast gamecode reader: single threshold + scale, ~0.3s."""
+    dx, dy, w, h = roi_rel
+    ax, ay = int(x1 + dx), int(y1 + dy)
+    roi_abs = (ax, ay, int(w), int(h))
+
+    if cv2 is None or np is None or pytesseract is None:
+        return {"ok": False, "value": None, "raw_text": "", "roi": roi_abs, "error": "deps_missing"}
+
+    if img is None:
+        if not image_path or not os.path.exists(image_path):
+            return {"ok": False, "value": None, "raw_text": "", "roi": roi_abs, "error": "image_not_found"}
+        img = cv2.imread(image_path)
+    if img is None:
+        return {"ok": False, "value": None, "raw_text": "", "roi": roi_abs, "error": "cv2_imread_failed"}
+
+    crop = _safe_crop(img, ax, ay, w, h)
+    if crop is None:
+        return {"ok": False, "value": None, "raw_text": "", "roi": roi_abs, "error": "roi_out_of_bounds"}
+
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if len(crop.shape) == 3 else crop
+    scaled = cv2.resize(gray, (w * 4, h * 4), interpolation=cv2.INTER_CUBIC)
+    _, binary = cv2.threshold(scaled, 140, 255, cv2.THRESH_BINARY)
+
+    try:
+        text = pytesseract.image_to_string(binary, config="--psm 7 -c tessedit_char_whitelist=0123456789").strip()
+    except Exception as e:
+        return {"ok": False, "value": None, "raw_text": "", "roi": roi_abs, "error": f"tesseract:{e}"}
+
+    digits = re.sub(r"\D+", "", text)
+    value = _normalize_twister_gamecode(digits)
+    if value:
+        return {"ok": True, "value": value, "raw_text": digits, "roi": roi_abs}
+    return {"ok": False, "value": None, "raw_text": digits, "roi": roi_abs, "error": "gamecode_not_found"}
 
 
 if __name__ == "__main__":

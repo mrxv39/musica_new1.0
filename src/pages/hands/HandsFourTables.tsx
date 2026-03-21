@@ -762,6 +762,20 @@ export function HandsTableBlock({
     }
   }, [collapsed]);
 
+  const [ocrFilter, setOcrFilter] = React.useState<"all" | "si" | "no">("all");
+
+  const filteredRealRows = React.useMemo(() => {
+    if (ocrFilter === "all") return realRows;
+    if (ocrFilter === "si") return realRows.filter((r) => r.linked_obs_id != null);
+    return realRows.filter((r) => r.linked_obs_id == null);
+  }, [realRows, ocrFilter]);
+
+  const filteredObsRows = React.useMemo(() => {
+    if (mode !== "OBS" || ocrFilter === "all") return obsRows;
+    if (ocrFilter === "si") return obsRows.filter((r) => (r as any).linked_hand_id != null && (r as any).linked_hand_id !== 0);
+    return obsRows.filter((r) => (r as any).linked_hand_id == null || (r as any).linked_hand_id === 0);
+  }, [obsRows, ocrFilter, mode]);
+
   const obsColumns = React.useMemo(
     () => makeHandsColumns(() => {}, obsRows[0] ?? null),
     [obsRows]
@@ -773,10 +787,31 @@ export function HandsTableBlock({
   const obsVisible = useVisibleColumns(obsColumnsConfig, HANDS_OBS_STORAGE_KEY);
   const realVisible = useVisibleColumns(REAL_HANDS_COLUMNS, HANDS_REAL_STORAGE_KEY);
 
+  const displayRealRows = mode === "REAL" ? filteredRealRows : realRows;
+  const displayObsRows = mode === "OBS" ? filteredObsRows : obsRows;
+
   return (
     <div style={{ ...tableBlockStyle, maxHeight: 420 }}>
       <div style={{ ...tableTitleStyle, display: "flex", alignItems: "center", gap: 8 }}>
-        Spots
+        {mode === "REAL" ? "Hands" : "Spots"}
+        {(mode === "REAL" ? realRows : obsRows).length > 0 && (
+          <>
+            {(["all", "si", "no"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setOcrFilter(v)}
+                style={{
+                  ...configButtonStyle,
+                  background: ocrFilter === v ? "#333" : undefined,
+                  color: ocrFilter === v ? "#fff" : undefined,
+                  fontWeight: ocrFilter === v ? 700 : 400,
+                }}
+              >
+                {v === "all" ? "All" : v === "si" ? (mode === "REAL" ? "Si OCR" : "Linked") : (mode === "REAL" ? "No OCR" : "Unlinked")}
+              </button>
+            ))}
+          </>
+        )}
         <button
           onClick={() => setCollapsed((v) => !v)}
           style={configButtonStyle}
@@ -818,13 +853,13 @@ export function HandsTableBlock({
         <div style={tableScrollStyle}>
           {mode === "REAL" ? (
             <RealHandsTable
-              rows={realRows}
+              rows={displayRealRows}
               dbPath={dbPath}
               visibleColumnIds={realVisible.visibleIds.length > 0 ? realVisible.visibleIds : undefined}
             />
           ) : (
             <HandsTable
-              rows={obsRows}
+              rows={displayObsRows}
               onSort={onSort}
               sortKey={sortKey}
               sortAsc={sortAsc}

@@ -90,6 +90,8 @@ function FilterButton({
   );
 }
 
+const copyBtnStyle: React.CSSProperties = { padding: "2px 6px", fontSize: 11, cursor: "pointer", borderRadius: 4, border: "1px solid #ccc", background: "#fff" };
+
 export function RealHandsTable({
   rows,
   dbPath,
@@ -106,6 +108,40 @@ export function RealHandsTable({
   const [openImageModal, setOpenImageModal] = React.useState(false);
   const [imagePath, setImagePath] = React.useState<string>("");
   const [imageTitle, setImageTitle] = React.useState<string>("");
+
+  const [copiedId, setCopiedId] = React.useState<number | null>(null);
+
+  async function copyHandJson(h: HandRealRow) {
+    const payload: any = {
+      id: h.id,
+      gamecode: h.gamecode,
+      startdate: h.startdate,
+      sb: h.sb,
+      bb: h.bb,
+      hero_cards: h.hero_cards,
+      flop: h.flop,
+      turn: h.turn,
+      river: h.river,
+      tournament_name: h.tournament_name ?? null,
+    };
+    try {
+      const pj = h.players_json ? JSON.parse(h.players_json) : null;
+      if (pj) payload.players = pj;
+    } catch { /* ignore */ }
+    if (h.linked_ocr_json) {
+      try {
+        payload.ocr = JSON.parse(h.linked_ocr_json as string);
+      } catch { /* ignore */ }
+    }
+    const text = JSON.stringify(payload, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(h.id);
+      window.setTimeout(() => setCopiedId((prev) => (prev === h.id ? null : prev)), 1200);
+    } catch {
+      window.alert("No se pudo copiar al portapapeles.");
+    }
+  }
 
   const [auditFilter, setAuditFilter] = React.useState<AuditFilter>("all");
 
@@ -162,6 +198,7 @@ export function RealHandsTable({
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
+            <th style={{ ...thStyle, width: 64 }}>Copy</th>
             {headerColumns.map((id) => (
               <th key={id} style={thStyle}>
                 {REAL_HANDS_HEADER_LABELS[id] ?? id}
@@ -176,6 +213,8 @@ export function RealHandsTable({
           onOpenHand={openHand}
           onOpenImage={openImage}
           visibleColumnIds={visibleColumnIds && visibleColumnIds.length > 0 ? visibleColumnIds : undefined}
+          copyHandJson={copyHandJson}
+          copiedId={copiedId}
         />
       </table>
 

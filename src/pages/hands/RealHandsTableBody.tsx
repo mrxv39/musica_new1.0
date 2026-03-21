@@ -1,3 +1,4 @@
+import React from "react";
 import type { HandRealRow } from "../../db";
 import { formatBoardCompact, formatCardsString } from "./realHandsFormatters";
 
@@ -21,6 +22,8 @@ type Props = {
   onOpenImage: (h: HandRealRow) => void;
   /** When set, only these columns are rendered (order preserved). */
   visibleColumnIds?: string[];
+  copyHandJson?: (h: HandRealRow) => void;
+  copiedId?: number | null;
 };
 
 function auditColors(status?: HandRealRow["ocr_audit_status"]) {
@@ -47,12 +50,16 @@ function tournamentLabel(h: HandRealRow): string {
 
 const cellStyle = { padding: "6px 8px" as const, whiteSpace: "nowrap" as const };
 
+const copyBtnStyle: React.CSSProperties = { padding: "2px 6px", fontSize: 11, cursor: "pointer", borderRadius: 4, border: "1px solid #ccc", background: "#fff" };
+
 export default function RealHandsTableBody({
   rows,
   getSpotPng,
   onOpenHand,
   onOpenImage,
   visibleColumnIds,
+  copyHandJson,
+  copiedId,
 }: Props) {
   const cols =
     visibleColumnIds && visibleColumnIds.length > 0
@@ -132,6 +139,17 @@ export default function RealHandsTableBody({
             onClick={() => onOpenHand(h)}
             title="Click para abrir"
           >
+            <td style={cellStyle}>
+              {copyHandJson && (
+                <button
+                  style={copyBtnStyle}
+                  title="Copiar JSON de la mano"
+                  onClick={(e) => { e.stopPropagation(); copyHandJson(h); }}
+                >
+                  {copiedId === h.id ? "Copied" : "Copy"}
+                </button>
+              )}
+            </td>
             {cols.map((id) => (
               <td key={id} style={cellStyle}>
                 {cells[id] ?? ""}

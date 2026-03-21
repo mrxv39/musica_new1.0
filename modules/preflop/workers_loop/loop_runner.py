@@ -42,8 +42,6 @@ def _run_sync_tasks(
     sync_every_ticks: int,
     fp: TextIO,
     import_xml_folder_fn: Any,
-    link_hands_obs_to_real_fn: Any,
-    link_obs_to_spots_fn: Any,
 ) -> None:
     if xml_dir and hero and (tick_n % sync_every_ticks == 0):
         try:
@@ -58,24 +56,6 @@ def _run_sync_tasks(
             log(fp, f"SYNC_IMPORT_XML tick={tick_n} result={result}")
         except Exception as e:
             log(fp, f"SYNC_IMPORT_XML_ERROR tick={tick_n} err={type(e).__name__}:{e}")
-
-    try:
-        result = link_hands_obs_to_real_fn(db_path=db_path)
-        links_created = None
-        if isinstance(result, dict):
-            links_created = result.get("links_created")
-        log(fp, f"SYNC_LINK_HANDS_OBS_TO_REAL tick={tick_n} links_created={links_created}")
-    except Exception as e:
-        log(fp, f"SYNC_LINK_HANDS_OBS_TO_REAL_ERROR tick={tick_n} err={type(e).__name__}:{e}")
-
-    try:
-        result = link_obs_to_spots_fn(db_path=db_path, verbose=False)
-        linked = None
-        if isinstance(result, dict):
-            linked = result.get("linked")
-        log(fp, f"SYNC_LINK_SPOTS_XML_REAL tick={tick_n} linked={linked}")
-    except Exception as e:
-        log(fp, f"SYNC_LINK_SPOTS_XML_REAL_ERROR tick={tick_n} err={type(e).__name__}:{e}")
 
 
 def run_loop(
@@ -118,8 +98,6 @@ def run_loop(
     import modules.workers.worker_preflop as worker_preflop_mod
     from modules.db import db as dbmod
     from modules.importers.championpoker_xml_importer import import_xml_folder
-    from modules.preflop.link_hands_obs_to_real import link_hands_obs_to_real
-    from modules.preflop.link_hands_obs_to_spots_xml_real import link_obs_to_spots
 
     MatchInput = None
     select_move = None
@@ -171,11 +149,7 @@ def run_loop(
                     sync_every_ticks=sync_every_ticks,
                     fp=fp,
                     import_xml_folder_fn=import_xml_folder,
-                    link_hands_obs_to_real_fn=link_hands_obs_to_real,
-                    link_obs_to_spots_fn=link_obs_to_spots,
                 )
-            else:
-                log(fp, f"SYNC_SKIPPED tick={tick_n} reason=missing_db_path")
 
             log(fp, f"TICK_END n={tick_n}")
 
