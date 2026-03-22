@@ -121,23 +121,19 @@ def classify_hand(card1: str, card2: str):
     return mano_raw, hand_rank, hand_class, bool(suited)
 
 
-def main():
-    # SIEMPRE un JSON en stdout
+def run_mano(image_path: str, templates=None) -> dict:
+    """Direct-call entry point (no subprocess). Returns the same dict as main()."""
     try:
-        if "--image" not in sys.argv:
-            raise Exception("Missing --image argument")
-
-        image_path = sys.argv[sys.argv.index("--image") + 1].strip()
         abs_image_path = os.path.abspath(image_path)
 
         if not os.path.exists(abs_image_path):
             raise Exception("Image not found")
 
-        templates = load_templates()
+        if templates is None:
+            templates = load_templates()
         if not templates:
             raise Exception("Templates missing")
 
-        # Leer imagen
         img = Image.open(abs_image_path).convert("L")
 
         c1 = img.crop((region_carta1[0], region_carta1[1], region_carta1[0] + region_carta1[2], region_carta1[1] + region_carta1[3]))
@@ -146,14 +142,12 @@ def main():
         crop1 = np.array(c1, dtype=np.uint8)
         crop2 = np.array(c2, dtype=np.uint8)
 
-        # Match con OpenCV
         try:
             card1, rank1, suit1, score1 = match_card_opencv(crop1, templates)
             card2, rank2, suit2, score2 = match_card_opencv(crop2, templates)
         except ModuleNotFoundError:
-            # cv2 no instalado
             fp = _fingerprint_fallback(abs_image_path)
-            out = {
+            return {
                 "valid": False,
                 "card1": "UNKNOWN",
                 "card2": "UNKNOWN",
@@ -166,8 +160,6 @@ def main():
                 "suited": False,
                 "error": "cv2_missing",
             }
-            print(json.dumps(out, ensure_ascii=False))
-            return
 
         mano_raw, hand_rank, hand_class, suited = classify_hand(card1, card2)
 
@@ -180,7 +172,7 @@ def main():
 
         fingerprint = _sha1(abs_image_path + "|" + mano_raw + "|" + str(int(time.time()) // 2))
 
-        out = {
+        return {
             "valid": bool(valid),
             "card1": str(card1),
             "card2": str(card2),
@@ -192,11 +184,9 @@ def main():
             "hand_class": str(hand_class),
             "suited": bool(suited),
         }
-        print(json.dumps(out, ensure_ascii=False))
     except Exception as e:
-        # SIEMPRE fingerprint no vacío
-        fp = _fingerprint_fallback(sys.argv[sys.argv.index("--image") + 1] if "--image" in sys.argv else "")
-        out = {
+        fp = _fingerprint_fallback(image_path or "")
+        return {
             "valid": False,
             "card1": "UNKNOWN",
             "card2": "UNKNOWN",
@@ -209,7 +199,18 @@ def main():
             "suited": False,
             "error": str(e),
         }
+
+
+def main():
+    # SIEMPRE un JSON en stdout
+    if "--image" not in sys.argv:
+        out = run_mano("")
+        out["error"] = "Missing --image argument"
         print(json.dumps(out, ensure_ascii=False))
+        return
+    image_path = sys.argv[sys.argv.index("--image") + 1].strip()
+    out = run_mano(image_path)
+    print(json.dumps(out, ensure_ascii=False))
 
 
 if __name__ == "__main__":

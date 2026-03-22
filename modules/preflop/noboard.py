@@ -27,12 +27,9 @@ def _fingerprint_fallback(image_path: str) -> str:
     return _sha1(abs_path + "|noboard|" + str(int(t.time()) // 2))
 
 
-def main() -> None:
+def run_noboard(image_path: str) -> dict:
+    """Direct-call entry point (no subprocess). Returns the same dict as main()."""
     try:
-        if "--image" not in sys.argv:
-            raise Exception("Missing --image argument")
-
-        image_path = sys.argv[sys.argv.index("--image") + 1]
         abs_image_path = os.path.abspath(image_path)
 
         if not os.path.exists(abs_image_path):
@@ -55,25 +52,16 @@ def main() -> None:
 
         fingerprint = _sha1(abs_image_path + "|noboard|" + str(int(t.time()) // 2))
 
-        out = {
+        return {
             "noboard_ok": bool(noboard_ok),
             "mean": mean_val,
             "std": std_val,
             "dark_ratio": dark_ratio,
             "fingerprint": fingerprint,
         }
-        print(json.dumps(out))
-        return
-
     except Exception as e:
-        # JSON estable incluso en error
-        try:
-            image_path = sys.argv[sys.argv.index("--image") + 1] if "--image" in sys.argv else ""
-        except Exception:
-            image_path = ""
-
-        fp = _fingerprint_fallback(image_path)
-        out = {
+        fp = _fingerprint_fallback(image_path or "")
+        return {
             "noboard_ok": False,
             "mean": 0.0,
             "std": 0.0,
@@ -81,8 +69,17 @@ def main() -> None:
             "fingerprint": fp,
             "error": str(e),
         }
+
+
+def main() -> None:
+    if "--image" not in sys.argv:
+        out = run_noboard("")
+        out["error"] = "Missing --image argument"
         print(json.dumps(out))
         return
+    image_path = sys.argv[sys.argv.index("--image") + 1]
+    out = run_noboard(image_path)
+    print(json.dumps(out))
 
 
 if __name__ == "__main__":

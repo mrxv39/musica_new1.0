@@ -1,20 +1,38 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\preflop\preflop.py
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\preflop\preflop.py
 import sys
 import os
 import json
 import time as t
 import hashlib
 import concurrent.futures
-import subprocess
 
-MANO_PATH = os.path.join(os.path.dirname(__file__), "mano.py")
-TIME_PATH = os.path.join(os.path.dirname(__file__), "time.py")
-NOBOARD_PATH = os.path.join(os.path.dirname(__file__), "noboard.py")
+try:
+    from .mano import run_mano
+    from .time import run_time
+    from .noboard import run_noboard
+except ImportError:
+    # Fallback for direct script execution (python preflop.py --image ...)
+    import importlib.util
+    _dir = os.path.dirname(os.path.abspath(__file__))
+    def _load_local(module_name, file_name):
+        spec = importlib.util.spec_from_file_location(module_name, os.path.join(_dir, file_name))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    run_mano = _load_local("mano", "mano.py").run_mano  # type: ignore[no-redef]
+    run_time = _load_local("time_module", "time.py").run_time  # type: ignore[no-redef]
+    run_noboard = _load_local("noboard", "noboard.py").run_noboard  # type: ignore[no-redef]
 
-MODULES = {
-    "mano": (MANO_PATH, "mano_ok"),
-    "time": (TIME_PATH, "time_ok"),
-    "noboard": (NOBOARD_PATH, "noboard_ok"),
+MODULES_OK_KEY = {
+    "mano": "mano_ok",
+    "time": "time_ok",
+    "noboard": "noboard_ok",
+}
+
+_MODULE_RUNNERS = {
+    "mano": run_mano,
+    "time": run_time,
+    "noboard": run_noboard,
 }
 
 
@@ -27,35 +45,18 @@ def _fingerprint(image_path: str) -> str:
     return _sha1(abs_image_path + "|preflop|" + str(int(t.time()) // 2))
 
 
-def run_module(name: str, path: str, image_path: str):
+def run_module(name: str, image_path: str):
     try:
-        proc = subprocess.run(
-            ["python", path, "--image", image_path],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if proc.returncode != 0 or not (proc.stdout or "").strip():
+        runner = _MODULE_RUNNERS[name]
+        data = runner(image_path)
+        if not isinstance(data, dict):
             return (
-                {"error": "nonzero exit or no output", MODULES[name][1]: False},
-                f"{name}: nonzero exit or no output",
+                {"error": "invalid result (not a dict)", MODULES_OK_KEY[name]: False},
+                f"{name}: invalid result (not a dict)",
             )
-
-        try:
-            data = json.loads(proc.stdout)
-            if not isinstance(data, dict):
-                return (
-                    {"error": "invalid json (not an object)", MODULES[name][1]: False},
-                    f"{name}: invalid json (not an object)",
-                )
-            return data, None
-        except Exception:
-            return ({"error": "invalid json", MODULES[name][1]: False}, f"{name}: invalid json")
-
-    except subprocess.TimeoutExpired:
-        return ({"error": "timeout", MODULES[name][1]: False}, f"{name}: timeout")
+        return data, None
     except Exception as e:
-        return ({"error": str(e), MODULES[name][1]: False}, f"{name}: {str(e)}")
+        return ({"error": str(e), MODULES_OK_KEY[name]: False}, f"{name}: {str(e)}")
 
 
 def extract_ok_flag(name: str, data: dict) -> bool:
@@ -66,30 +67,24 @@ def extract_ok_flag(name: str, data: dict) -> bool:
             return bool(hand_class and mano_raw)
         return False
 
-    key = MODULES[name][1]
+    key = MODULES_OK_KEY[name]
     return bool(isinstance(data, dict) and data.get(key, False))
 
 
-def main():
+def run_preflop(image_path: str) -> dict:
+    """Direct-call entry point (no subprocess). Runs all modules and returns combined result."""
     try:
-        if "--image" not in sys.argv:
-            raise Exception("Missing --image argument")
-
-        image_path = sys.argv[sys.argv.index("--image") + 1]
-
-        # ✅ FIX: si la imagen no existe, error global (y errors no vacío)
-        if not os.path.exists(image_path):
+        abs_image_path = os.path.abspath(image_path)
+        if not os.path.exists(abs_image_path):
             raise Exception("Image not found")
 
-        fp = _fingerprint(image_path)
+        fp = _fingerprint(abs_image_path)
 
         results = {}
         errors = []
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futs = {name: executor.submit(run_module, name, path, image_path) for name, (path, _) in MODULES.items()}
-
-            # ✅ FIX: iteración correcta
+            futs = {name: executor.submit(run_module, name, abs_image_path) for name in _MODULE_RUNNERS}
             for name, future in futs.items():
                 data, err = future.result()
                 results[name] = data
@@ -102,25 +97,16 @@ def main():
 
         preflop_ok = bool(mano_ok and time_ok and noboard_ok)
 
-        out = {
+        return {
             "preflop_ok": preflop_ok,
             "fingerprint": fp,
             "modules": results,
             "errors": errors,
         }
-        print(json.dumps(out))
-        return
-
     except Exception as e:
-        try:
-            image_path = sys.argv[sys.argv.index("--image") + 1] if "--image" in sys.argv else ""
-        except Exception:
-            image_path = ""
-
-        fp = _fingerprint(image_path)
+        fp = _fingerprint(image_path or "")
         msg = str(e)
-
-        out = {
+        return {
             "preflop_ok": False,
             "fingerprint": fp,
             "modules": {
@@ -130,8 +116,16 @@ def main():
             },
             "errors": [msg],
         }
+
+
+def main():
+    if "--image" not in sys.argv:
+        out = run_preflop("")
         print(json.dumps(out))
         return
+    image_path = sys.argv[sys.argv.index("--image") + 1]
+    out = run_preflop(image_path)
+    print(json.dumps(out))
 
 
 if __name__ == "__main__":

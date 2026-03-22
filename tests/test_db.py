@@ -2,11 +2,24 @@ import unittest
 # [test_id:BASE_DB_Structured]
 import os
 import json
+import tempfile
 from modules.db import db
 
 class TestDB(unittest.TestCase):
     def setUp(self):
+        self._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.db_path = self._tmp.name
+        self._tmp.close()
+        os.environ["POKER_BOSS_DB_PATH"] = self.db_path
         db.init_db()
+
+    def tearDown(self):
+        if "POKER_BOSS_DB_PATH" in os.environ:
+            del os.environ["POKER_BOSS_DB_PATH"]
+        try:
+            os.unlink(self.db_path)
+        except Exception:
+            pass
     def test_insert_hand(self):
         fingerprint = 'test_fp_123'
         data = json.dumps({'test': 1})
