@@ -33,14 +33,14 @@ class TestBetsOCR(unittest.TestCase):
         # Simular OCR:
         # - primera variante devuelve algo parseable
         # Como se llama múltiples veces (3 rois x N variantes), devolvemos siempre lo mismo.
-        m_ocr.return_value = "123.45\n"
+        m_ocr.return_value = "23.45\n"
 
         res = bets.read_bets(self.tmp_path)
         self.assertTrue(res["ok"])
-        self.assertAlmostEqual(res["p1"], 123.45, places=2)
-        self.assertAlmostEqual(res["p2"], 123.45, places=2)
-        self.assertAlmostEqual(res["p3"], 123.45, places=2)
-        self.assertEqual(res["raw"]["p1"], "123.45")
+        self.assertAlmostEqual(res["p1"], 23.45, places=2)
+        self.assertAlmostEqual(res["p2"], 23.45, places=2)
+        self.assertAlmostEqual(res["p3"], 23.45, places=2)
+        self.assertEqual(res["raw"]["p1"], "23.45")
 
     @patch("modules.ocr.bets.cv2.imread")
     def test_roi_out_of_bounds_ok_false_if_none_ok(self, m_imread):
