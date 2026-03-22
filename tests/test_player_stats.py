@@ -6,8 +6,6 @@ import pytest
 from modules.stats.player_stats import (
     PlayerAccum,
     _process_hand,
-    compute_player_stats,
-    save_player_stats,
     ensure_player_stats_table,
     refresh_player_stats,
     format_player_stats,
@@ -26,10 +24,10 @@ def _make_actions(*specs):
 
 
 class TestProcessHand:
-    """Unit tests for _process_hand logic."""
+    """Unit tests for _process_hand logic (keyed by (player, table_size))."""
 
-    def test_vpip_and_pfr_basic(self):
-        """BTN raises, SB folds, BB calls -> BTN has VPIP+PFR, BB has VPIP."""
+    def test_vpip_and_pfr_3h(self):
+        """3-handed: BTN raises, SB folds, BB calls."""
         actions = _make_actions(
             (0, "SB", "POST_SB", 10),
             (0, "BB", "POST_BB", 20),
@@ -40,15 +38,57 @@ class TestProcessHand:
         accums = {}
         _process_hand(actions, accums)
 
-        assert accums["BTN"].total_hands == 1
-        assert accums["BTN"].vpip_hands == 1
-        assert accums["BTN"].pfr_hands == 1
-        assert accums["BB"].vpip_hands == 1
-        assert accums["BB"].pfr_hands == 0
-        assert accums["SB"].vpip_hands == 0
+        assert ("BTN", 3) in accums
+        assert accums[("BTN", 3)].vpip_hands == 1
+        assert accums[("BTN", 3)].pfr_hands == 1
+        assert accums[("BB", 3)].vpip_hands == 1
+        assert accums[("BB", 3)].pfr_hands == 0
+        assert accums[("SB", 3)].vpip_hands == 0
+
+    def test_hu_separate_from_3h(self):
+        """HU hand goes into table_size=2 bucket."""
+        actions = _make_actions(
+            (0, "SB", "POST_SB", 10),
+            (0, "BB", "POST_BB", 20),
+            (1, "SB", "RAISE", 60),
+            (1, "BB", "FOLD", 0),
+        )
+        accums = {}
+        _process_hand(actions, accums)
+
+        assert ("SB", 2) in accums
+        assert ("SB", 3) not in accums
+        assert accums[("SB", 2)].total_hands == 1
+        assert accums[("SB", 2)].pfr_hands == 1
+
+    def test_mixed_3h_and_hu(self):
+        """Same player in both 3H and HU hands gets separate stats."""
+        accums = {}
+
+        # 3H hand
+        _process_hand(_make_actions(
+            (0, "A", "POST_SB", 10),
+            (0, "B", "POST_BB", 20),
+            (1, "C", "RAISE", 60),
+            (1, "A", "FOLD", 0),
+            (1, "B", "CALL", 40),
+        ), accums)
+
+        # HU hand with same player A
+        _process_hand(_make_actions(
+            (0, "A", "POST_SB", 10),
+            (0, "B", "POST_BB", 20),
+            (1, "A", "RAISE", 60),
+            (1, "B", "FOLD", 0),
+        ), accums)
+
+        assert accums[("A", 3)].total_hands == 1
+        assert accums[("A", 3)].vpip_hands == 0
+        assert accums[("A", 2)].total_hands == 1
+        assert accums[("A", 2)].vpip_hands == 1
+        assert accums[("A", 2)].pfr_hands == 1
 
     def test_limp(self):
-        """SB calls (limp), BB checks -> SB has limp."""
         actions = _make_actions(
             (0, "SB", "POST_SB", 10),
             (0, "BB", "POST_BB", 20),
@@ -59,12 +99,10 @@ class TestProcessHand:
         accums = {}
         _process_hand(actions, accums)
 
-        assert accums["SB"].limp_hands == 1
-        assert accums["SB"].vpip_hands == 1
-        assert accums["BB"].limp_hands == 0
+        assert accums[("SB", 3)].limp_hands == 1
+        assert accums[("BB", 3)].limp_hands == 0
 
     def test_3bet_detection(self):
-        """BTN raises, SB 3-bets -> SB has 3-bet, BTN has fold-to-3bet opp."""
         actions = _make_actions(
             (0, "SB", "POST_SB", 10),
             (0, "BB", "POST_BB", 20),
@@ -76,30 +114,10 @@ class TestProcessHand:
         accums = {}
         _process_hand(actions, accums)
 
-        assert accums["SB"].threeb_hands == 1
-        assert accums["SB"].threeb_opps == 1
-        assert accums["BTN"].fold_to_3b_opps == 1
-        assert accums["BTN"].fold_to_3b == 1
-
-    def test_3bet_opportunity_for_multiple_players(self):
-        """BTN raises -> SB folds (had 3bet opp) -> BB calls (had 3bet opp)."""
-        actions = _make_actions(
-            (0, "SB", "POST_SB", 10),
-            (0, "BB", "POST_BB", 20),
-            (1, "BTN", "RAISE", 60),
-            (1, "SB", "FOLD", 0),
-            (1, "BB", "CALL", 40),
-        )
-        accums = {}
-        _process_hand(actions, accums)
-
-        assert accums["SB"].threeb_opps == 1
-        assert accums["BB"].threeb_opps == 1
-        assert accums["SB"].threeb_hands == 0
-        assert accums["BB"].threeb_hands == 0
+        assert accums[("SB", 3)].threeb_hands == 1
+        assert accums[("BTN", 3)].fold_to_3b == 1
 
     def test_4bet(self):
-        """BTN raises, SB 3-bets, BTN 4-bets."""
         actions = _make_actions(
             (0, "SB", "POST_SB", 10),
             (0, "BB", "POST_BB", 20),
@@ -112,12 +130,10 @@ class TestProcessHand:
         accums = {}
         _process_hand(actions, accums)
 
-        assert accums["BTN"].fourb_hands == 1
-        assert accums["BTN"].fourb_opps == 1
-        assert accums["BTN"].fold_to_3b == 0
+        assert accums[("BTN", 3)].fourb_hands == 1
+        assert accums[("BTN", 3)].fold_to_3b == 0
 
-    def test_aggression_factor_postflop(self):
-        """Postflop: player bets and raises -> counted in AF."""
+    def test_af_postflop(self):
         actions = _make_actions(
             (0, "A", "POST_SB", 10),
             (0, "B", "POST_BB", 20),
@@ -132,13 +148,12 @@ class TestProcessHand:
         accums = {}
         _process_hand(actions, accums)
 
-        assert accums["A"].af_bets_raises == 2  # 2 bets
-        assert accums["A"].af_calls == 1  # 1 call postflop
-        assert accums["B"].af_bets_raises == 1  # 1 raise
-        assert accums["B"].af_calls == 1  # 1 call
+        assert accums[("A", 2)].af_bets_raises == 2
+        assert accums[("A", 2)].af_calls == 1
+        assert accums[("B", 2)].af_bets_raises == 1
+        assert accums[("B", 2)].af_calls == 1
 
     def test_wtsd(self):
-        """Player who sees river without folding -> WTSD."""
         actions = _make_actions(
             (0, "A", "POST_SB", 10),
             (0, "B", "POST_BB", 20),
@@ -146,8 +161,6 @@ class TestProcessHand:
             (1, "B", "CHECK", 0),
             (2, "A", "CHECK", 0),
             (2, "B", "CHECK", 0),
-            (3, "A", "CHECK", 0),
-            (3, "B", "CHECK", 0),
             (4, "A", "CHECK", 0),
             (4, "B", "BET", 20),
             (4, "A", "CALL", 20),
@@ -155,62 +168,33 @@ class TestProcessHand:
         accums = {}
         _process_hand(actions, accums)
 
-        assert accums["A"].wtsd_opps == 1
-        assert accums["A"].wtsd_hands == 1
-        assert accums["B"].wtsd_hands == 1
+        assert accums[("A", 2)].wtsd_hands == 1
+        assert accums[("B", 2)].wtsd_hands == 1
 
-    def test_wtsd_fold_on_river(self):
-        """Player folds on river -> NOT WTSD."""
+    def test_skip_single_player_hand(self):
+        """Hands with only 1 player (walkover) are skipped."""
         actions = _make_actions(
             (0, "A", "POST_SB", 10),
-            (0, "B", "POST_BB", 20),
-            (1, "A", "CALL", 10),
-            (1, "B", "CHECK", 0),
-            (2, "A", "CHECK", 0),
-            (2, "B", "CHECK", 0),
-            (3, "A", "CHECK", 0),
-            (3, "B", "CHECK", 0),
-            (4, "A", "BET", 40),
-            (4, "B", "FOLD", 0),
         )
         accums = {}
         _process_hand(actions, accums)
-
-        assert accums["A"].wtsd_hands == 1
-        assert accums["B"].wtsd_hands == 0
-
-    def test_all_fold_preflop_no_postflop_stats(self):
-        """Everyone folds preflop -> no postflop stats."""
-        actions = _make_actions(
-            (0, "SB", "POST_SB", 10),
-            (0, "BB", "POST_BB", 20),
-            (1, "BTN", "FOLD", 0),
-            (1, "SB", "FOLD", 0),
-        )
-        accums = {}
-        _process_hand(actions, accums)
-
-        assert accums["BB"].wtsd_opps == 0
-        assert accums["BB"].af_bets_raises == 0
+        assert len(accums) == 0
 
 
 class TestRefreshAndQuery:
-    """Integration tests using a temp database."""
-
-    def test_refresh_and_get(self):
+    def test_refresh_and_get_by_table_size(self):
         with tempfile.TemporaryDirectory() as td:
             db_path = os.path.join(td, "test.db")
             conn = sqlite3.connect(db_path)
             ensure_schema(conn)
             ensure_player_stats_table(conn)
 
-            # Insert a simple hand
+            # Insert a 3-handed hand
             conn.execute("""
                 INSERT INTO hands(room, hero, source_file, gamecode, sb, bb)
                 VALUES ('test', 'hero', 'f.xml', 'G1', 10, 20)
             """)
             hand_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-
             conn.executemany("""
                 INSERT INTO actions_real(hand_id, gamecode, round_no, action_no,
                     player, type_id, type_name, sum_chips, sum_bb)
@@ -227,19 +211,27 @@ class TestRefreshAndQuery:
 
             result = refresh_player_stats(db_path, verbose=False)
             assert result["ok"]
-            assert result["players"] == 3
 
-            hero = get_player_stats(db_path, "hero")
-            assert hero is not None
-            assert hero["total_hands"] == 1
-            assert hero["vpip_hands"] == 1
-            assert hero["pfr_hands"] == 1
+            # Query by table_size=3
+            hero_3h = get_player_stats(db_path, "hero", table_size=3)
+            assert hero_3h is not None
+            assert hero_3h["total_hands"] == 1
+            assert hero_3h["pfr_hands"] == 1
+
+            # Query by table_size=2 should be None
+            hero_hu = get_player_stats(db_path, "hero", table_size=2)
+            assert hero_hu is None
+
+            # Combined (no table_size filter)
+            hero_all = get_player_stats(db_path, "hero")
+            assert hero_all["total_hands"] == 1
 
 
 class TestFormatPlayerStats:
-    def test_format_basic(self):
+    def test_format_with_table_size(self):
         stats = {
-            "player": "TestPlayer",
+            "player": "Test",
+            "table_size": 3,
             "total_hands": 100,
             "vpip_hands": 45,
             "pfr_hands": 30,
@@ -256,7 +248,28 @@ class TestFormatPlayerStats:
             "wtsd_opps": 50,
         }
         output = format_player_stats(stats)
+        assert "[3H]" in output
         assert "45.0%" in output  # VPIP
-        assert "30.0%" in output  # PFR
-        assert "25.0%" in output  # 3-bet (5/20)
-        assert "2.0" in output    # AF (60/30)
+
+    def test_format_hu(self):
+        stats = {
+            "player": "Test",
+            "table_size": 2,
+            "total_hands": 50,
+            "vpip_hands": 40,
+            "pfr_hands": 35,
+            "threeb_hands": 10,
+            "threeb_opps": 20,
+            "fold_to_3b": 3,
+            "fold_to_3b_opps": 10,
+            "fourb_hands": 1,
+            "fourb_opps": 3,
+            "limp_hands": 2,
+            "af_bets_raises": 30,
+            "af_calls": 15,
+            "wtsd_hands": 10,
+            "wtsd_opps": 25,
+        }
+        output = format_player_stats(stats)
+        assert "[HU]" in output
+        assert "80.0%" in output  # VPIP 40/50

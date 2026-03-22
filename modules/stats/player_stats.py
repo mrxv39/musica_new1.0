@@ -1,7 +1,11 @@
 # C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\stats\player_stats.py
 # Compute and cache per-player poker statistics from actions_real.
 #
-# Stats are calculated from raw action data and stored in player_stats table.
+# Stats are split by table_size (number of players in the hand):
+#   - 3 = 3-handed
+#   - 2 = heads-up
+# Each player has separate stat rows for each table_size they've played.
+#
 # Recalculate after importing new hands.
 
 from __future__ import annotations
@@ -19,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 PLAYER_STATS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS player_stats (
-    player TEXT PRIMARY KEY,
+    player TEXT NOT NULL,
+    table_size INTEGER NOT NULL DEFAULT 3,
     total_hands INTEGER NOT NULL DEFAULT 0,
     vpip_hands INTEGER NOT NULL DEFAULT 0,
     pfr_hands INTEGER NOT NULL DEFAULT 0,
@@ -37,7 +42,8 @@ CREATE TABLE IF NOT EXISTS player_stats (
     won_hands INTEGER NOT NULL DEFAULT 0,
     total_won_chips REAL NOT NULL DEFAULT 0,
     total_bet_chips REAL NOT NULL DEFAULT 0,
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (player, table_size)
 );
 """
 
@@ -54,6 +60,13 @@ STAT_COLUMNS = [
 
 
 def ensure_player_stats_table(conn: sqlite3.Connection) -> None:
+    # Drop old single-PK table if it exists, recreate with composite PK
+    cur = conn.cursor()
+    cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='player_stats'")
+    row = cur.fetchone()
+    if row and "table_size" not in (row[0] or ""):
+        cur.execute("DROP TABLE player_stats")
+        conn.commit()
     conn.executescript(PLAYER_STATS_SCHEMA)
     conn.commit()
 
@@ -81,6 +94,10 @@ class PlayerAccum:
     total_bet_chips: float = 0.0
 
 
+# Key for accumulators: (player, table_size)
+AccumKey = Tuple[str, int]
+
+
 # ── Core calculation ─────────────────────────────────────────────────────
 
 def _load_actions_by_hand(conn: sqlite3.Connection) -> Dict[int, List[Tuple]]:
@@ -95,22 +112,30 @@ def _load_actions_by_hand(conn: sqlite3.Connection) -> Dict[int, List[Tuple]]:
     hands: Dict[int, List[Tuple]] = defaultdict(list)
     for row in cur:
         hand_id = row[0]
-        hands[hand_id].append(row[1:])  # (round_no, action_no, player, type_name, sum_chips)
+        hands[hand_id].append(row[1:])
 
     return hands
 
 
-def _process_hand(actions: List[Tuple], accums: Dict[str, PlayerAccum]) -> None:
+def _process_hand(actions: List[Tuple], accums: Dict[AccumKey, PlayerAccum]) -> None:
     """Process one hand's actions and update player accumulators.
 
     Each action tuple: (round_no, action_no, player, type_name, sum_chips)
+    Stats are keyed by (player, table_size) where table_size = number of
+    distinct players in the hand.
     """
     players_in_hand = {a[2] for a in actions}
+    table_size = len(players_in_hand)
 
-    # Ensure all players have accumulators
+    # Skip hands with only 1 player (walkover, no useful stats)
+    if table_size < 2:
+        return
+
+    # Ensure all players have accumulators for this table_size
     for player in players_in_hand:
-        if player not in accums:
-            accums[player] = PlayerAccum()
+        key = (player, table_size)
+        if key not in accums:
+            accums[key] = PlayerAccum()
 
     # ── Preflop analysis ──
 
@@ -123,7 +148,7 @@ def _process_hand(actions: List[Tuple], accums: Dict[str, PlayerAccum]) -> None:
 
     for round_no, action_no, player, type_name, sum_chips in actions:
         if round_no > 1:
-            break  # done with preflop
+            break
         if type_name in ("POST_SB", "POST_BB", "ANTE"):
             continue
 
@@ -141,7 +166,7 @@ def _process_hand(actions: List[Tuple], accums: Dict[str, PlayerAccum]) -> None:
 
     # Update basic preflop stats
     for player in players_in_hand:
-        acc = accums[player]
+        acc = accums[(player, table_size)]
         acc.total_hands += 1
         if player in vpip_players:
             acc.vpip_hands += 1
@@ -155,7 +180,6 @@ def _process_hand(actions: List[Tuple], accums: Dict[str, PlayerAccum]) -> None:
     if raiser_sequence:
         open_raiser = raiser_sequence[0]
 
-        # 3-bet opportunities: players who faced the open raise
         saw_open = False
         for round_no, action_no, player, type_name, sum_chips in actions:
             if round_no > 1:
@@ -164,38 +188,30 @@ def _process_hand(actions: List[Tuple], accums: Dict[str, PlayerAccum]) -> None:
                 continue
 
             if not saw_open:
-                # Wait for the open raise
                 if player == open_raiser and type_name in ("RAISE", "ALL_IN"):
                     saw_open = True
                 continue
 
-            # Skip open raiser's subsequent actions (calling 3bet, etc.)
             if player == open_raiser:
                 continue
 
-            # This player faces the open raise → 3-bet opportunity
             if type_name in ("FOLD", "CALL", "RAISE", "ALL_IN", "CHECK"):
-                accums[player].threeb_opps += 1
+                accums[(player, table_size)].threeb_opps += 1
 
-            # Once someone 3-bets, no more 3-bet opps (rest would be cold-4-bet)
             if type_name in ("RAISE", "ALL_IN"):
                 break
 
-        # 3-bet count
         if len(raiser_sequence) >= 2:
-            accums[raiser_sequence[1]].threeb_hands += 1
+            accums[(raiser_sequence[1], table_size)].threeb_hands += 1
 
-            # Fold to 3-bet: did open raiser fold?
-            accums[open_raiser].fold_to_3b_opps += 1
+            accums[(open_raiser, table_size)].fold_to_3b_opps += 1
             if open_raiser in folded_preflop:
-                accums[open_raiser].fold_to_3b += 1
+                accums[(open_raiser, table_size)].fold_to_3b += 1
 
-            # 4-bet opportunity for the open raiser
-            accums[open_raiser].fourb_opps += 1
+            accums[(open_raiser, table_size)].fourb_opps += 1
 
-        # 4-bet count
         if len(raiser_sequence) >= 3:
-            accums[raiser_sequence[2]].fourb_hands += 1
+            accums[(raiser_sequence[2], table_size)].fourb_hands += 1
 
     # ── Postflop stats ──
 
@@ -211,7 +227,7 @@ def _process_hand(actions: List[Tuple], accums: Dict[str, PlayerAccum]) -> None:
         if round_no > max_round:
             max_round = round_no
 
-        acc = accums[player]
+        acc = accums[(player, table_size)]
         if type_name in ("BET", "RAISE", "ALL_IN"):
             acc.af_bets_raises += 1
         elif type_name == "CALL":
@@ -219,36 +235,35 @@ def _process_hand(actions: List[Tuple], accums: Dict[str, PlayerAccum]) -> None:
         elif type_name == "FOLD":
             folded_postflop.add(player)
 
-    # WTSD: saw flop + didn't fold + hand reached river
     has_river = max_round >= 4
     for player in saw_flop:
-        accums[player].wtsd_opps += 1
+        accums[(player, table_size)].wtsd_opps += 1
         if has_river and player not in folded_postflop:
-            accums[player].wtsd_hands += 1
+            accums[(player, table_size)].wtsd_hands += 1
 
     # ── Chip tracking ──
     for round_no, action_no, player, type_name, sum_chips in actions:
         if type_name not in ("POST_SB", "POST_BB", "ANTE", "FOLD", "CHECK"):
-            accums[player].total_bet_chips += sum_chips
+            accums[(player, table_size)].total_bet_chips += sum_chips
 
 
-def compute_player_stats(conn: sqlite3.Connection) -> Dict[str, PlayerAccum]:
-    """Compute stats for all players from actions_real."""
+def compute_player_stats(conn: sqlite3.Connection) -> Dict[AccumKey, PlayerAccum]:
+    """Compute stats for all players from actions_real, split by table_size."""
     t0 = time.perf_counter()
 
     hands = _load_actions_by_hand(conn)
     logger.info("Loaded %d hands in %.1fs", len(hands), time.perf_counter() - t0)
 
-    accums: Dict[str, PlayerAccum] = {}
+    accums: Dict[AccumKey, PlayerAccum] = {}
     for hand_id, actions in hands.items():
         _process_hand(actions, accums)
 
     elapsed = time.perf_counter() - t0
-    logger.info("Computed stats for %d players in %.1fs", len(accums), elapsed)
+    logger.info("Computed stats for %d player/size combos in %.1fs", len(accums), elapsed)
     return accums
 
 
-def save_player_stats(conn: sqlite3.Connection, accums: Dict[str, PlayerAccum]) -> int:
+def save_player_stats(conn: sqlite3.Connection, accums: Dict[AccumKey, PlayerAccum]) -> int:
     """Save computed stats to player_stats table. Returns rows written."""
     ensure_player_stats_table(conn)
     cur = conn.cursor()
@@ -259,15 +274,15 @@ def save_player_stats(conn: sqlite3.Connection, accums: Dict[str, PlayerAccum]) 
     update_set = ", ".join(f"{c}=excluded.{c}" for c in STAT_COLUMNS)
 
     rows = []
-    for player, acc in accums.items():
+    for (player, table_size), acc in accums.items():
         vals = [getattr(acc, c) for c in STAT_COLUMNS]
-        rows.append((player, *vals))
+        rows.append((player, table_size, *vals))
 
     cur.executemany(
         f"""
-        INSERT INTO player_stats(player, {cols}, updated_at)
-        VALUES (?, {placeholders}, datetime('now'))
-        ON CONFLICT(player) DO UPDATE SET
+        INSERT INTO player_stats(player, table_size, {cols}, updated_at)
+        VALUES (?, ?, {placeholders}, datetime('now'))
+        ON CONFLICT(player, table_size) DO UPDATE SET
             {update_set}, updated_at=datetime('now')
         """,
         rows,
@@ -285,40 +300,70 @@ def refresh_player_stats(db_path: str, verbose: bool = True) -> Dict[str, Any]:
         n = save_player_stats(conn, accums)
         elapsed = time.perf_counter() - t0
 
-        if verbose:
-            print(f"[STATS] Computed stats for {n} players in {elapsed:.1f}s")
+        # Count unique players
+        unique_players = len({k[0] for k in accums})
 
-        return {"ok": True, "players": n, "elapsed_s": round(elapsed, 2)}
+        if verbose:
+            print(f"[STATS] {unique_players} players, {n} rows (by table_size) in {elapsed:.1f}s")
+
+        return {"ok": True, "players": unique_players, "rows": n, "elapsed_s": round(elapsed, 2)}
     finally:
         conn.close()
 
 
-def get_player_stats(db_path: str, player: str) -> Optional[Dict[str, Any]]:
-    """Fetch cached stats for one player."""
+def get_player_stats(
+    db_path: str, player: str, table_size: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    """Fetch cached stats for one player. If table_size is None, returns combined."""
     conn = sqlite3.connect(db_path)
     try:
         ensure_player_stats_table(conn)
         cur = conn.cursor()
-        cur.execute("SELECT * FROM player_stats WHERE player = ?", (player,))
-        row = cur.fetchone()
-        if not row:
-            return None
-        cols = [d[0] for d in cur.description]
-        return dict(zip(cols, row))
+        if table_size is not None:
+            cur.execute(
+                "SELECT * FROM player_stats WHERE player = ? AND table_size = ?",
+                (player, table_size),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            cols = [d[0] for d in cur.description]
+            return dict(zip(cols, row))
+        else:
+            # Combine all table_sizes
+            cur.execute("SELECT * FROM player_stats WHERE player = ?", (player,))
+            rows = cur.fetchall()
+            if not rows:
+                return None
+            cols = [d[0] for d in cur.description]
+            combined = {"player": player, "table_size": 0}
+            for c in STAT_COLUMNS:
+                idx = cols.index(c)
+                combined[c] = sum(row[idx] for row in rows)
+            return combined
     finally:
         conn.close()
 
 
-def get_all_player_stats(db_path: str, min_hands: int = 10) -> List[Dict[str, Any]]:
+def get_all_player_stats(
+    db_path: str, min_hands: int = 10, table_size: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """Fetch cached stats for all players with at least min_hands."""
     conn = sqlite3.connect(db_path)
     try:
         ensure_player_stats_table(conn)
         cur = conn.cursor()
-        cur.execute(
-            "SELECT * FROM player_stats WHERE total_hands >= ? ORDER BY total_hands DESC",
-            (min_hands,),
-        )
+        if table_size is not None:
+            cur.execute(
+                "SELECT * FROM player_stats WHERE total_hands >= ? AND table_size = ? "
+                "ORDER BY total_hands DESC",
+                (min_hands, table_size),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM player_stats WHERE total_hands >= ? ORDER BY total_hands DESC",
+                (min_hands,),
+            )
         cols = [d[0] for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
     finally:
@@ -334,6 +379,9 @@ def format_player_stats(stats: Dict[str, Any]) -> str:
     if total == 0:
         return f"{stats.get('player', '?')}: 0 hands"
 
+    ts = stats.get("table_size", 0)
+    ts_label = {2: "HU", 3: "3H"}.get(ts, "ALL") if ts else "ALL"
+
     def pct(num: int, den: int) -> str:
         if den == 0:
             return "-"
@@ -344,7 +392,7 @@ def format_player_stats(stats: Dict[str, Any]) -> str:
     af = f"{af_br / af_calls:.1f}" if af_calls > 0 else "-"
 
     lines = [
-        f"{stats['player']} ({total} hands)",
+        f"{stats['player']} [{ts_label}] ({total} hands)",
         f"  VPIP:  {pct(stats['vpip_hands'], total)}",
         f"  PFR:   {pct(stats['pfr_hands'], total)}",
         f"  3-Bet: {pct(stats['threeb_hands'], stats['threeb_opps'])}",
