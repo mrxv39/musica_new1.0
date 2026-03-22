@@ -125,7 +125,7 @@ def _find_unique_scope_sheet(conn: sqlite3.Connection, inp: SpotDecisionInput) -
           AND scope_se_min <= ?
           AND scope_se_max > ?
         """,
-        (_pos(inp.spot_key), float(inp.p1_se_bb), float(inp.p1_se_bb)),
+        (_t(inp.spot_key), float(inp.p1_se_bb), float(inp.p1_se_bb)),
     )
     rows = list(cur.fetchall())
     rows = [
@@ -148,13 +148,13 @@ def decide_spot_strategy(conn: sqlite3.Connection, inp: SpotDecisionInput) -> di
       { ok, move, betmin, betmax, spot_strategy_id?, ... }
     """
     sheet = _find_unique_scope_sheet(conn, inp)
-    spot_key = _pos(inp.spot_key)
+    spot_key = _t(inp.spot_key)
     p2_tipo = _tipo(inp.p2_tipo)
     p3_tipo = _tipo(inp.p3_tipo)
     p2_pos = _pos(inp.p2_pos)
     p3_pos = _pos(inp.p3_pos)
 
-    if sheet.strip().lower() == "nash push fold":
+    if sheet.strip().lower() != "hoja1":
         try:
             hc = normalize_hand_class(inp.hand_class)
         except ValueError:

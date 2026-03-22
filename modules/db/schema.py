@@ -38,7 +38,17 @@ CREATE TABLE IF NOT EXISTS spots (
     captured_gamecode TEXT DEFAULT NULL,
 
     frame_ref TEXT DEFAULT '',
-    created_at_ms INTEGER DEFAULT 0
+    created_at_ms INTEGER DEFAULT 0,
+    hand_id INTEGER DEFAULT NULL
+);
+
+-- =========================
+-- Mesa state (live time_active flag per mesa)
+-- =========================
+CREATE TABLE IF NOT EXISTS mesa_state (
+    mesa INTEGER PRIMARY KEY,
+    time_active INTEGER DEFAULT 0,
+    updated_at_ms INTEGER DEFAULT 0
 );
 
 -- =========================
@@ -78,6 +88,23 @@ CREATE TABLE IF NOT EXISTS tournaments (
     startdate TEXT NOT NULL DEFAULT '',
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(room, hero, source_file)
+);
+
+-- =========================
+-- Spot strategies (imported from Excel)
+-- =========================
+-- =========================
+-- Hand links (spot ↔ hand matching)
+-- =========================
+CREATE TABLE IF NOT EXISTS hand_links (
+    link_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    obs_id INTEGER NOT NULL,
+    spot_id INTEGER NOT NULL,
+    gamecode TEXT NOT NULL DEFAULT '',
+    match_score REAL DEFAULT 0,
+    match_method TEXT DEFAULT '',
+    created_at_ms INTEGER DEFAULT 0,
+    UNIQUE(obs_id)
 );
 
 -- =========================
@@ -143,5 +170,106 @@ CREATE TABLE IF NOT EXISTS spots_strategies_nash (
     p2stack_max REAL DEFAULT NULL,
     p3stack_min REAL DEFAULT NULL,
     p3stack_max REAL DEFAULT NULL
+);
+
+-- =========================
+-- Workers captures (OCR audit per capture)
+-- =========================
+CREATE TABLE IF NOT EXISTS workers_captures (
+    capture_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mesa INTEGER DEFAULT 0,
+    image_path TEXT DEFAULT '',
+    final_image_path TEXT DEFAULT '',
+    image_fingerprint TEXT NOT NULL,
+    image_size_bytes INTEGER DEFAULT 0,
+    status TEXT DEFAULT '',
+    reason TEXT DEFAULT '',
+
+    ocr_ok INTEGER DEFAULT 0,
+    ocr_json TEXT DEFAULT '',
+    ocr_errors_json TEXT DEFAULT '',
+
+    names_ok INTEGER DEFAULT 0,
+    p2_name TEXT DEFAULT '',
+    p3_name TEXT DEFAULT '',
+    names_errors_json TEXT DEFAULT '',
+    names_json TEXT DEFAULT '',
+
+    villano_ok INTEGER DEFAULT 0,
+    villano_p2_name TEXT DEFAULT '',
+    villano_p2_tipo TEXT DEFAULT '',
+    villano_p3_name TEXT DEFAULT '',
+    villano_p3_tipo TEXT DEFAULT '',
+    villano_created_json TEXT DEFAULT '',
+    villano_errors_json TEXT DEFAULT '',
+    villano_json TEXT DEFAULT '',
+
+    stackefectivo_ok INTEGER DEFAULT 0,
+    stackefectivo_value REAL DEFAULT NULL,
+    stackefectivo_raw TEXT DEFAULT '',
+    stackefectivo_method TEXT DEFAULT '',
+    stackefectivo_roi_json TEXT DEFAULT '',
+    stackefectivo_error TEXT DEFAULT '',
+    stackefectivo_json TEXT DEFAULT '',
+
+    bets_ok INTEGER DEFAULT 0,
+    bet_p1 REAL DEFAULT NULL,
+    bet_p2 REAL DEFAULT NULL,
+    bet_p3 REAL DEFAULT NULL,
+    bet_raw_p1 TEXT DEFAULT '',
+    bet_raw_p2 TEXT DEFAULT '',
+    bet_raw_p3 TEXT DEFAULT '',
+    bet_method_p1 TEXT DEFAULT '',
+    bet_method_p2 TEXT DEFAULT '',
+    bet_method_p3 TEXT DEFAULT '',
+    bets_errors_json TEXT DEFAULT '',
+    bets_json TEXT DEFAULT '',
+
+    stacks_ok INTEGER DEFAULT 0,
+    stack_p1 REAL DEFAULT NULL,
+    stack_p2 REAL DEFAULT NULL,
+    stack_p3 REAL DEFAULT NULL,
+    stack_raw_p1 TEXT DEFAULT '',
+    stack_raw_p2 TEXT DEFAULT '',
+    stack_raw_p3 TEXT DEFAULT '',
+    stack_method_p1 TEXT DEFAULT '',
+    stack_method_p2 TEXT DEFAULT '',
+    stack_method_p3 TEXT DEFAULT '',
+    stacks_errors_json TEXT DEFAULT '',
+    stacks_json TEXT DEFAULT '',
+
+    table_state_ok INTEGER DEFAULT 0,
+    table_players INTEGER DEFAULT 0,
+    table_is_hu INTEGER DEFAULT 0,
+    table_is_3h INTEGER DEFAULT 0,
+    table_active_seats_json TEXT DEFAULT '',
+    table_eliminated_seats_json TEXT DEFAULT '',
+    table_state_method TEXT DEFAULT '',
+    table_state_errors_json TEXT DEFAULT '',
+    table_state_json TEXT DEFAULT '',
+
+    dealer_ok INTEGER DEFAULT 0,
+    dealer_seat INTEGER DEFAULT NULL,
+    dealer_score REAL DEFAULT NULL,
+    dealer_method TEXT DEFAULT '',
+    dealer_errors_json TEXT DEFAULT '',
+    dealer_debug_json TEXT DEFAULT '',
+    dealer_json TEXT DEFAULT '',
+
+    posiciones_ok INTEGER DEFAULT 0,
+    pos_p1 TEXT DEFAULT '',
+    pos_p2 TEXT DEFAULT '',
+    pos_p3 TEXT DEFAULT '',
+    pos_btn_seat INTEGER DEFAULT NULL,
+    pos_sb_seat INTEGER DEFAULT NULL,
+    pos_bb_seat INTEGER DEFAULT NULL,
+    pos_dealer_seat INTEGER DEFAULT NULL,
+    pos_method TEXT DEFAULT '',
+    pos_errors_json TEXT DEFAULT '',
+    pos_debug_json TEXT DEFAULT '',
+    posiciones_json TEXT DEFAULT '',
+
+    created_at_ms INTEGER DEFAULT 0,
+    updated_at_ms INTEGER DEFAULT 0
 );
 """

@@ -14,6 +14,132 @@ def _as_float(v: Any, default: float = 0.0) -> float:
         return default
 
 
+def _build_spot_key(
+    hero_pos: str,
+    p2_pos: str,
+    p3_pos: str,
+    bets: Dict[str, Any],
+    table_state: Dict[str, Any],
+    stacks: Optional[Dict[str, Any]] = None,
+) -> str:
+    """
+    Build the spot_key that matches the Excel strategy scopes.
+
+    Rules:
+    - BTN: hero is BTN, first to act
+    - SBvsBB: hero is SB, only BB left (HU or 3-handed no prior action)
+    - SBvsBTN L/MR: hero is SB, BTN acted (limp=1bb, minraise=2bb)
+    - BBvsSB L/MR: hero is BB, SB acted (limp=1bb, minraise=2bb)
+    - BBvsSB OS: hero is BB, SB went all-in (stack=0, bet>0)
+    - BBvsBTN L/MR: hero is BB, BTN acted (limp=1bb, minraise=2bb)
+    - SQZ: hero faces a raise and a call (squeeze spot)
+    """
+    h = hero_pos.upper().strip()
+    is_hu = bool(table_state.get("is_hu", False)) if isinstance(table_state, dict) else False
+    stacks = stacks or {}
+
+    p2_bet = _as_float(bets.get("p2", 0), 0)
+    p3_bet = _as_float(bets.get("p3", 0), 0)
+    p2_stack = _as_float(stacks.get("p2", None), None)
+    p3_stack = _as_float(stacks.get("p3", None), None)
+
+    if h == "BTN":
+        return "BTN"
+
+    if h == "SB":
+        if is_hu:
+            return "SBvsBB"
+        # 3H: check if BTN acted before us
+        btn_bet = 0.0
+        if p2_pos.upper().strip() == "BTN":
+            btn_bet = p2_bet
+        elif p3_pos.upper().strip() == "BTN":
+            btn_bet = p3_bet
+        if btn_bet >= 2:
+            return "SBvsBTN MR"
+        if btn_bet >= 1:
+            return "SBvsBTN L"
+        return "SBvsBB"
+
+    if h == "BB":
+        # Collect info for each villain by position
+        villains = {}
+        for seat_pos, seat_bet, seat_stack in [
+            (p2_pos.upper().strip(), p2_bet, p2_stack),
+            (p3_pos.upper().strip(), p3_bet, p3_stack),
+        ]:
+            if seat_pos in ("SB", "BTN"):
+                villains[seat_pos] = {"bet": seat_bet, "stack": seat_stack}
+
+        sb = villains.get("SB", {})
+        btn = villains.get("BTN", {})
+
+        # SB all-in: stack=0 and bet>0 (works in HU and 3H where BTN folded)
+        sb_stack = sb.get("stack")
+        sb_bet = sb.get("bet", 0)
+        if sb_stack is not None and sb_stack == 0 and sb_bet > 0:
+            return "BBvsSB OS"
+
+        # Determine who acted (the villain with the highest bet, excluding folded BTN)
+        btn_bet = btn.get("bet", 0)
+        if sb_bet > 0 and sb_bet >= btn_bet:
+            return "BBvsSB MR" if sb_bet >= 2 else "BBvsSB_LIMP"
+        if btn_bet > 0:
+            return "BBvsBTN MR" if btn_bet >= 2 else "BBvsBTN L"
+        # Fallback: SB limped
+        if "SB" in villains:
+            return "BBvsSB_LIMP"
+        return "BBvsBTN L"
+
+    return h
+
+
+def _normalize_hu_positions(
+    p2_pos: str, p3_pos: str,
+    bets_fixed: Dict[str, Any],
+    p2_tipo: str, p3_tipo: str,
+    ocr_stacks: Dict[str, Any],
+    table_state: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    In HU, the active villain can be in p2 or p3 depending on who got eliminated.
+    The Excel strategies always expect the villain in p2 position.
+    This function swaps p2↔p3 if needed so the villain lands in p2.
+    """
+    is_hu = bool(table_state.get("is_hu", False)) if isinstance(table_state, dict) else False
+    if not is_hu:
+        return {
+            "p2_pos": p2_pos, "p3_pos": p3_pos,
+            "p2_tipo": p2_tipo, "p3_tipo": p3_tipo,
+            "p1_bet": bets_fixed["p1_used"], "p2_bet": bets_fixed["p2_used"], "p3_bet": bets_fixed["p3_used"],
+            "p2_stack": _as_float(ocr_stacks.get("p2", 0), 0),
+            "p3_stack": _as_float(ocr_stacks.get("p3", 0), 0),
+        }
+
+    # HU: find which seat has the active villain
+    p2_active = bool(p2_pos.strip())
+    p3_active = bool(p3_pos.strip())
+
+    if p3_active and not p2_active:
+        # Villain is in p3 — swap to p2. In HU, p3_tipo inherits p2_tipo for scope matching.
+        return {
+            "p2_pos": p3_pos, "p3_pos": "",
+            "p2_tipo": p3_tipo, "p3_tipo": p3_tipo,
+            "p1_bet": bets_fixed["p1_used"], "p2_bet": bets_fixed["p3_used"], "p3_bet": 0.0,
+            "p2_stack": _as_float(ocr_stacks.get("p3", 0), 0),
+            "p3_stack": 0.0,
+        }
+
+    # p2 is already the villain or both empty — no swap needed
+    return {
+        "p2_pos": p2_pos, "p3_pos": p3_pos,
+        "p2_tipo": p2_tipo, "p3_tipo": p3_tipo,
+        "p1_bet": bets_fixed["p1_used"], "p2_bet": bets_fixed["p2_used"], "p3_bet": bets_fixed["p3_used"],
+        "p2_stack": _as_float(ocr_stacks.get("p2", 0), 0),
+        "p3_stack": _as_float(ocr_stacks.get("p3", 0), 0),
+    }
+
+
 def _fix_bets_for_matching(hero_pos: str, bets_result: Any) -> Dict[str, Any]:
     """
     OCR de bets a veces confunde el bet del hero en BTN (aún sin actuar) con el pot/otra cifra y devuelve ~3.
@@ -89,15 +215,11 @@ def compute_strategy(
         p1_bet = _as_float(bets_result.get("p1", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0
         p2_bet = _as_float(bets_result.get("p2", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0
         p3_bet = _as_float(bets_result.get("p3", 0.0), 0.0) if isinstance(bets_result, dict) else 0.0
-        bb_inferred = max(p1_bet, p2_bet, p3_bet)
-        if bb_inferred <= 0.0:
-            bb_inferred = 1.0
-
+        # Stacks and bets from OCR are already in BB units — no division needed.
         se_derived = compute_effective_stack_bb(
             posiciones=pos if isinstance(pos, dict) else {},
             stacks=ocr_stacks if isinstance(ocr_stacks, dict) else {},
             bets=bets_result if isinstance(bets_result, dict) else {},
-            bb=bb_inferred,
         )
         se_derived_valid = in_range(se_derived)
 
@@ -116,38 +238,47 @@ def compute_strategy(
 
             bets_fixed = _fix_bets_for_matching(hero_pos=hero_pos, bets_result=bets_result)
 
-            p2_tipo = "unknown"
-            p3_tipo = "unknown"
-            if isinstance(villano_result, dict) and bool(villano_result.get("ok", False)):
-                p2 = villano_result.get("p2", {}) if isinstance(villano_result.get("p2"), dict) else {}
-                p3 = villano_result.get("p3", {}) if isinstance(villano_result.get("p3"), dict) else {}
-                # Normalize to match DB conventions (strategies use e.g. FISH/REG).
-                p2_tipo = str(p2.get("tipo", "unknown") or "unknown").strip().upper() or "UNKNOWN"
-                p3_tipo = str(p3.get("tipo", "unknown") or "unknown").strip().upper() or "UNKNOWN"
+            table_state = ocr.get("table_state", {}) if isinstance(ocr, dict) else {}
+            spot_key = _build_spot_key(hero_pos, p2_pos, p3_pos, bets_result, table_state, ocr_stacks)
 
-            # Strategy situation key is stored in spots.name, convention:
-            #   "{HERO}_vs_{P2POS}_{P3POS}_{P2TIPO}_{P3TIPO}"
-            situacion = f"{hero_pos}_vs_{p2_pos}_{p3_pos}_{p2_tipo}_{p3_tipo}"
+            p2_tipo_raw = "unknown"
+            p3_tipo_raw = "unknown"
+            if isinstance(villano_result, dict) and bool(villano_result.get("ok", False)):
+                p2v = villano_result.get("p2", {}) if isinstance(villano_result.get("p2"), dict) else {}
+                p3v = villano_result.get("p3", {}) if isinstance(villano_result.get("p3"), dict) else {}
+                p2_tipo_raw = str(p2v.get("tipo", "unknown") or "unknown").strip().upper() or "UNKNOWN"
+                p3_tipo_raw = str(p3v.get("tipo", "unknown") or "unknown").strip().upper() or "UNKNOWN"
+
+            # Normalize HU: swap p3→p2 if villain is in p3 and p2 is eliminated
+            norm = _normalize_hu_positions(
+                p2_pos, p3_pos, bets_fixed, p2_tipo_raw, p3_tipo_raw, ocr_stacks, table_state,
+            )
+            p2_pos_n = norm["p2_pos"]
+            p3_pos_n = norm["p3_pos"]
+            p2_tipo = norm["p2_tipo"]
+            p3_tipo = norm["p3_tipo"]
+
+            situacion = f"{hero_pos}_vs_{p2_pos_n}_{p3_pos_n}_{p2_tipo}_{p3_tipo}"
 
             hand_class = str(mano_result.get("hand_class", "") or "") if isinstance(mano_result, dict) else ""
             # Compat: legacy tests can inject MatchInput/select_move to bypass DB engine.
             if (MatchInput is not None) and (select_move is not None):
                 inp = MatchInput(
                     situacion=situacion,
-                    spot=hero_pos,
+                    spot=spot_key,
                     hero_pos=hero_pos,
                     hand_class=hand_class,
-                    p1_bet_bb=float(bets_fixed["p1_used"]),
+                    p1_bet_bb=float(norm["p1_bet"]),
                     p1_stack_bb=float(ocr_stacks.get("p1", 0) or 0),
                     p1_se_bb=float(se_used),
-                    p2_pos=p2_pos,
+                    p2_pos=p2_pos_n,
                     p2_tipo=p2_tipo,
-                    p2_bet_bb=float(bets_fixed["p2_used"]),
-                    p2_stack_bb=float(ocr_stacks.get("p2", 0) or 0),
-                    p3_pos=p3_pos,
+                    p2_bet_bb=float(norm["p2_bet"]),
+                    p2_stack_bb=float(norm["p2_stack"]),
+                    p3_pos=p3_pos_n,
                     p3_tipo=p3_tipo,
-                    p3_bet_bb=float(bets_fixed["p3_used"]),
-                    p3_stack_bb=float(ocr_stacks.get("p3", 0) or 0),
+                    p3_bet_bb=float(norm["p3_bet"]),
+                    p3_stack_bb=float(norm["p3_stack"]),
                 )
                 decision = select_move(inp)
             else:
@@ -158,12 +289,12 @@ def compute_strategy(
                     decision = decide_spot_strategy(
                         conn,
                         SpotDecisionInput(
-                            spot_key=hero_pos,
+                            spot_key=spot_key,
                             hand_class=hand_class,
                             p1_se_bb=float(se_used),
-                            p1_bet_bb=float(bets_fixed["p1_used"]),
-                            p2_pos=p2_pos,
-                            p3_pos=p3_pos,
+                            p1_bet_bb=float(norm["p1_bet"]),
+                            p2_pos=p2_pos_n,
+                            p3_pos=p3_pos_n,
                             p2_tipo=p2_tipo,
                             p3_tipo=p3_tipo,
                         ),

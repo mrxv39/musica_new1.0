@@ -91,21 +91,21 @@ def link_obs_to_game(
     match_score: float = 0.0,
     match_method: str = "",
 ) -> Optional[int]:
+    """Link a spot to a hand by setting spots.hand_id from gamecode lookup."""
     if not obs_id or not gamecode:
         return None
 
     init_db()
     with connect() as conn:
         cur = conn.cursor()
+        cur.execute("SELECT id FROM hands WHERE gamecode = ? LIMIT 1", (gamecode,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        hand_id = int(row["id"])
         cur.execute(
-            '''
-            INSERT OR IGNORE INTO hand_links
-            (spot_id, gamecode, match_score, match_method, created_at_ms)
-            VALUES (?, ?, ?, ?, ?)
-            ''',
-            (int(obs_id), gamecode, float(match_score), match_method or "", now_ms()),
+            "UPDATE spots SET hand_id = ? WHERE obs_id = ?",
+            (hand_id, int(obs_id)),
         )
         conn.commit()
-        cur.execute("SELECT link_id FROM hand_links WHERE spot_id = ?", (int(obs_id),))
-        row = cur.fetchone()
-        return int(row["link_id"]) if row else None
+        return hand_id

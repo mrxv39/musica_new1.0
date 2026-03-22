@@ -20,16 +20,9 @@ def test_collect_and_delete_rows_only_for_requested_folder(temp_db_path):
             """,
             (folder + r"\a.png", other_folder + r"\b.png"),
         )
-        target_spot_id = conn.execute("SELECT spot_id FROM spots WHERE fingerprint='fp_target'").fetchone()[0]
-        other_spot_id = conn.execute("SELECT spot_id FROM spots WHERE fingerprint='fp_other'").fetchone()[0]
+        target_spot_id = conn.execute("SELECT obs_id FROM spots WHERE fingerprint='fp_target'").fetchone()[0]
+        other_spot_id = conn.execute("SELECT obs_id FROM spots WHERE fingerprint='fp_other'").fetchone()[0]
 
-        conn.execute(
-            """
-            INSERT INTO hand_links (spot_id, gamecode, match_score, match_method, created_at_ms)
-            VALUES (?, 'gc_target', 1.0, 'test', 1), (?, 'gc_other', 1.0, 'test', 1)
-            """,
-            (target_spot_id, other_spot_id),
-        )
         conn.execute(
             """
             INSERT INTO workers_captures
@@ -44,23 +37,13 @@ def test_collect_and_delete_rows_only_for_requested_folder(temp_db_path):
 
         rows = _collect_rows_for_folder(conn, folder)
         assert rows.obs_ids == [target_spot_id]
-        assert len(rows.link_ids) == 1
         assert len(rows.capture_ids) == 1
 
         deleted = _delete_rows_for_folder(conn, rows)
         conn.commit()
 
-        assert deleted == {
-            "deleted_obs": 1,
-            "deleted_links": 1,
-            "deleted_workers_captures": 1,
-        }
-
-        remaining_obs = conn.execute("SELECT fingerprint FROM spots ORDER BY spot_id").fetchall()
+        remaining_obs = conn.execute("SELECT fingerprint FROM spots ORDER BY obs_id").fetchall()
         assert [row["fingerprint"] for row in remaining_obs] == ["fp_other"]
-
-        remaining_links = conn.execute("SELECT spot_id FROM hand_links").fetchall()
-        assert [row["spot_id"] for row in remaining_links] == [other_spot_id]
 
         remaining_caps = conn.execute("SELECT image_fingerprint FROM workers_captures").fetchall()
         assert [row["image_fingerprint"] for row in remaining_caps] == ["cap_other"]

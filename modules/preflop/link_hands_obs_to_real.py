@@ -333,7 +333,7 @@ def link_hands_obs_to_real(
         obs_rows = cur.execute(obs_sql, obs_params).fetchall()
 
         real_rows = cur.execute(
-            "SELECT id, gamecode, hero_cards, startdate, hero, bb, players_json FROM hands_real ORDER BY startdate ASC"
+            "SELECT id, gamecode, hero_cards, startdate, hero, bb, players_json FROM hands ORDER BY startdate ASC"
         ).fetchall()
 
         real_prepared = []
@@ -516,14 +516,27 @@ def link_hands_obs_to_real(
                     )
 
         if not report and links:
-            cur.executemany(
-                """
-                INSERT OR REPLACE INTO hand_links
-                (obs_id, gamecode, match_score, match_method, created_at_ms)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                links,
-            )
+            # links tuples: (obs_id, gamecode, score, method, ts)
+            # Build gamecode→hand_id map for UPDATE spots SET hand_id
+            gamecodes = list({gc for _, gc, *_ in links})
+            placeholders = ",".join("?" for _ in gamecodes)
+            hand_map = {}
+            for row in cur.execute(
+                f"SELECT id, gamecode FROM hands WHERE gamecode IN ({placeholders})",
+                gamecodes,
+            ).fetchall():
+                hand_map[row["gamecode"]] = row["id"]
+
+            updates = [
+                (hand_map[gc], obs_id)
+                for obs_id, gc, *_ in links
+                if gc in hand_map
+            ]
+            if updates:
+                cur.executemany(
+                    "UPDATE spots SET hand_id = ? WHERE obs_id = ?",
+                    updates,
+                )
             con.commit()
 
         return {

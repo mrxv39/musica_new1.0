@@ -254,12 +254,8 @@
       const p3tipoEl = document.getElementById("p3tipo-" + mesa);
       if (!moveEl || !betEl || !handEl || !seEl) return;
 
-      const ready = !!row && !!row.strategy_ready;
-
-      // Only show tipo pills if the spot is recent (last 15 seconds)
-      const STALE_MS = 15000;
-      const detectedAt = row ? Number(row.last_detected_at_ms || 0) : 0;
-      const isRecent = detectedAt > 0 && (Date.now() - detectedAt) < STALE_MS;
+      // Show pills only while time is active (worker detected time countdown on this mesa)
+      const isRecent = !!row && !!row.time_active;
 
       if (row && isRecent) {
         const now = Date.now();
@@ -292,6 +288,8 @@
         if (p2tipoEl) p2tipoEl.className = "pill pill-tipo hidden";
         if (p3tipoEl) p3tipoEl.className = "pill pill-tipo hidden";
       }
+
+      const ready = !!row && !!row.strategy_ready && isRecent;
 
       if (!ready) {
         moveEl.className = "pill pill-move hidden"; moveEl.textContent = "";

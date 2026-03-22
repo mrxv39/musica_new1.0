@@ -103,11 +103,11 @@ pub fn get_hand_obs_image(db_path: String, gamecode: String) -> Result<Option<St
     let mut stmt = conn.prepare(
         "
         SELECT
-            NULLIF(h.frame_ref, '') AS img_path
-        FROM hand_links l
-        JOIN spots h
-          ON h.spot_id = l.spot_id
-        WHERE l.gamecode = ?
+            NULLIF(s.frame_ref, '') AS img_path
+        FROM hands h
+        JOIN spots s
+          ON s.hand_id = h.id
+        WHERE h.gamecode = ?
         LIMIT 1
         "
     ).map_err(|e| e.to_string())?;
@@ -130,6 +130,7 @@ pub struct MesaOverlayState {
     pub preflop_ok: bool,
     pub frame_ref: Option<String>,
     pub strategy_ready: bool,
+    pub time_active: bool,
     pub hand_class: Option<String>,
     pub move_: Option<String>,
     pub betmin: Option<f64>,
@@ -147,8 +148,21 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
 
     let mut out: Vec<MesaOverlayState> = Vec::new();
 
+    // Read time_active state for all mesas
+    let mut time_active_map = std::collections::HashMap::new();
+    if let Ok(mut stmt) = con.prepare("SELECT mesa, time_active FROM mesa_state") {
+        if let Ok(mut rows) = stmt.query([]) {
+            while let Ok(Some(row)) = rows.next() {
+                let m: i64 = row.get(0).unwrap_or(0);
+                let ta: i64 = row.get(1).unwrap_or(0);
+                time_active_map.insert(m, ta == 1);
+            }
+        }
+    }
+
     for mesa in 1..=4 {
         let table_id = format!("mesa_{}", mesa);
+        let time_active = *time_active_map.get(&mesa).unwrap_or(&false);
 
         let mut stmt = con.prepare(
             "
@@ -194,6 +208,7 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
                 preflop_ok: ok == 1,
                 frame_ref: frame,
                 strategy_ready,
+                time_active,
                 hand_class,
                 move_: strategy_move,
                 betmin: strategy_betmin,
@@ -211,6 +226,7 @@ pub fn get_mesas_overlay_state(db_path: String) -> Result<Vec<MesaOverlayState>,
                 preflop_ok: false,
                 frame_ref: None,
                 strategy_ready: false,
+                time_active,
                 hand_class: None,
                 move_: None,
                 betmin: None,
@@ -266,6 +282,82 @@ print(out_path)
 
         let out = run_python_with_env(&["-c", py, &mesa_s], None)?;
         Ok(out.trim().to_string())
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking error: {e}"))?
+}
+
+#[derive(serde::Deserialize)]
+pub struct BugReportRequest {
+    pub mesas: Vec<i64>,
+    pub note: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct BugReportResult {
+    pub dir: String,
+    pub images: Vec<String>,
+    pub note_path: String,
+}
+
+#[tauri::command]
+pub async fn capture_bug_report(req: BugReportRequest) -> Result<BugReportResult, String> {
+    let mesas_json = serde_json::to_string(&req.mesas).map_err(|e| e.to_string())?;
+    let note = req.note.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let py = r#"
+import os, sys, json
+from datetime import datetime
+from modules.preflop.workers_loop.config import AREAS
+from modules.preflop.workers_loop.capture import capture_bbox_to_path
+
+mesas = json.loads(sys.argv[1])
+note = sys.argv[2] if len(sys.argv) > 2 else ""
+
+root = os.path.abspath(".")
+ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+out_dir = os.path.join(root, "data", "bug_reports", ts)
+os.makedirs(out_dir, exist_ok=True)
+
+images = []
+for mesa in mesas:
+    area = None
+    for a in AREAS:
+        if int(a["mesa"]) == mesa:
+            area = a
+            break
+    if area is None:
+        continue
+    bbox = (int(area["x1"]), int(area["y1"]), int(area["x2"]), int(area["y2"]))
+    out_path = os.path.join(out_dir, f"mesa_{mesa}.bmp")
+    capture_bbox_to_path(bbox, out_path)
+    images.append(out_path)
+
+note_path = os.path.join(out_dir, 'note.md')
+hdr = chr(35) + ' Bug Report ' + ts
+with open(note_path, 'w', encoding='utf-8') as f:
+    f.write(hdr + '\n\n')
+    f.write('**Mesas capturadas:** ' + str(mesas) + '\n\n')
+    if note.strip():
+        f.write(chr(35)*2 + ' Nota\n\n' + note + '\n')
+
+result = json.dumps(dict(dir=out_dir, images=images, note_path=note_path))
+print(result)
+"#;
+
+        let out = run_python_with_env(&["-c", py, &mesas_json, &note], None)?;
+        let parsed: serde_json::Value = serde_json::from_str(out.trim())
+            .map_err(|e| format!("json parse error: {e}\nraw: {out}"))?;
+
+        Ok(BugReportResult {
+            dir: parsed["dir"].as_str().unwrap_or("").to_string(),
+            images: parsed["images"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default(),
+            note_path: parsed["note_path"].as_str().unwrap_or("").to_string(),
+        })
     })
     .await
     .map_err(|e| format!("spawn_blocking error: {e}"))?

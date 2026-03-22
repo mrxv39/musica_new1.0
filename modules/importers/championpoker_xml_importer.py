@@ -347,22 +347,27 @@ def parse_one_xml_file(
         for rnd in game.findall("round"):
             round_no = int(rnd.attrib.get("no", "-1") or -1)
 
-            cards_txt = _txt(rnd.find("cards"))
             # In your files:
-            # - round 1 cards = hero hole cards (sometimes "X X" depending on export)
+            # - round 1 cards = pocket cards per player (pick hero's)
             # - round 2 cards = flop
             # - round 3 cards = turn
             # - round 4 cards = river
-            if round_no == 1 and cards_txt:
-                # only take it if it's not unknown placeholder
-                if not _is_unknown_cards(cards_txt):
-                    hero_cards = cards_txt
-            elif round_no == 2 and cards_txt:
-                flop = cards_txt
-            elif round_no == 3 and cards_txt:
-                turn = cards_txt
-            elif round_no == 4 and cards_txt:
-                river = cards_txt
+            if round_no == 1:
+                # Find hero's pocket cards specifically
+                for cards_el in rnd.findall("cards"):
+                    player = (cards_el.get("player") or "").strip()
+                    txt = _txt(cards_el)
+                    if player == hero and txt and not _is_unknown_cards(txt):
+                        hero_cards = txt
+                        break
+            else:
+                cards_txt = _txt(rnd.find("cards"))
+                if round_no == 2 and cards_txt:
+                    flop = cards_txt
+                elif round_no == 3 and cards_txt:
+                    turn = cards_txt
+                elif round_no == 4 and cards_txt:
+                    river = cards_txt
 
             for act in rnd.findall("action"):
                 a_no = int(act.attrib.get("no", "-1") or -1)

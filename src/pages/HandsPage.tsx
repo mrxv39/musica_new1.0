@@ -1,6 +1,7 @@
 // C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\HandsPage.tsx
 import React from "react";
 import HandsToolbar from "./hands/HandsToolbar";
+import BugReportBar from "../components/BugReportBar";
 import {
   TournamentsTable,
   HandsTableBlock,
@@ -65,6 +66,9 @@ export default function HandsPage() {
           {hp.workersRunning ? "Stop workers" : "Run workers (loop, 4 instances)"}
         </button>
       </div>
+
+      <div style={{ height: 8 }} />
+      <BugReportBar />
 
       <div style={{ height: 10 }} />
 

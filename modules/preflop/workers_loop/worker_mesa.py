@@ -33,6 +33,22 @@ from ..fingerprinting import spot_fingerprint
 
 RECENT_CAPTURE_WINDOW_MS = int(os.environ.get("POKER_BOSS_CAPTURE_DEDUPE_WINDOW_MS", "15000"))
 
+
+def _update_mesa_time_active(mesa: int, active: bool) -> None:
+    """Update mesa_state.time_active so the overlay knows when to hide pills."""
+    from modules.db.conn import connect
+    now_ms = int(time.time() * 1000)
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO mesa_state (mesa, time_active, updated_at_ms)
+            VALUES (?, ?, ?)
+            ON CONFLICT(mesa) DO UPDATE SET time_active = excluded.time_active, updated_at_ms = excluded.updated_at_ms
+            """,
+            (int(mesa), 1 if active else 0, now_ms),
+        )
+        conn.commit()
+
 # Cache en memoria por mesa para cortar frames idénticos antes del pipeline pesado.
 _LAST_CAPTURE_FP_BY_MESA: Dict[int, Optional[str]] = {}
 
@@ -142,11 +158,21 @@ def run_worker_mesa_once(
             profile_times["time_gate"] = time.perf_counter() - t_time_gate0
         if not bool(time_gate.get("time_ok")):
             _safe_remove(img_path)
+            # Mark mesa as time_active=0 so overlay hides strategy pills
+            try:
+                _update_mesa_time_active(mesa, False)
+            except Exception:
+                pass
             if dbg:
                 score = time_gate.get("score", None)
                 reason = time_gate.get("error") or time_gate.get("reason") or "time_false"
                 log(fp, f"[mesa {mesa}] TIME FALSE -> skip | score={score!r} | reason={reason}")
             return
+        # Mark mesa as time_active=1
+        try:
+            _update_mesa_time_active(mesa, True)
+        except Exception:
+            pass
         time_spot_t0 = time.perf_counter()
 
     capture_id: Optional[int] = None

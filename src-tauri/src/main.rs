@@ -112,6 +112,7 @@ fn main() {
             obs::get_mesas_overlay_state,
             obs::capture_single_mesa,
             obs::update_player_tipo,
+            obs::capture_bug_report,
 
             // REAL reset
             reset_real::reset_hands,

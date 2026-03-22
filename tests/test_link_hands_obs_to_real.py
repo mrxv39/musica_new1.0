@@ -6,7 +6,7 @@ from modules.preflop.link_hands_obs_to_real import link_hands_obs_to_real
 def _create_hands_table(conn):
     conn.execute(
         """
-        CREATE TABLE hands (
+        CREATE TABLE IF NOT EXISTS hands (
             id INTEGER PRIMARY KEY,
             gamecode TEXT NOT NULL,
             hero_cards TEXT NOT NULL DEFAULT '',
@@ -88,12 +88,12 @@ def test_link_hands_obs_to_real_links_by_gamecode_ocr(initialized_db, temp_db_pa
     conn = sqlite3.connect(str(temp_db_path))
     try:
         row = conn.execute(
-            "SELECT spot_id, gamecode, match_method FROM hand_links"
+            "SELECT obs_id, hand_id FROM spots WHERE hand_id IS NOT NULL"
         ).fetchone()
     finally:
         conn.close()
 
-    assert row == (obs_id, "GC1", "gamecode_ocr")
+    assert row == (obs_id, 1)
 
 
 def test_link_hands_obs_to_real_links_by_rank_only(initialized_db, temp_db_path):
@@ -113,12 +113,12 @@ def test_link_hands_obs_to_real_links_by_rank_only(initialized_db, temp_db_path)
     conn = sqlite3.connect(str(temp_db_path))
     try:
         row = conn.execute(
-            "SELECT spot_id, gamecode, match_method FROM hand_links"
+            "SELECT obs_id, hand_id FROM spots WHERE hand_id IS NOT NULL"
         ).fetchone()
     finally:
         conn.close()
 
-    assert row == (obs_id, "GC9", "rank_only")
+    assert row == (obs_id, 1)
 
 
 def test_link_hands_obs_to_real_uses_each_gamecode_only_once(initialized_db, temp_db_path):
@@ -138,7 +138,7 @@ def test_link_hands_obs_to_real_uses_each_gamecode_only_once(initialized_db, tem
 
     conn = sqlite3.connect(str(temp_db_path))
     try:
-        count = conn.execute("SELECT COUNT(*) FROM hand_links").fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) FROM spots WHERE hand_id IS NOT NULL").fetchone()[0]
     finally:
         conn.close()
 
@@ -162,7 +162,7 @@ def test_link_hands_obs_to_real_no_match_when_no_candidate(initialized_db, temp_
 
     conn = sqlite3.connect(str(temp_db_path))
     try:
-        count = conn.execute("SELECT COUNT(*) FROM hand_links").fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) FROM spots WHERE hand_id IS NOT NULL").fetchone()[0]
     finally:
         conn.close()
 
@@ -188,12 +188,12 @@ def test_link_hands_obs_to_real_multiple_gamecodes_links_both(initialized_db, te
     conn = sqlite3.connect(str(temp_db_path))
     try:
         rows = conn.execute(
-            "SELECT spot_id, gamecode FROM hand_links ORDER BY spot_id ASC"
+            "SELECT obs_id, hand_id FROM spots WHERE hand_id IS NOT NULL ORDER BY obs_id ASC"
         ).fetchall()
     finally:
         conn.close()
 
-    assert rows == [(obs_id_1, "GC1"), (obs_id_2, "GC2")]
+    assert rows == [(obs_id_1, 1), (obs_id_2, 2)]
 
 
 def test_link_hands_obs_to_real_obs_ids_filter_only_links_requested(initialized_db, temp_db_path):
@@ -215,9 +215,9 @@ def test_link_hands_obs_to_real_obs_ids_filter_only_links_requested(initialized_
     conn = sqlite3.connect(str(temp_db_path))
     try:
         rows = conn.execute(
-            "SELECT spot_id, gamecode FROM hand_links ORDER BY spot_id ASC"
+            "SELECT obs_id, hand_id FROM spots WHERE hand_id IS NOT NULL ORDER BY obs_id ASC"
         ).fetchall()
     finally:
         conn.close()
 
-    assert rows == [(obs_id_1, "GC1")]
+    assert rows == [(obs_id_1, 1)]

@@ -16,7 +16,7 @@ describe("fetchLatestHandsObs SQL contract", () => {
     vi.clearAllMocks();
   });
 
-  it("keeps the hand_links join and linked_gamecode alias in the query", async () => {
+  it("joins hands directly via hand_id and exposes linked_gamecode alias", async () => {
     const { fetchLatestHandsObs } = await import("../db");
 
     await fetchLatestHandsObs("C:\\fake\\obs.db", 50);
@@ -25,9 +25,9 @@ describe("fetchLatestHandsObs SQL contract", () => {
     expect(selectMock).toHaveBeenCalledTimes(1);
 
     const [sql, params] = selectMock.mock.calls[0];
-    expect(String(sql)).toContain("hand_links");
     expect(String(sql)).toContain("linked_gamecode");
-    expect(String(sql)).toContain("LEFT JOIN");
+    expect(String(sql)).toContain("LEFT JOIN hands");
+    expect(String(sql)).toContain("hand_id");
     expect(params).toEqual([50]);
   });
 });

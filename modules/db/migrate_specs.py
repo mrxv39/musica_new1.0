@@ -7,6 +7,7 @@ SPOTS_COLUMNS = [
     ("captured_gamecode", "TEXT DEFAULT NULL"),
     ("frame_ref", "TEXT DEFAULT ''"),
     ("review_status", "TEXT DEFAULT NULL"),
+    ("hand_id", "INTEGER DEFAULT NULL"),
 ]
 
 INDEX_SQLS = [

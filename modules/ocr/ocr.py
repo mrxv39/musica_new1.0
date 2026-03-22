@@ -109,7 +109,7 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
             out["errors"].append(f"villano:{e}")
         try:
             t0 = time.perf_counter()
-            out["table_state"] = table_state.compute_table_state(out.get("names"), out.get("stacks"))
+            out["table_state"] = table_state.compute_table_state(out.get("names"), out.get("stacks"), out.get("bets"))
             timings["ocr_table_state"] = time.perf_counter() - t0
         except Exception as e:
             out["errors"].append(f"table_state:{e}")
@@ -124,8 +124,13 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         except Exception as e:
             out["errors"].append(f"dealer:{e}")
             out["dealer"] = {"ok": False, "errors": [str(e)]}
-        # gamecode OCR desactivado temporalmente: dejamos valor neutro.
-        out["gamecode"] = {"ok": False, "skipped": "gamecode_disabled"}
+        try:
+            t0 = time.perf_counter()
+            out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1)
+            timings["ocr_gamecode"] = time.perf_counter() - t0
+        except Exception as e:
+            out["errors"].append(f"gamecode:{e}")
+            out["gamecode"] = {"ok": False, "errors": [str(e)]}
     else:
         # Parallel path (POKER_BOSS_WORKER_SEQUENTIAL=0 and POKER_BOSS_OCR_SEQUENTIAL=0): thread pools.
         def _run_bets():
@@ -181,7 +186,7 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
             out["errors"].append(f"villano:{e}")
 
         try:
-            out["table_state"] = table_state.compute_table_state(out.get("names"), out.get("stacks"))
+            out["table_state"] = table_state.compute_table_state(out.get("names"), out.get("stacks"), out.get("bets"))
         except Exception as e:
             out["errors"].append(f"table_state:{e}")
             out["table_state"] = {"ok": False, "errors": [str(e)]}
@@ -208,8 +213,13 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
                 out["errors"].append(f"parallel_dealer_future_error:{e}")
                 out["dealer"] = {"ok": False, "errors": [str(e)]}
 
-        # gamecode OCR desactivado temporalmente: dejamos valor neutro.
-        out["gamecode"] = {"ok": False, "skipped": "gamecode_disabled"}
+        try:
+            t0 = time.perf_counter()
+            out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1)
+            timings["ocr_gamecode"] = time.perf_counter() - t0
+        except Exception as e:
+            out["errors"].append(f"gamecode:{e}")
+            out["gamecode"] = {"ok": False, "errors": [str(e)]}
 
     # Posiciones (depends on table_state, bets, dealer)
     try:

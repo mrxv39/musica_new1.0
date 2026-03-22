@@ -71,7 +71,7 @@ describe("fetchLatestHandsReal spot_links contract", () => {
     expect(String(baseSql)).toContain("LEFT JOIN tournaments t");
     expect(String(baseSql)).toContain("t.tournamentname AS tournament_name");
     expect(String(baseSql)).toContain("t.tournamentcode AS tournament_code");
-    expect(String(baseSql)).toContain("LEFT JOIN hand_links l");
+    expect(String(baseSql)).toContain("LEFT JOIN spots s");
     expect(baseParams).toEqual([25]);
 
     const [spotSql, spotParams] = selectMock.mock.calls[1];

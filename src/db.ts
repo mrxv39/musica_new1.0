@@ -274,10 +274,10 @@ export async function fetchLatestHandsObs(
   const rows = await (db as any).select(
     `SELECT
        ho.*,
-       l.gamecode AS linked_gamecode
+       h.gamecode AS linked_gamecode
      FROM spots ho
-     LEFT JOIN hand_links l
-       ON l.obs_id = ho.obs_id
+     LEFT JOIN hands h
+       ON h.id = ho.hand_id
      ${where}
      ORDER BY detected_at_ms DESC
      LIMIT ?1`,
@@ -457,34 +457,15 @@ export async function fetchLatestHandsReal(dbPath: string, limit = 200): Promise
        hr.*,
        t.tournamentname AS tournament_name,
        t.tournamentcode AS tournament_code,
-       l.obs_id AS linked_obs_id,
-       l.match_score AS ocr_match_score,
-       l.match_method AS ocr_match_method,
-       h.mano_raw AS ocr_mano_raw,
-       h.frame_ref AS ocr_frame_ref,
-       h.ocr_json AS linked_ocr_json,
-       wc.status AS wc_status,
-       wc.reason AS wc_reason,
-       wc.ocr_errors_json AS ocr_errors_json,
-       wc.stacks_ok AS stacks_ok,
-       wc.stacks_errors_json AS stacks_errors_json,
-       wc.bets_ok AS bets_ok,
-       wc.bets_errors_json AS bets_errors_json,
-       wc.posiciones_ok AS posiciones_ok,
-       wc.pos_errors_json AS pos_errors_json,
-       wc.dealer_ok AS dealer_ok,
-       wc.dealer_errors_json AS dealer_errors_json,
-       wc.table_state_ok AS table_state_ok,
-       wc.table_state_errors_json AS table_state_errors_json
+       s.obs_id AS linked_obs_id,
+       s.mano_raw AS ocr_mano_raw,
+       s.frame_ref AS ocr_frame_ref,
+       s.ocr_json AS linked_ocr_json
      FROM hands hr
      LEFT JOIN tournaments t
        ON t.id = hr.tournament_id
-     LEFT JOIN hand_links l
-       ON l.gamecode = hr.gamecode
-     LEFT JOIN spots h
-       ON h.obs_id = l.obs_id
-     LEFT JOIN workers_captures wc
-       ON wc.final_image_path = h.frame_ref
+     LEFT JOIN spots s
+       ON s.hand_id = hr.id
      ORDER BY hr.startdate DESC, hr.id DESC
      LIMIT ?1`,
     [limit]
