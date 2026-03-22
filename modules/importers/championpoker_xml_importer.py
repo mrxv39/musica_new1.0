@@ -279,12 +279,29 @@ def _round_to_street(round_no: int) -> str:
 
 def _parse_tournament(xml_path: str, *, room: str, hero: str, tournament_path: str = "") -> ImportedTournament:
     root = ET.parse(xml_path).getroot()
-    general = root.find("game/general")
+    # Tournament-level data lives in <session><general> in real Champion Poker XMLs,
+    # but test fixtures may have it inside <game><general>.
+    # Try root-level first, fall back to game/general.
+    general = root.find("general")
+    general_game = root.find("game/general")
 
     general_values = {field: "" for field in TOURNAMENT_GENERAL_FIELDS}
-    if general is not None:
-        for field in TOURNAMENT_GENERAL_FIELDS:
-            general_values[field] = _txt(general.find(field))
+
+    def _get_field(field: str) -> str:
+        """Try field name exact, then without underscores, in both general locations."""
+        for node in (general, general_game):
+            if node is None:
+                continue
+            val = _txt(node.find(field))
+            if val:
+                return val
+            val = _txt(node.find(field.replace("_", "")))
+            if val:
+                return val
+        return ""
+
+    for field in TOURNAMENT_GENERAL_FIELDS:
+        general_values[field] = _get_field(field)
 
     return ImportedTournament(
         room=room,
