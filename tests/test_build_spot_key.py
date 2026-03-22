@@ -8,8 +8,8 @@ def test_btn_always_returns_btn():
     assert _build_spot_key("BTN", "SB", "BB", {"p1": 0, "p2": 0.5, "p3": 1}, {"is_hu": False}, {"p1": 20, "p2": 15, "p3": 10}) == "BTN"
 
 
-def test_sb_hu_returns_sbvsbb():
-    assert _build_spot_key("SB", "", "BB", {"p1": 0.5, "p2": 0, "p3": 1}, {"is_hu": True}, {"p1": 20, "p2": 0, "p3": 15}) == "SBvsBB"
+def test_sb_hu_returns_sbvsbb_hu():
+    assert _build_spot_key("SB", "", "BB", {"p1": 0.5, "p2": 0, "p3": 1}, {"is_hu": True}, {"p1": 20, "p2": 0, "p3": 15}) == "SBvsBB HU"
 
 
 def test_bb_hu_sb_limp():

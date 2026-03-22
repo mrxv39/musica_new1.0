@@ -48,7 +48,7 @@ def _build_spot_key(
 
     if h == "SB":
         if is_hu:
-            return "SBvsBB"
+            return "SBvsBB HU"
         # 3H: check if BTN acted before us
         btn_bet = 0.0
         if p2_pos.upper().strip() == "BTN":
