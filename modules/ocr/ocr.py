@@ -98,9 +98,20 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         except Exception as e:
             out["errors"].append(f"names:{e}")
         try:
+            t0 = time.perf_counter()
+            out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1)
+            timings["ocr_gamecode"] = time.perf_counter() - t0
+        except Exception as e:
+            out["errors"].append(f"gamecode:{e}")
+            out["gamecode"] = {"ok": False, "errors": [str(e)]}
+        try:
             p2_name = (out.get("names") or {}).get("p2_name", "")
             p3_name = (out.get("names") or {}).get("p3_name", "")
-            villano_args = dict(image_path=image_path, x1=x1, y1=y1, p2_name=p2_name, p3_name=p3_name)
+            gc = ""
+            gc_result = out.get("gamecode") or {}
+            if isinstance(gc_result, dict) and gc_result.get("ok"):
+                gc = str(gc_result.get("value") or "").strip()
+            villano_args = dict(image_path=image_path, x1=x1, y1=y1, p2_name=p2_name, p3_name=p3_name, gamecode=gc)
             if hasattr(villano, "classify_villano"):
                 out["villano"] = villano.classify_villano(**villano_args)
             else:
@@ -124,13 +135,6 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         except Exception as e:
             out["errors"].append(f"dealer:{e}")
             out["dealer"] = {"ok": False, "errors": [str(e)]}
-        try:
-            t0 = time.perf_counter()
-            out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1)
-            timings["ocr_gamecode"] = time.perf_counter() - t0
-        except Exception as e:
-            out["errors"].append(f"gamecode:{e}")
-            out["gamecode"] = {"ok": False, "errors": [str(e)]}
     else:
         # Parallel path (POKER_BOSS_WORKER_SEQUENTIAL=0 and POKER_BOSS_OCR_SEQUENTIAL=0): thread pools.
         def _run_bets():
@@ -175,9 +179,21 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
                     out["errors"].append(f"parallel_ocr_future_error:{e}")
 
         try:
+            t0 = time.perf_counter()
+            out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1)
+            timings["ocr_gamecode"] = time.perf_counter() - t0
+        except Exception as e:
+            out["errors"].append(f"gamecode:{e}")
+            out["gamecode"] = {"ok": False, "errors": [str(e)]}
+
+        try:
             p2_name = (out.get("names") or {}).get("p2_name", "")
             p3_name = (out.get("names") or {}).get("p3_name", "")
-            villano_args = dict(image_path=image_path, x1=x1, y1=y1, p2_name=p2_name, p3_name=p3_name)
+            gc = ""
+            gc_result = out.get("gamecode") or {}
+            if isinstance(gc_result, dict) and gc_result.get("ok"):
+                gc = str(gc_result.get("value") or "").strip()
+            villano_args = dict(image_path=image_path, x1=x1, y1=y1, p2_name=p2_name, p3_name=p3_name, gamecode=gc)
             if hasattr(villano, "classify_villano"):
                 out["villano"] = villano.classify_villano(**villano_args)
             else:
@@ -212,14 +228,6 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
             except Exception as e:
                 out["errors"].append(f"parallel_dealer_future_error:{e}")
                 out["dealer"] = {"ok": False, "errors": [str(e)]}
-
-        try:
-            t0 = time.perf_counter()
-            out["gamecode"] = gamecode.read_gamecode(image_path, x1=x1, y1=y1)
-            timings["ocr_gamecode"] = time.perf_counter() - t0
-        except Exception as e:
-            out["errors"].append(f"gamecode:{e}")
-            out["gamecode"] = {"ok": False, "errors": [str(e)]}
 
     # Posiciones (depends on table_state, bets, dealer)
     try:

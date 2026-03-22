@@ -11,8 +11,39 @@ CREATE TABLE IF NOT EXISTS players (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
     tipo TEXT NOT NULL DEFAULT 'fish',
+    notes TEXT NOT NULL DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- =========================
+-- Hand-Players join (extracted from hands.players_json)
+-- =========================
+CREATE TABLE IF NOT EXISTS hand_players (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hand_id INTEGER NOT NULL REFERENCES hands(id) ON DELETE CASCADE,
+    player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    seat INTEGER DEFAULT 0,
+    chips REAL DEFAULT 0,
+    is_dealer INTEGER DEFAULT 0,
+    win REAL DEFAULT 0,
+    UNIQUE(hand_id, player_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_hand_players_hand ON hand_players(hand_id);
+CREATE INDEX IF NOT EXISTS idx_hand_players_player ON hand_players(player_id);
+
+-- =========================
+-- Player aliases (OCR variants -> canonical player)
+-- =========================
+CREATE TABLE IF NOT EXISTS player_aliases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alias TEXT UNIQUE NOT NULL,
+    player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_aliases_player ON player_aliases(player_id);
 
 -- =========================
 -- Spots (OCR observations from worker)
