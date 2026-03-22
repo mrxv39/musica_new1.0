@@ -41,4 +41,5 @@
 ## Estado actual
 - Rama `feature/refactor-preflop-imports` contiene T08 + T04 + fix player_stats.py
 - `player_stats` tabla ya poblada con datos reales
-- Pendiente: commit del fix de player_stats.py restaurado
+- Fix player_stats.py restaurado y commiteado: `e1f7531`
+- Ambas ramas listas para merge a master cuando se apruebe
