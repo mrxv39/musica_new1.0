@@ -22,6 +22,7 @@ from modules.ocr import (
     posiciones,
     gamecode,
 )
+from modules.ocr.stacks_quantize import quantize_stacks_result
 
 
 def _load_images_once(
@@ -88,6 +89,7 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
         try:
             t0 = time.perf_counter()
             out["stacks"] = stacks.read_stacks(image_path, x1=x1, y1=y1, img_gray=img_gray)
+            out["stacks"] = quantize_stacks_result(out["stacks"])
             timings["ocr_stacks"] = time.perf_counter() - t0
         except Exception as e:
             out["errors"].append(f"stacks:{e}")
@@ -168,6 +170,8 @@ def run_ocr(image_path: str, x1: int = 0, y1: int = 0) -> Dict[str, Any]:
             for fut in as_completed([f1, f2, f3]):
                 try:
                     key, val, dt = fut.result()
+                    if key == "stacks":
+                        val = quantize_stacks_result(val)
                     out[key] = val
                     if key == "bets":
                         timings["ocr_bets"] = dt
