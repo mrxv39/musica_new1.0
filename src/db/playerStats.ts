@@ -10,16 +10,7 @@
  *   total_won_chips REAL, total_bet_chips REAL, updated_at TEXT
  */
 
-import Database from "@tauri-apps/plugin-sql";
-import { getPlayersDbUrl } from "../config";
-
-let _db: Database | null = null;
-
-async function getDB(): Promise<Database> {
-  if (_db) return _db;
-  _db = await Database.load(getPlayersDbUrl());
-  return _db;
-}
+import { getDB } from "./sql";
 
 export type PlayerStatsRow = {
   player: string;
