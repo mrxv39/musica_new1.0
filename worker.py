@@ -4,6 +4,9 @@ import json
 import subprocess
 import os
 from modules.db import db
+from modules.preflop.mano import run_mano
+from modules.preflop.time import run_time
+from modules.preflop.noboard import run_noboard
 
 def run_script(script, image):
     result = {}
@@ -33,10 +36,10 @@ def table_worker(table_id):
     db.init_db()
     while True:
         image = f'data/last_table_{table_id}.png'
-        # Preflop modules
-        mano = run_script('modules/preflop/mano.py', image)
-        time_mod = run_script('modules/preflop/time.py', image)
-        noboard = run_script('modules/preflop/noboard.py', image)
+        # Preflop modules (direct import, no subprocess)
+        mano = run_mano(image)
+        time_mod = run_time(image)
+        noboard = run_noboard(image)
         print(f'[DEBUG] Table {table_id} preflop results: mano={mano}, time_mod={time_mod}, noboard={noboard}')
         preflop_valid = mano.get('valid')
         time_ok = time_mod.get('time_ok')
