@@ -1,14 +1,16 @@
 /// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\hands\HandsColumnsConfigModal.tsx
 import React from "react";
-import type { ColumnDef } from "./handsColumns";
+
+export type ColumnConfigItem = { id: string; label: string };
 
 type Props = {
   open: boolean;
-  columns: ColumnDef[];
+  columns: ColumnConfigItem[];
   visibleIds: string[];
   onChangeVisibleIds: (next: string[]) => void;
   onClose: () => void;
   storageKey: string;
+  title?: string;
 };
 
 function uniqStable(xs: string[]) {
@@ -30,6 +32,7 @@ export function HandsColumnsConfigModal({
   onChangeVisibleIds,
   onClose,
   storageKey,
+  title = "Hands – columnas",
 }: Props) {
   const allIds = React.useMemo(() => columns.map((c) => c.id), [columns]);
   const visibleSet = React.useMemo(() => new Set(visibleIds), [visibleIds]);
@@ -95,7 +98,7 @@ export function HandsColumnsConfigModal({
             gap: 10,
           }}
         >
-          <div style={{ fontWeight: 700 }}>Hands – columnas</div>
+          <div style={{ fontWeight: 700 }}>{title}</div>
           <button onClick={onClose} style={{ padding: "6px 10px", cursor: "pointer" }}>
             Cerrar
           </button>

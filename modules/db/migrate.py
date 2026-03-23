@@ -35,6 +35,10 @@ def _create_indexes(conn: sqlite3.Connection) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_hands_obs_table_time ON hands_obs(table_id, detected_at_ms DESC)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_hands_xml_session_startdate ON hands_xml(sessioncode, startdate)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_hand_links_gamecode ON hand_links(gamecode)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_hands_startdate_desc ON hands(startdate DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_hands_tournament_id ON hands(tournament_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_spots_hand_id ON spots(hand_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_tournaments_created_at ON tournaments(created_at DESC)")
 
 
 def init_db() -> None:

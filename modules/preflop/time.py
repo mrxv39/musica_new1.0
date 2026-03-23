@@ -28,9 +28,13 @@ def run_time(image_path: str) -> dict:
         img = Image.open(abs_image_path).convert('L')
         arr = np.array(img, dtype=np.uint8)
         x, y, w, h = ROI
-        if arr.shape[0] < y + h or arr.shape[1] < x + w:
+        # If image is already the size of the ROI (pre-cropped), use it directly
+        if arr.shape[0] <= h * 2 and arr.shape[1] <= w * 2:
+            roi = arr
+        elif arr.shape[0] < y + h or arr.shape[1] < x + w:
             raise Exception('ROI out of bounds')
-        roi = arr[y:y+h, x:x+w]
+        else:
+            roi = arr[y:y+h, x:x+w]
         tpl = Image.open(TEMPLATE_PATH).convert('L')
         tpl_arr = np.array(tpl, dtype=np.uint8)
         res = cv2.matchTemplate(roi, tpl_arr, cv2.TM_CCOEFF_NORMED)

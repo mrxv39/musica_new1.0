@@ -1,130 +1,153 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::process::Command;
+// C:\Users\Usuario\Desktop\proyectos\poker_boss\src-tauri\src\main.rs
 
-const PROJECT_ROOT: &str = r"C:\Users\Usuario\Desktop\proyectos\poker_boss";
+use std::sync::Arc;
+use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder};
 
-fn run_python_with_env(args: &[&str], db_path_env: Option<&str>) -> Result<String, String> {
-    let mut cmd = Command::new("python");
-    cmd.args(args).current_dir(PROJECT_ROOT);
+mod image_io;
+mod import_xml;
+mod match_spots;
+mod obs;
+mod python;
+mod reset_real;
+mod workers;
 
-    if let Some(p) = db_path_env {
-        cmd.env("POKER_BOSS_DB_PATH", p);
-    }
+fn show_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
+    let w = app
+        .get_webview_window(label)
+        .ok_or_else(|| format!("window not found: {}", label))?;
+    w.show().map_err(|e| e.to_string())?;
+    Ok(())
+}
 
-    let out = cmd.output().map_err(|e| format!("failed to spawn python: {e}"))?;
-
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr).to_string();
-        let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-        return Err(format!(
-            "python failed (code={:?})\nSTDOUT:\n{}\nSTDERR:\n{}",
-            out.status.code(),
-            stdout,
-            stderr
-        ));
-    }
-
-    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+fn hide_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
+    let w = app
+        .get_webview_window(label)
+        .ok_or_else(|| format!("window not found: {}", label))?;
+    w.hide().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
-async fn reset_hands_obs(db_path: String) -> Result<String, String> {
-    let dbp = db_path;
-    tauri::async_runtime::spawn_blocking(move || {
-        let code = "import sqlite3,sys; p=sys.argv[1]; con=sqlite3.connect(p); con.execute('DELETE FROM hands_obs'); con.commit(); print('hands_obs vaciada correctamente')";
-        let out = run_python_with_env(&["-c", code, &dbp], None)?;
-        Ok(out.trim().to_string())
-    })
-    .await
-    .map_err(|e| format!("spawn_blocking error: {e}"))?
-}
-
-#[tauri::command]
-async fn run_worker_one(image_path: String, db_path: String) -> Result<String, String> {
-    let img = image_path;
-    let dbp = db_path;
-    tauri::async_runtime::spawn_blocking(move || {
-        let script = r".\modules\workers\worker.py";
-        let out = run_python_with_env(
-            &[
-                script,
-                "--id",
-                "1",
-                "--image",
-                &img,
-                "--max_ticks",
-                "1",
-                "--print_every_tick",
-                "true",
-                "--persist_without_stack",
-                "true",
-            ],
-            Some(&dbp),
-        )?;
-        Ok(out.trim().to_string())
-    })
-    .await
-    .map_err(|e| format!("spawn_blocking error: {e}"))?
-}
-
-#[tauri::command]
-async fn run_worker_batch(folder_path: String, limit: u32, db_path: String) -> Result<String, String> {
-    let folder = folder_path;
-    let limit_u = limit;
-    let dbp = db_path;
-
-    tauri::async_runtime::spawn_blocking(move || {
-        let dir = std::path::Path::new(&folder);
-        if !dir.exists() {
-            return Err(format!("folder does not exist: {}", folder));
+fn show_overlay(app: tauri::AppHandle) -> Result<(), String> {
+    for i in 1..=4 {
+        let label = format!("overlay_{}", i);
+        let _ = show_window(&app, &label);
+        if let Some(w) = app.get_webview_window(&label) {
+            let _ = w.set_ignore_cursor_events(true);
         }
-        if !dir.is_dir() {
-            return Err(format!("not a folder: {}", folder));
-        }
-
-        let script = r".\modules\workers\worker.py";
-
-        // replay_dir mode: --images_dir + --max_ticks N
-        let out = run_python_with_env(
-            &[
-                script,
-                "--id",
-                "1",
-                "--images_dir",
-                &folder,
-                "--loop",
-                "false",
-                "--max_ticks",
-                &limit_u.to_string(),
-                "--print_every_tick",
-                "true",
-                "--persist_without_stack",
-                "true",
-            ],
-            Some(&dbp),
-        )?;
-
-        Ok(format!(
-            "replay_dir done (max_ticks={}) folder={} db={}\n{}",
-            limit_u,
-            folder,
-            dbp,
-            out.trim()
-        ))
-    })
-    .await
-    .map_err(|e| format!("spawn_blocking error: {e}"))?
+    }
+    Ok(())
 }
+
+#[tauri::command]
+fn hide_overlay(app: tauri::AppHandle) -> Result<(), String> {
+    for i in 1..=4 {
+        let label = format!("overlay_{}", i);
+        let _ = hide_window(&app, &label);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn overlay_set_interactive(app: tauri::AppHandle, interactive: bool) -> Result<(), String> {
+    for i in 1..=4 {
+        let label = format!("overlay_{}", i);
+        if let Some(w) = app.get_webview_window(&label) {
+            let _ = w.set_ignore_cursor_events(!interactive);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_cursor_position() -> Result<(i32, i32), String> {
+    use std::mem::MaybeUninit;
+    #[repr(C)]
+    struct POINT { x: i32, y: i32 }
+    extern "system" { fn GetCursorPos(lp: *mut POINT) -> i32; }
+    let mut pt = MaybeUninit::<POINT>::uninit();
+    let ok = unsafe { GetCursorPos(pt.as_mut_ptr()) };
+    if ok == 0 { return Err("GetCursorPos failed".into()); }
+    let pt = unsafe { pt.assume_init() };
+    Ok((pt.x, pt.y))
+}
+
+// Mesa regions: must match modules/preflop/workers_loop/config.py AREAS
+const MESA_OVERLAYS: [(i32, i32, u32, u32); 4] = [
+    (520,  210,  776, 597),  // mesa 1
+    (520,  807,  776, 597),  // mesa 2
+    (1296, 210,  776, 597),  // mesa 3
+    (1296, 807,  776, 597),  // mesa 4
+];
 
 fn main() {
     tauri::Builder::default()
+        .setup(|app| {
+            for (i, &(x, y, w, h)) in MESA_OVERLAYS.iter().enumerate() {
+                let label = format!("overlay_{}", i + 1);
+                let overlay = WebviewWindowBuilder::new(
+                    app,
+                    &label,
+                    WebviewUrl::App(format!("overlay.html?mesa={}", i + 1).into()),
+                )
+                .decorations(false)
+                .transparent(true)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .resizable(false)
+                .title(&format!("overlay mesa {}", i + 1))
+                .inner_size(w as f64, h as f64)
+                .position(x as f64, y as f64)
+                .build()?;
+
+                let _ = overlay.set_size(PhysicalSize::new(w, h));
+                let _ = overlay.set_position(PhysicalPosition::new(x, y));
+                let _ = overlay.set_ignore_cursor_events(true);
+                overlay.hide()?;
+            }
+
+            Ok(())
+        })
+        .manage(Arc::new(workers::state::WorkersState::default()))
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            reset_hands_obs,
-            run_worker_one,
-            run_worker_batch
+            // image io
+            image_io::read_image_base64,
+
+            // overlay
+            show_overlay,
+            hide_overlay,
+            overlay_set_interactive,
+            get_cursor_position,
+
+            // OBS tools (dev/CLI only: run_worker_one, run_worker_batch, capture_test_images)
+            obs::reset_hands_obs,
+            obs::run_worker_one,
+            obs::run_worker_batch,
+            obs::capture_test_images,
+            obs::get_hand_obs_image,
+            obs::get_mesas_overlay_state,
+            obs::capture_single_mesa,
+            obs::update_player_tipo,
+            obs::capture_bug_report,
+
+            // REAL reset
+            reset_real::reset_hands,
+            reset_real::reset_four_tables,
+
+            // workers loop/tick
+            workers::commands::set_workers_running,
+            workers::commands::get_workers_status,
+            workers::commands::run_workers_tick,
+
+            // REAL import
+            import_xml::import_champion_xml,
+
+            // REAL ↔ OCR linking
+            match_spots::match_spots
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

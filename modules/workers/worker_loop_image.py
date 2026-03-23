@@ -71,11 +71,15 @@ def get_image_for_tick(
 
     # screen
     try:
-        cap_path = safe_capture(region=region)
+        result = safe_capture(region=region)
+        # safe_capture returns (path, error) tuple
+        cap_path = result[0] if isinstance(result, tuple) else result
+        cap_err = result[1] if isinstance(result, tuple) and len(result) > 1 else None
         cleanup_path = cap_path
         image_ref = "screen_region" if region else "screen"
         if not cap_path or not os.path.exists(cap_path):
-            return ImageGrabResult(None, image_ref, ["screen capture failed"], cleanup_path)
+            err_msg = cap_err or "screen capture failed"
+            return ImageGrabResult(None, image_ref, [err_msg], cleanup_path)
         return ImageGrabResult(cap_path, image_ref, errors, cleanup_path)
     except Exception as e:
         return ImageGrabResult(None, "screen", [f"safe_capture:{e}"], None)

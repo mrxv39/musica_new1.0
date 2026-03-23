@@ -17,12 +17,24 @@ def get_fingerprint(worker_id: int, mode: str, image_or_region: str) -> str:
     return sha1_text(f"{worker_id}|{mode}|{image_or_region}|{bucket}")
 
 
-def safe_capture(region: List[int]) -> Tuple[Optional[str], Optional[str]]:
+def get_file_fingerprint(file_path: str) -> str:
+    """SHA1 hash of file contents."""
+    h = hashlib.sha1()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def safe_capture(region: Optional[List[int]] = None) -> Tuple[Optional[str], Optional[str]]:
     try:
         from PIL import ImageGrab  # type: ignore
 
-        x, y, w, h = region
-        img = ImageGrab.grab(bbox=(x, y, x + w, y + h))
+        if region:
+            x, y, w, h = region
+            img = ImageGrab.grab(bbox=(x, y, x + w, y + h))
+        else:
+            img = ImageGrab.grab()
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
         img.save(tmp.name)
         return tmp.name, None

@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+UPDATE_WORKER_CAPTURE_OCR_SQL = """
+UPDATE workers_captures
+SET
+    ocr_ok = ?,
+    ocr_json = ?,
+    ocr_errors_json = ?,
+
+    names_ok = ?,
+    p2_name = ?,
+    p3_name = ?,
+    names_errors_json = ?,
+    names_json = ?,
+
+    villano_ok = ?,
+    villano_p2_name = ?,
+    villano_p2_tipo = ?,
+    villano_p3_name = ?,
+    villano_p3_tipo = ?,
+    villano_created_json = ?,
+    villano_errors_json = ?,
+    villano_json = ?,
+
+    stackefectivo_ok = ?,
+    stackefectivo_value = ?,
+    stackefectivo_raw = ?,
+    stackefectivo_method = ?,
+    stackefectivo_roi_json = ?,
+    stackefectivo_error = ?,
+    stackefectivo_json = ?,
+
+    bets_ok = ?,
+    bet_p1 = ?,
+    bet_p2 = ?,
+    bet_p3 = ?,
+    bet_raw_p1 = ?,
+    bet_raw_p2 = ?,
+    bet_raw_p3 = ?,
+    bet_method_p1 = ?,
+    bet_method_p2 = ?,
+    bet_method_p3 = ?,
+    bets_errors_json = ?,
+    bets_json = ?,
+
+    stacks_ok = ?,
+    stack_p1 = ?,
+    stack_p2 = ?,
+    stack_p3 = ?,
+    stack_raw_p1 = ?,
+    stack_raw_p2 = ?,
+    stack_raw_p3 = ?,
+    stack_method_p1 = ?,
+    stack_method_p2 = ?,
+    stack_method_p3 = ?,
+    stacks_errors_json = ?,
+    stacks_json = ?,
+
+    table_state_ok = ?,
+    table_players = ?,
+    table_is_hu = ?,
+    table_is_3h = ?,
+    table_active_seats_json = ?,
+    table_eliminated_seats_json = ?,
+    table_state_method = ?,
+    table_state_errors_json = ?,
+    table_state_json = ?,
+
+    dealer_ok = ?,
+    dealer_seat = ?,
+    dealer_score = ?,
+    dealer_method = ?,
+    dealer_errors_json = ?,
+    dealer_debug_json = ?,
+    dealer_json = ?,
+
+    posiciones_ok = ?,
+    pos_p1 = ?,
+    pos_p2 = ?,
+    pos_p3 = ?,
+    pos_btn_seat = ?,
+    pos_sb_seat = ?,
+    pos_bb_seat = ?,
+    pos_dealer_seat = ?,
+    pos_method = ?,
+    pos_errors_json = ?,
+    pos_debug_json = ?,
+    posiciones_json = ?,
+
+    updated_at_ms = ?
+WHERE capture_id = ?
+"""

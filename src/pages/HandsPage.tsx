@@ -1,195 +1,170 @@
-/// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\HandsPage.tsx
-import { useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\HandsPage.tsx
+import React from "react";
 import HandsToolbar from "./hands/HandsToolbar";
-import HandsTable from "./hands/HandsTable";
-import { useHandsObs } from "./hands/useHandsObs";
-import { sortHands } from "./hands/sortHands";
-import { useHandsSort } from "./hands/useHandsSort";
-import { filterHandsByAllFilters, parseNumericRange } from "./hands/handsFilters";
-
-const BATCH_FOLDER_PATH =
-  "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\modules\\preflop\\test_images";
-
-function summarize(s: string, max = 220) {
-  const t = (s || "").replace(/\s+/g, " ").trim();
-  if (!t) return "";
-  return t.length > max ? t.slice(0, max) + " …" : t;
-}
+import BugReportBar from "../components/BugReportBar";
+import {
+  TournamentsTable,
+  HandsTableBlock,
+  PlayersTableBlock,
+} from "./hands/HandsFourTables";
+import { useHandsPage } from "./hands/useHandsPage";
+import type { ReviewFilter } from "./hands/useHandsObs";
+import {
+  HandsBlocksConfigModal,
+  HandsVisibleBlocks,
+  loadInitialVisibleBlocks,
+  persistVisibleBlocks,
+} from "./hands/HandsBlocksConfigModal";
 
 export default function HandsPage() {
-  const { dbPath, setDbPath, rows, status, auto, setAuto, canLoad, loadOnce } = useHandsObs();
-  const { sortKey, sortAsc, onSort } = useHandsSort();
-
-  const [busy, setBusy] = useState<boolean>(false);
-  const [actionStatus, setActionStatus] = useState<string>("");
-  const [lastLog, setLastLog] = useState<string>("");
-
-  const [stackEfRangeText, setStackEfRangeText] = useState<string>(
-    () => localStorage.getItem("hands.stackEfRangeText") || ""
-  );
-  const [betRangeText, setBetRangeText] = useState<string>(
-    () => localStorage.getItem("hands.betRangeText") || ""
-  );
-  const [rangeListText, setRangeListText] = useState<string>(
-    () => localStorage.getItem("hands.rangeListText") || ""
-  );
-
-  const stackEfRange = useMemo(() => parseNumericRange(stackEfRangeText), [stackEfRangeText]);
-  const betRange = useMemo(() => parseNumericRange(betRangeText), [betRangeText]);
-
-  const filtered = useMemo(
-    () => filterHandsByAllFilters(rows, stackEfRange, betRange, rangeListText),
-    [rows, stackEfRange, betRange, rangeListText]
-  );
-
-  const sortedRows = useMemo(
-    () => sortHands(filtered.rows, sortKey, sortAsc),
-    [filtered.rows, sortKey, sortAsc]
-  );
-
-  const onReset = async () => {
-    const p = dbPath.trim();
-    if (!p) return;
-
-    setBusy(true);
-    setActionStatus("reset: running...");
-    setLastLog("");
-    try {
-      const msg = await invoke<string>("reset_hands_obs", { dbPath: p });
-      const m = String(msg || "");
-      setLastLog(m);
-      setActionStatus("reset: " + (summarize(m) || "ok"));
-      await loadOnce();
-    } catch (e: any) {
-      const m = "ERROR: " + (e?.message || String(e));
-      setLastLog(m);
-      setActionStatus("reset: " + summarize(m));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // ✅ esto es lo que usa el modal (dinámico, por imagen abierta)
-  const onRunOneForImage = async (imagePath: string) => {
-    const p = dbPath.trim();
-    const img = (imagePath || "").trim();
-
-    if (!p) return "ERROR: dbPath vacío";
-    if (!img) return "ERROR: imagePath vacío";
-
-    try {
-      // IMPORTANTE: la key tiene que llamarse imagePath (mismo nombre que te pide el error)
-      const msg = await invoke<string>("run_worker_one", { imagePath: img, dbPath: p });
-      const m = String(msg || "");
-      await loadOnce();
-      return m.trim();
-    } catch (e: any) {
-      return "ERROR: " + (e?.message || String(e));
-    }
-  };
-
-  const onRunBatch = async () => {
-    const p = dbPath.trim();
-    if (!p) return;
-
-    setBusy(true);
-    setActionStatus("50 hands: running...");
-    setLastLog("");
-    try {
-      const msg = await invoke<string>("run_worker_batch", {
-        folderPath: BATCH_FOLDER_PATH,
-        limit: 50,
-        dbPath: p,
-      });
-      const m = String(msg || "");
-      setLastLog(m);
-      setActionStatus("50 hands: " + (summarize(m) || "ok"));
-      await loadOnce();
-    } catch (e: any) {
-      const m = "ERROR: " + (e?.message || String(e));
-      setLastLog(m);
-      setActionStatus("50 hands: " + summarize(m));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const uiStatus =
-    actionStatus && actionStatus.trim().length > 0 ? `${status} | ${actionStatus}` : status;
-
-  const onChangeStackEfRangeText = (v: string) => {
-    setStackEfRangeText(v);
-    localStorage.setItem("hands.stackEfRangeText", v);
-  };
-
-  const onChangeBetRangeText = (v: string) => {
-    setBetRangeText(v);
-    localStorage.setItem("hands.betRangeText", v);
-  };
-
-  const onChangeRangeListText = (v: string) => {
-    setRangeListText(v);
-    localStorage.setItem("hands.rangeListText", v);
-  };
-
-  const onClearFilters = () => {
-    onChangeStackEfRangeText("");
-    onChangeBetRangeText("");
-    onChangeRangeListText("");
-  };
-
+  const hp = useHandsPage();
+  const [blocksConfigOpen, setBlocksConfigOpen] = React.useState(false);
+  const [visibleBlocks, setVisibleBlocks] = React.useState<HandsVisibleBlocks>(() => loadInitialVisibleBlocks());
   return (
-    <>
-      <HandsToolbar
-        dbPath={dbPath}
-        onChangeDbPath={setDbPath}
-        canLoad={canLoad}
-        onRefresh={loadOnce}
-        auto={auto}
-        onToggleAuto={setAuto}
-        status={uiStatus}
-        busy={busy}
-        onReset={onReset}
-        onRunBatch={onRunBatch}
-        stackEfRangeText={stackEfRangeText}
-        onChangeStackEfRangeText={onChangeStackEfRangeText}
-        betRangeText={betRangeText}
-        onChangeBetRangeText={onChangeBetRangeText}
-        rangeListText={rangeListText}
-        onChangeRangeListText={onChangeRangeListText}
-        onClearFilters={onClearFilters}
-      />
-
-      <HandsTable
-        rows={sortedRows}
-        onSort={onSort}
-        canRunOne={Boolean(canLoad && dbPath.trim().length > 0)}
-        onRunOneForImage={onRunOneForImage}
-      />
-
-      <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-        Rows: {sortedRows.length} / {rows.length} | DB actual: {dbPath.trim()}
+    <div style={{ padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <HandsToolbar
+          canLoad={hp.canLoad}
+          onRefresh={hp.loadOnce}
+          auto={hp.auto}
+          onToggleAuto={hp.setAuto}
+          status={hp.uiStatus}
+          busy={hp.busy}
+          onReset={hp.onReset}
+        />
+        <button
+          style={{
+            marginLeft: "auto",
+            padding: "6px 10px",
+            cursor: "pointer",
+            borderRadius: 6,
+            border: "1px solid #ddd",
+            background: "#fff",
+            fontSize: 12,
+          }}
+          onClick={() => setBlocksConfigOpen(true)}
+          title="Selecciona qué tablas se muestran"
+        >
+          Config tablas
+        </button>
       </div>
 
-      {filtered.rangeError ? (
-        <div style={{ marginTop: 6, fontSize: 12, color: "#b00020" }}>
-          Rango inválido: {filtered.rangeError}
-        </div>
-      ) : null}
+      <HandsBlocksConfigModal
+        open={blocksConfigOpen}
+        visibleBlocks={visibleBlocks}
+        onChangeVisibleBlocks={(next) => {
+          persistVisibleBlocks(next);
+          setVisibleBlocks(next);
+        }}
+        onClose={() => setBlocksConfigOpen(false)}
+      />
 
-      <div style={{ marginTop: 2, fontSize: 12, opacity: 0.7 }}>
-        Folder 50-hands: {BATCH_FOLDER_PATH}
+      <div style={{ height: 10 }} />
+
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <button disabled={!hp.canLoad} onClick={hp.onToggleWorkers} title="Lanza 4 instancias del worker">
+          {hp.workersRunning ? "Stop workers" : "Run workers (loop, 4 instances)"}
+        </button>
       </div>
 
-      {lastLog ? (
-        <details style={{ marginTop: 10 }}>
-          <summary style={{ cursor: "pointer", fontSize: 12, opacity: 0.8 }}>
-            Ver log completo (stdout/stderr)
-          </summary>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, marginTop: 8 }}>{lastLog}</pre>
-        </details>
+      <div style={{ height: 8 }} />
+      <BugReportBar />
+
+      <div style={{ height: 10 }} />
+
+      <ReviewFilterBar filter={hp.reviewFilter} onChange={hp.setReviewFilter} />
+
+      <div style={{ height: 10 }} />
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr",
+          gap: 16,
+          alignItems: "start",
+        }}
+      >
+        {visibleBlocks.tournaments && <TournamentsTable rows={hp.tournaments ?? []} />}
+        {visibleBlocks.spots && (
+          <HandsTableBlock
+            mode="OBS"
+            realRows={[]}
+            obsRows={hp.sortedObsRows}
+            dbPath={hp.dbPath}
+            sortKey={hp.sortKey}
+            sortAsc={hp.sortAsc}
+            onSort={hp.onSort}
+            canRunOne={false}
+            onRunOneForImage={hp.onRunOneForImage}
+            onMarkReview={hp.markReview}
+            lastLog={hp.lastLog}
+          />
+        )}
+        {visibleBlocks.hands && (
+          <HandsTableBlock
+            mode="REAL"
+            realRows={hp.sortedRealRows}
+            obsRows={[]}
+            dbPath={hp.dbPath}
+            sortKey={hp.sortKey}
+            sortAsc={hp.sortAsc}
+            onSort={hp.onSort}
+            canRunOne={false}
+            onRunOneForImage={hp.onRunOneForImage}
+            onMarkReview={hp.markReview}
+            lastLog={hp.lastLog}
+          />
+        )}
+        {visibleBlocks.players && <PlayersTableBlock rows={hp.players ?? []} />}
+      </div>
+
+      {hp.obsFooterText ? (
+        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>{hp.obsFooterText}</div>
       ) : null}
-    </>
+
+      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
+        {hp.actionStatus ? <div>{hp.actionStatus}</div> : null}
+        {hp.lastLog ? <pre style={{ whiteSpace: "pre-wrap" }}>{hp.lastLog}</pre> : null}
+      </div>
+    </div>
+  );
+}
+
+const REVIEW_OPTIONS: { value: ReviewFilter; label: string }[] = [
+  { value: "all", label: "Todas" },
+  { value: "pending", label: "Pendientes" },
+  { value: "ok", label: "OK" },
+  { value: "error", label: "Errores" },
+];
+
+function ReviewFilterBar({
+  filter,
+  onChange,
+}: {
+  filter: ReviewFilter;
+  onChange: (f: ReviewFilter) => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, marginRight: 4 }}>Review:</span>
+      {REVIEW_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          style={{
+            padding: "4px 12px",
+            borderRadius: 6,
+            border: filter === opt.value ? "2px solid #333" : "1px solid #ccc",
+            background: filter === opt.value ? "#333" : "#fff",
+            color: filter === opt.value ? "#fff" : "#333",
+            fontWeight: filter === opt.value ? 700 : 400,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
   );
 }
