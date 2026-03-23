@@ -18,7 +18,7 @@ class TestWorkerDedupeAndPersist(unittest.TestCase):
         self.tmpdb = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
         self.tmpdb.close()
         self.db_path = self.tmpdb.name
-        os.environ["MUSICA_DB_PATH"] = self.db_path
+        os.environ["POKER_BOSS_DB_PATH"] = self.db_path
         dbmod.init_db()
 
         # Create a temp file to use as --image (must exist)
@@ -37,7 +37,7 @@ class TestWorkerDedupeAndPersist(unittest.TestCase):
         except Exception:
             pass
         try:
-            del os.environ["MUSICA_DB_PATH"]
+            del os.environ["POKER_BOSS_DB_PATH"]
         except KeyError:
             pass
 

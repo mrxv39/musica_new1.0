@@ -79,7 +79,7 @@ def test_select_move_unique_match(monkeypatch, tmp_path):
     conn.commit()
     conn.close()
 
-    monkeypatch.setenv("MUSICA_DB_PATH", str(db_path))
+    monkeypatch.setenv("POKER_BOSS_DB_PATH", str(db_path))
 
     inp = MatchInput(
         situacion="TEST_SIT",
@@ -154,7 +154,7 @@ def test_select_move_default_fold_when_not_in_any_or_range(monkeypatch, tmp_path
     conn.commit()
     conn.close()
 
-    monkeypatch.setenv("MUSICA_DB_PATH", str(db_path))
+    monkeypatch.setenv("POKER_BOSS_DB_PATH", str(db_path))
 
     inp = MatchInput(
         situacion="TEST_SIT",

@@ -15,7 +15,7 @@ let _db: Database | null = null;
 let _initPromise: Promise<void> | null = null;
 
 // ✅ DB única absoluta
-export const DB_URL = "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/musica_new.db";
+export const DB_URL = "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/poker_boss.db";
 
 export type SituationRow = {
   id: number;

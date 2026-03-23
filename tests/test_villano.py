@@ -12,7 +12,7 @@ class TestVillanoOCR(unittest.TestCase):
     def setUp(self):
         # Use a temporary DB file for isolation
         self.db_fd, self.db_path = tempfile.mkstemp(suffix='.sqlite')
-        os.environ['MUSICA_DB_PATH'] = self.db_path
+        os.environ['POKER_BOSS_DB_PATH'] = self.db_path
         self._connections = []
         def _new_conn():
             conn = sqlite3.connect(self.db_path)
@@ -32,8 +32,8 @@ class TestVillanoOCR(unittest.TestCase):
                 pass
         os.close(self.db_fd)
         os.remove(self.db_path)
-        if 'MUSICA_DB_PATH' in os.environ:
-            del os.environ['MUSICA_DB_PATH']
+        if 'POKER_BOSS_DB_PATH' in os.environ:
+            del os.environ['POKER_BOSS_DB_PATH']
 
     @patch('modules.ocr.names.read_names')
     def test_missing_player_inserted(self, mock_read_names):

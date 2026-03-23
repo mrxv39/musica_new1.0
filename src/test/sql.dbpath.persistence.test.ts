@@ -2,7 +2,7 @@
  * C:\Users\Usuario\Desktop\proyectos\poker_boss\src\test\sql.dbpath.persistence.test.ts
  *
  * Este test garantiza:
- * - La DB URL usada por getDB() es EXACTAMENTE musica_new.db (ruta absoluta)
+ * - La DB URL usada por getDB() es EXACTAMENTE poker_boss.db (ruta absoluta)
  * - initDB ejecuta CREATE TABLE + migración defensiva
  * - upsertSituationKey hace INSERT + SELECT
  * - deleteSubStrategyById devuelve true/false según rowsAffected
@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const EXPECTED_DB_URL = "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/musica_new.db";
+const EXPECTED_DB_URL = "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/poker_boss.db";
 
 // --- Mock del plugin-sql ---
 const execute = vi.fn(async () => ({ rowsAffected: 1 }));
@@ -41,7 +41,7 @@ vi.mock("@tauri-apps/plugin-sql", () => {
   };
 });
 
-describe("sql.ts uses musica_new.db and persists via SQL", () => {
+describe("sql.ts uses poker_boss.db and persists via SQL", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     // Import dinámico para que el mock se aplique limpio

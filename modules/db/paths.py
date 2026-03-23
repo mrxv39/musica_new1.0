@@ -20,7 +20,7 @@ def data_dir(root: str | None = None) -> str:
 def get_db_path(cfg: DBConfig | None = None) -> str:
     """
     DB path resolution order:
-      1) env override via get_db_path_from_env(cfg) (e.g. MUSICA_DB_PATH in tests)
+      1) env override via get_db_path_from_env(cfg) (e.g. POKER_BOSS_DB_PATH in tests)
       2) project ./data/<default_filename>
     """
     cfg = cfg or DBConfig()

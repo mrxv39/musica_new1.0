@@ -1,4 +1,4 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\preflop\mano.py
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\preflop\mano.py
 import sys
 import os
 import json

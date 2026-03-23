@@ -1,4 +1,4 @@
-HOJA DE RUTA – musica_new
+HOJA DE RUTA – poker_boss
 ============================================================
 Fecha: 2026-02-17 (v3 estratégica)
 
@@ -196,5 +196,5 @@ ProyectoInfo
 ============================================================
 
 repo_git: https://github.com/mrxv39/musica_new1.0.git
-name_project: musica_new
+name_project: poker_boss
 backup: Desktop\backups\backup_musica_new_20260217_080837.zip

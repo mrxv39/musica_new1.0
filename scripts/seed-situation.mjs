@@ -1,6 +1,6 @@
 import Database from "@tauri-apps/plugin-sql";
 
-const DB_URL = "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/musica_new.db";
+const DB_URL = "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/poker_boss.db";
 const KEY = "BTN_vs_SB_BB_FISH_FISH";
 
 async function main() {

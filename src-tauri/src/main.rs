@@ -10,7 +10,6 @@ fn run_python_with_env(args: &[&str], db_path_env: Option<&str>) -> Result<Strin
 
     if let Some(p) = db_path_env {
         cmd.env("POKER_BOSS_DB_PATH", p);
-        cmd.env("MUSICA_DB_PATH", p);
     }
 
     let out = cmd.output().map_err(|e| format!("failed to spawn python: {e}"))?;

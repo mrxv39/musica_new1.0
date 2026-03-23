@@ -1,4 +1,4 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\db\schema.py
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\db\schema.py
 
 # NOTA:
 # - Aquí solo dejamos CREATE TABLE (sin índices que dependan de columnas),

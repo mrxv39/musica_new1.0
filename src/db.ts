@@ -1,6 +1,6 @@
 import Database from "@tauri-apps/plugin-sql";
 
-export const DEFAULT_DB_PATH = "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\musica_new.db";
+export const DEFAULT_DB_PATH = "C:\\Users\\Usuario\\Desktop\\proyectos\\poker_boss\\data\\poker_boss.db";
 
 export type HandsObsRow = {
   id?: number;

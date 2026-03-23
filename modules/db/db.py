@@ -7,7 +7,7 @@ Refactor serio (split lógico):
 - repos: legacy / obs / xml.
 
 Compatibilidad:
-- Env var legacy: MUSICA_DB_PATH (tests antiguos).
+- Env var: POKER_BOSS_DB_PATH.
 - API pública sin cambios: init_db/get_conn/insert_hand/insert_obs/upsert_xml_game/...
 """
 from __future__ import annotations

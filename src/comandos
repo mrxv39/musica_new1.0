@@ -6,11 +6,11 @@ python .\modules\workers\worker.py `
   --print_every_tick true
 
   BORRAR TABLA OBSERVED HANDS
-  python -c "import sqlite3; con=sqlite3.connect(r'C:\Users\Usuario\Desktop\proyectos\poker_boss\data\musica_new.db'); con.execute('DELETE FROM hands_obs'); con.commit(); print('hands_obs vaciada correctamente')"
+  python -c "import sqlite3; con=sqlite3.connect(r'C:\Users\Usuario\Desktop\proyectos\poker_boss\data\poker_boss.db'); con.execute('DELETE FROM hands_obs'); con.commit(); print('hands_obs vaciada correctamente')"
 
 
 cd C:\Users\Usuario\Desktop\proyectos\poker_boss
-$env:POKER_BOSS_DB_PATH="C:\Users\Usuario\Desktop\proyectos\poker_boss\data\musica_new.db"
+$env:POKER_BOSS_DB_PATH="C:\Users\Usuario\Desktop\proyectos\poker_boss\data\poker_boss.db"
 
 python .\modules\workers\worker.py `
   --id 1 `
