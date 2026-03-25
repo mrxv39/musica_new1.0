@@ -4,6 +4,7 @@ import StrategyPage from "../pages/StrategyPage";
 import HandsPage from "../pages/HandsPage";
 import SpotsPage from "../pages/SpotsPage";
 import PlayersPage from "../pages/PlayersPage";
+import PlayerStatsPage from "../pages/PlayerStatsPage";
 import ComingSoon from "../components/ComingSoon";
 import AppShell from "./AppShell";
 import { Tab } from "./tabs";
@@ -17,6 +18,7 @@ export default function AppRouter() {
       {activeTab === "strategy" && <StrategyPage />}
       {activeTab === "spots" && <SpotsPage />}
       {activeTab === "players" && <PlayersPage />}
+      {activeTab === "stats" && <PlayerStatsPage />}
       {activeTab === "account" && <ComingSoon title="Account" />}
       {activeTab === "import" && <ComingSoon title="Import" />}
     </AppShell>
