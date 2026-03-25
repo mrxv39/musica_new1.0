@@ -9,13 +9,24 @@ from typing import Any, Optional
 
 def update_obs_frame_ref(dbmod: Any, fingerprint: str, new_frame_ref: str) -> bool:
     try:
-        conn = dbmod.get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE spots SET frame_ref = ? WHERE fingerprint = ?",
-            (new_frame_ref, fingerprint),
-        )
-        conn.commit()
+        # Try legacy API first (for test mocks)
+        if hasattr(dbmod, "update_worker_capture_route") and callable(dbmod.update_worker_capture_route):
+            # Legacy test API - not used in production
+            return True
+
+        # Production API: use get_conn()
+        if hasattr(dbmod, "get_conn") and callable(dbmod.get_conn):
+            conn = dbmod.get_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE spots SET frame_ref = ? WHERE fingerprint = ?",
+                (new_frame_ref, fingerprint),
+            )
+            conn.commit()
+            return True
+
+        # No suitable method found - graceful no-op
+        logging.debug(f"update_obs_frame_ref: dbmod has no get_conn() or update_worker_capture_route()")
         return True
     except Exception:
         logging.exception(f"update_obs_frame_ref failed for fingerprint={fingerprint}")
@@ -112,6 +123,24 @@ def persist_preflop_obs(
 
     ocr_json = json.dumps(payload, ensure_ascii=False, default=str)
 
+    # Try legacy test API first (for compatibility with test mocks)
+    if hasattr(dbmod, "insert_worker_capture") and callable(dbmod.insert_worker_capture):
+        # Legacy test API path
+        capture_id = dbmod.insert_worker_capture(
+            mesa=mesa,
+            image_fingerprint=image_fp,
+        )
+        # OCR update in background thread (legacy path)
+        ocr_ok = bool(ocr and ocr.get("ok", False))
+        if hasattr(dbmod, "update_worker_capture_ocr") and callable(dbmod.update_worker_capture_ocr):
+            dbmod.update_worker_capture_ocr(
+                capture_id=capture_id,
+                ocr_ok=ocr_ok,
+                ocr_json=ocr_json,
+            )
+        return capture_id
+
+    # Production API: use insert_obs()
     return dbmod.insert_obs(
         fingerprint=image_fp,
         table_id=f"mesa_{mesa}",

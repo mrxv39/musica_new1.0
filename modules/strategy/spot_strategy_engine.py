@@ -91,12 +91,12 @@ def _specificity(row: sqlite3.Row) -> tuple[int, int, int, int, float, float]:
     p2_tipo = 1 if _t(row["p2_tipo"]) else 0
     p3_tipo = 1 if _t(row["p3_tipo"]) else 0
     pos = 1 if (_t(row["p2_pos"]) or _t(row["p3_pos"])) else 0
-    bet = 1 if (row["bet_min"] is not None and row["bet_max"] is not None) else 0
+    bet = 1 if (row["p1bet_min"] is not None and row["p1bet_max"] is not None) else 0
     se_min = float(row["stack_effective_min"] or 0.0)
     se_max = float(row["stack_effective_max"] or 0.0)
     se_width = se_max - se_min
-    bet_min = _f(row["bet_min"])
-    bet_max = _f(row["bet_max"])
+    bet_min = _f(row["p1bet_min"])
+    bet_max = _f(row["p1bet_max"])
     bet_width = (bet_max - bet_min) if (bet_min is not None and bet_max is not None) else 9999.0
     return (p2_tipo, p3_tipo, pos, bet, -se_width, -bet_width)
 
@@ -257,8 +257,15 @@ def decide_spot_strategy(conn: sqlite3.Connection, inp: SpotDecisionInput) -> di
         "stack_effective_min": float(row["stack_effective_min"]),
         "stack_effective_max": float(row["stack_effective_max"]),
     }
-    betmin = _eval_bet_expr(row["bet_min"], ctx=ctx)
-    betmax = _eval_bet_expr(row["bet_max"], ctx=ctx)
+    # Use dedicated bet_min/bet_max columns for output sizing if available,
+    # otherwise fall back to p1bet_min/p1bet_max (input matching columns).
+    row_keys = row.keys() if hasattr(row, "keys") else []
+    if "bet_min" in row_keys:
+        betmin = _eval_bet_expr(row["bet_min"], ctx=ctx)
+        betmax = _eval_bet_expr(row["bet_max"], ctx=ctx)
+    else:
+        betmin = _eval_bet_expr(row["p1bet_min"], ctx=ctx)
+        betmax = _eval_bet_expr(row["p1bet_max"], ctx=ctx)
     # fallback: if not provided, use 0 to keep shape stable (still counts as no_strategy_move)
     if betmin is None:
         betmin = 0.0

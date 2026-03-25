@@ -252,7 +252,7 @@ def test_run_loop_sin_xml_dir_no_ejecuta_sync(monkeypatch, tmp_path):
 
 def test_run_loop_sin_db_path_no_ejecuta_sync(monkeypatch, tmp_path):
     """When DB_PATH is missing, sync doesn't happen."""
-    calls = {"import": 0}
+    calls = {"import": 0, "spot_link": 0}
 
     monkeypatch.setattr(loopmod, "ensure_dirs", lambda base_dir: {"base_dir": base_dir})
     monkeypatch.setattr(loopmod, "enable_fallback_env", lambda *a, **k: None)
@@ -269,6 +269,10 @@ def test_run_loop_sin_db_path_no_ejecuta_sync(monkeypatch, tmp_path):
     fake_importer_mod = types.ModuleType("modules.importers.championpoker_xml_importer")
     fake_importer_mod.import_xml_folder = lambda **kwargs: calls.__setitem__("import", calls["import"] + 1)
     monkeypatch.setitem(sys.modules, "modules.importers.championpoker_xml_importer", fake_importer_mod)
+
+    fake_linker_mod = types.ModuleType("modules.preflop.link_hands_obs_to_spots_xml_real")
+    fake_linker_mod.link_obs_to_spots = lambda **kwargs: calls.__setitem__("spot_link", calls["spot_link"] + 1)
+    monkeypatch.setitem(sys.modules, "modules.preflop.link_hands_obs_to_spots_xml_real", fake_linker_mod)
 
     fp = io.StringIO()
     loopmod.run_loop(

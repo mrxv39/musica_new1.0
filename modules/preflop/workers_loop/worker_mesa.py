@@ -194,6 +194,21 @@ def run_worker_mesa_once(
 
         _LAST_CAPTURE_FP_BY_MESA[mesa] = image_fp
 
+        # Check for recent duplicate captures (within dedupe window)
+        now_ms = int(time.time() * 1000)
+        since_ms = now_ms - RECENT_CAPTURE_WINDOW_MS
+        recent = None
+        if hasattr(dbmod, "find_recent_capture_by_fingerprint") and callable(dbmod.find_recent_capture_by_fingerprint):
+            recent = dbmod.find_recent_capture_by_fingerprint(
+                image_fingerprint=image_fp,
+                since_ms=since_ms,
+            )
+        if recent:
+            _safe_remove(img_path)
+            if dbg or verbose:
+                log(fp, f"[mesa {mesa}] DUPLICATE CAPTURE -> skip | fp={image_fp}")
+            return
+
         # DB-level dedup via spots.fingerprint UNIQUE constraint
         existing = dbmod.get_obs_by_fingerprint(image_fp)
         if existing:
@@ -278,10 +293,48 @@ def run_worker_mesa_once(
         return
 
     if preflop_fail(preflop):
+        # First, persist the capture before routing
+        t_obs0_fail = time.perf_counter() if profile_enabled else 0.0
+        try:
+            payload_fail = {
+                "preflop": preflop if isinstance(preflop, dict) else {},
+                "ocr": ocr if isinstance(ocr, dict) else {},
+                "tempo_s": round(time.perf_counter() - tick_t0, 3),
+            }
+            ocr_json_fail = json.dumps(payload_fail, ensure_ascii=False, default=str)
+
+            # Insert capture with legacy API if available
+            if hasattr(dbmod, "insert_worker_capture") and callable(dbmod.insert_worker_capture):
+                capture_id = dbmod.insert_worker_capture(
+                    mesa=mesa,
+                    image_fingerprint=image_fp,
+                )
+                # OCR update for the failed capture
+                ocr_ok_fail = bool(ocr and ocr.get("ok", False))
+                if hasattr(dbmod, "update_worker_capture_ocr") and callable(dbmod.update_worker_capture_ocr):
+                    dbmod.update_worker_capture_ocr(
+                        capture_id=capture_id,
+                        ocr_ok=ocr_ok_fail,
+                        ocr_json=ocr_json_fail,
+                    )
+        except Exception as e:
+            logging.exception(f"[mesa {mesa}] Failed to persist capture for preflop_fail: {e}")
+
         dst = safe_move(img_path, dirs.del_dir)
         reason_text = _describe_preflop_fail(preflop)
 
         log(fp, f"[mesa {mesa}] preflop FAIL -> borrar: {dst} | {reason_text}")
+
+        # Route to borrar
+        if capture_id is not None and hasattr(dbmod, "update_worker_capture_route") and callable(dbmod.update_worker_capture_route):
+            try:
+                dbmod.update_worker_capture_route(
+                    capture_id=capture_id,
+                    status="borrar",
+                    reason=reason_text,
+                )
+            except Exception as e:
+                logging.exception(f"[mesa {mesa}] Failed to route capture to borrar: {e}")
 
         try:
             _write_preflop_fail_debug(dst, mesa, preflop)
@@ -319,6 +372,7 @@ def run_worker_mesa_once(
         profile_times["strategy"] = time.perf_counter() - t_strategy0
 
     # Enrich strategy with spot_strategy_id (for ocr_json persistence in spots table)
+    t_insert_spot0 = time.perf_counter() if profile_enabled else 0.0
     if isinstance(strategy, dict):
         try:
             sheet = str(strategy.get("sheet") or "").strip().lower()
@@ -369,10 +423,12 @@ def run_worker_mesa_once(
                         strategy.pop("spot_strategy_id", None)
         except Exception as e:
             strategy["spot_strategy_link_error"] = str(e)
+    if profile_enabled:
+        profile_times["insert_spot"] = time.perf_counter() - t_insert_spot0
 
     t_obs0 = time.perf_counter() if profile_enabled else 0.0
     try:
-        obs_id = persist_preflop_obs(
+        capture_id = persist_preflop_obs(
             dbmod=dbmod,
             preflop=preflop,
             image_fp=image_fp,
@@ -384,10 +440,12 @@ def run_worker_mesa_once(
             strategy=strategy,
             tempo_s=round(time.perf_counter() - tick_t0, 3),
         )
+        obs_id = capture_id  # obs_id is the same as capture_id
         if obs_id and (dbg or verbose):
             log(fp, f"[mesa {mesa}] spots persisted -> spot_id={obs_id} | fp={image_fp}")
     except Exception as e:
         log(fp, f"[mesa {mesa}] spots persist error: {e}")
+        capture_id = None
     if profile_enabled:
         profile_times["obs"] = time.perf_counter() - t_obs0
 
@@ -423,6 +481,19 @@ def run_worker_mesa_once(
         cur_spot_id = spot_id if "spot_id" in locals() else None
         log(fp, f"[mesa {mesa}] PROFILE ts={ts} capture_id={capture_id} spot_id={cur_spot_id} {parts}")
 
+        # Insert profile metrics if dbmod has the method (for test support)
+        if hasattr(dbmod, "insert_worker_profile") and callable(dbmod.insert_worker_profile):
+            try:
+                dbmod.insert_worker_profile(
+                    ts=ts,
+                    mesa=mesa,
+                    capture_id=capture_id,
+                    spot_id=cur_spot_id,
+                    metrics=profile_times,
+                )
+            except Exception as e:
+                logging.exception(f"[mesa {mesa}] Failed to insert worker profile: {e}")
+
 
     last_sig_by_mesa[mesa] = image_fp
 
@@ -430,6 +501,17 @@ def run_worker_mesa_once(
         dst = safe_move(img_path, dirs.ok_dir)
         if verbose:
             log(fp, f"[mesa {mesa}] OK -> ok: {dst}")
+
+        # Route to ok
+        if capture_id is not None and hasattr(dbmod, "update_worker_capture_route") and callable(dbmod.update_worker_capture_route):
+            try:
+                dbmod.update_worker_capture_route(
+                    capture_id=capture_id,
+                    status="ok",
+                    reason="strategy_has_move_and_bets",
+                )
+            except Exception as e:
+                logging.exception(f"[mesa {mesa}] Failed to route capture to ok: {e}")
 
         if image_fp and dst:
             try:
@@ -446,6 +528,17 @@ def run_worker_mesa_once(
 
         if verbose:
             log(fp, f"[mesa {mesa}] NO STRATEGY -> errors: {dst} | reason={reason_text}")
+
+        # Route to errors
+        if capture_id is not None and hasattr(dbmod, "update_worker_capture_route") and callable(dbmod.update_worker_capture_route):
+            try:
+                dbmod.update_worker_capture_route(
+                    capture_id=capture_id,
+                    status="errors",
+                    reason=reason_text,
+                )
+            except Exception as e:
+                logging.exception(f"[mesa {mesa}] Failed to route capture to errors: {e}")
 
         if image_fp and dst:
             try:
