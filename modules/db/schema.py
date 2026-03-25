@@ -204,6 +204,36 @@ CREATE TABLE IF NOT EXISTS spots_strategies_nash (
 );
 
 -- =========================
+-- Worker profile (performance metrics per hand/capture)
+-- =========================
+CREATE TABLE IF NOT EXISTS worker_profile (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    mesa INTEGER NOT NULL,
+    capture_id INTEGER DEFAULT NULL,
+    spot_id INTEGER DEFAULT NULL,
+    time_gate REAL DEFAULT 0.0,
+    capture REAL DEFAULT 0.0,
+    fp_db REAL DEFAULT 0.0,
+    ocr REAL DEFAULT 0.0,
+    preflop REAL DEFAULT 0.0,
+    ocr_preflop_parallel REAL DEFAULT 0.0,
+    copy_capture REAL DEFAULT 0.0,
+    extract REAL DEFAULT 0.0,
+    insert_spot REAL DEFAULT 0.0,
+    strategy REAL DEFAULT 0.0,
+    obs REAL DEFAULT 0.0,
+    time_sec REAL DEFAULT 0.0,
+    total REAL DEFAULT 0.0,
+    ocr_bets REAL DEFAULT 0.0,
+    ocr_stacks REAL DEFAULT 0.0,
+    ocr_names REAL DEFAULT 0.0,
+    ocr_dealer REAL DEFAULT 0.0,
+    ocr_gamecode REAL DEFAULT 0.0,
+    created_at_ms INTEGER DEFAULT 0
+);
+
+-- =========================
 -- Workers captures (OCR audit per capture)
 -- =========================
 CREATE TABLE IF NOT EXISTS workers_captures (
