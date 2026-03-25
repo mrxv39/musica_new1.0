@@ -127,7 +127,7 @@ def load_obs(con: sqlite3.Connection) -> List[Dict[str, Any]]:
     cur = con.cursor()
     rows = cur.execute("""
     SELECT
-      obs_id,
+      spot_id,
       table_id,
       detected_at_ms,
       mano_raw,
@@ -138,7 +138,7 @@ def load_obs(con: sqlite3.Connection) -> List[Dict[str, Any]]:
       p3bet,
       frame_ref
     FROM spots
-    ORDER BY detected_at_ms ASC, obs_id ASC
+    ORDER BY detected_at_ms ASC, spot_id ASC
     """).fetchall()
 
     out: List[Dict[str, Any]] = []
