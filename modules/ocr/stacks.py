@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from typing import Dict, Tuple, Optional, Any
@@ -51,6 +52,80 @@ def _clean_numeric_text(text: str) -> str:
         t = t[: first + 1] + t[first + 1 :].replace(".", "")
     return t.strip(".")
 
+def _find_dot_position(crop_gray: Optional[np.ndarray]) -> Optional[int]:
+    """Detect decimal dot by finding a bright pixel cluster in the bottom
+    rows of the crop (baseline area) that sits in a gap between digit columns.
+    The dot must have high brightness (>180) and be in the bottom 4 rows only.
+    Returns the x-center of the dot relative to the crop, or None."""
+    if crop_gray is None:
+        return None
+    h, w = crop_gray.shape[:2]
+    if h < 8 or w < 10:
+        return None
+    # Only look at the bottom 4 rows (baseline where the dot sits)
+    baseline = crop_gray[h - 4 :, :]
+    # Also get the full-height column profile to identify digit columns
+    thr = 120
+    bright_count_full = np.array([int(np.sum(crop_gray[:, c] > thr)) for c in range(w)])
+    digit_min = max(4, h // 3)
+    # Find bright pixels in baseline that are NOT part of a tall digit column
+    # and are isolated (surrounded by dark columns in baseline)
+    dot_candidates: list[int] = []
+    for c in range(3, w - 3):
+        # Skip columns that are part of a digit (many bright rows in full height)
+        if bright_count_full[c] >= digit_min:
+            continue
+        # The dot column must have very few bright rows (1-3 in full height)
+        if bright_count_full[c] > 3:
+            continue
+        # Check if this column has a bright pixel in the baseline
+        baseline_max = int(np.max(baseline[:, c]))
+        if baseline_max < 180:
+            continue
+        # Immediate neighbors must NOT be bright in the baseline (isolation)
+        left_baseline = int(np.max(baseline[:, c - 1])) if c > 0 else 0
+        right_baseline = int(np.max(baseline[:, c + 1])) if c < w - 1 else 0
+        if left_baseline > 150 and right_baseline > 150:
+            continue  # sandwiched between bright columns = part of a digit
+        # Must be between two digit regions (within 6 cols on each side)
+        has_digit_left = any(bright_count_full[max(0, c - j)] >= digit_min for j in range(1, 7))
+        has_digit_right = any(bright_count_full[min(w - 1, c + j)] >= digit_min for j in range(1, 7))
+        if has_digit_left and has_digit_right:
+            dot_candidates.append(c)
+    if not dot_candidates:
+        return None
+    # Group consecutive candidates and take the first cluster
+    # (there should be only one dot)
+    clusters: list[list[int]] = [[dot_candidates[0]]]
+    for i in range(1, len(dot_candidates)):
+        if dot_candidates[i] - dot_candidates[i - 1] <= 2:
+            clusters[-1].append(dot_candidates[i])
+        else:
+            clusters.append([dot_candidates[i]])
+    # Take the narrowest cluster (1-4 cols wide)
+    for cl in clusters:
+        if len(cl) <= 4:
+            return int(round(np.mean(cl)))
+    return None
+
+
+def _insert_dot_from_pixel_analysis(cleaned: str, crop_gray: Optional[np.ndarray]) -> str:
+    """If tesseract missed the decimal dot but pixel analysis finds one,
+    insert it into the cleaned numeric string at the right position."""
+    if "." in cleaned or not cleaned or crop_gray is None:
+        return cleaned
+    dot_x = _find_dot_position(crop_gray)
+    if dot_x is None:
+        return cleaned
+    h, w = crop_gray.shape[:2]
+    # Map dot_x to a fractional position in the string
+    # Assume digits are roughly evenly spaced across the crop width
+    frac = dot_x / w
+    pos = int(round(frac * len(cleaned)))
+    pos = max(1, min(pos, len(cleaned) - 1))
+    return cleaned[:pos] + "." + cleaned[pos:]
+
+
 def _parse_stack_value(cleaned: str) -> Optional[float]:
     if not cleaned:
         return None
@@ -60,6 +135,11 @@ def _parse_stack_value(cleaned: str) -> Optional[float]:
         n = int(cleaned)
         if 100 <= n <= 999:
             return n / 10.0
+        if 1000 <= n <= 9999:
+            v100 = n / 100.0
+            if 0.5 <= v100 <= 75.0:
+                return v100
+            return n / 10.0
         return float(n)
     except Exception:
         return None
@@ -67,7 +147,7 @@ def _parse_stack_value(cleaned: str) -> Optional[float]:
 def _preprocess_variants(gray: np.ndarray) -> Dict[str, np.ndarray]:
     variants: Dict[str, np.ndarray] = {}
     h, w = gray.shape[:2]
-    up = cv2.resize(gray, (w * 4, h * 4), interpolation=cv2.INTER_NEAREST)
+    up = cv2.resize(gray, (w * 4, h * 4), interpolation=cv2.INTER_CUBIC)
     up = cv2.GaussianBlur(up, (3, 3), 0)
     # Otsu normal
     _, otsu = cv2.threshold(up, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -79,7 +159,7 @@ def _preprocess_variants(gray: np.ndarray) -> Dict[str, np.ndarray]:
 def _preprocess_legacy(gray: np.ndarray, thr: int) -> Dict[str, np.ndarray]:
     variants: Dict[str, np.ndarray] = {}
     h, w = gray.shape[:2]
-    up = cv2.resize(gray, (w * 4, h * 4), interpolation=cv2.INTER_NEAREST)
+    up = cv2.resize(gray, (w * 4, h * 4), interpolation=cv2.INTER_CUBIC)
     up = cv2.GaussianBlur(up, (3, 3), 0)
     _, norm = cv2.threshold(up, thr, 255, cv2.THRESH_BINARY)
     variants["thr"] = norm
@@ -122,6 +202,7 @@ def _ocr_one_stack(img_gray: np.ndarray, x: int, y: int, w: int, h: int, label: 
         except Exception:
             continue
         cleaned = _clean_numeric_text(txt)
+        cleaned = _insert_dot_from_pixel_analysis(cleaned, crop) if "." not in cleaned and len(cleaned) >= 2 else cleaned
         val = _parse_stack_value(cleaned)
         if val and val > 0:
             return {
@@ -140,6 +221,7 @@ def _ocr_one_stack(img_gray: np.ndarray, x: int, y: int, w: int, h: int, label: 
         except Exception:
             continue
         cleaned = _clean_numeric_text(txt)
+        cleaned = _insert_dot_from_pixel_analysis(cleaned, crop) if "." not in cleaned and len(cleaned) >= 2 else cleaned
         val = _parse_stack_value(cleaned)
         if val and val > 0:
             return {
@@ -170,6 +252,7 @@ def read_stacks(
     thr_p1: int = THR_P1,
     thr_p2: int = THR_P2,
     thr_p3: int = THR_P3,
+    img_gray: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "ok": False,
@@ -185,7 +268,10 @@ def read_stacks(
         "method": {"p1": "", "p2": "", "p3": ""},
         "errors": [],
     }
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img_gray is not None:
+        img = img_gray
+    else:
+        img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         out["errors"].append("imread_fail")
         return out

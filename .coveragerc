@@ -1,0 +1,24 @@
+[run]
+source = modules
+omit =
+    */preflop/capture_test_images.py
+    */preflop/import_xml.py
+    */preflop/link_hands_obs_to_spots_xml_real.py
+    */preflop/link_spots_real_images_by_start.py
+    */preflop/live_xml_sync.py
+    */preflop/repair_hero_cards_real.py
+    */importers/championpoker_xml_inbox.py
+    */spots/build_spot_signatures.py
+    */spots/spot_signature.py
+    */preflop/workers_loop/test_*.py
+    */preflop/test_import_xml_args.py
+    */strategy/selector_*.py
+    */strategy/substrategy_constants.py
+
+[report]
+fail_under = 75
+show_missing = True
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError

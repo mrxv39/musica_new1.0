@@ -1,6 +1,7 @@
 # C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\ocr\bets\bets_ocr_core.py
 from __future__ import annotations
 
+import os
 from typing import Optional, Tuple
 
 import cv2
@@ -17,6 +18,10 @@ from .bets_utils import safe_crop, debug_save_crop
 from .bets_cache import get_cached, set_cached
 from .bets_variants import iter_variants_limited, iter_variants_adaptive
 from .bets_quantize import is_decimal_like, quantize_bet, looks_like_wrong_integer_for_half
+
+
+def bets_debug_enabled() -> bool:
+    return os.environ.get("OCR_DEBUG_BETS", "0") == "1"
 
 
 def tesseract_available() -> bool:
@@ -133,14 +138,21 @@ def ocr_roi(
 
     best = normalize_final_result(best)
 
-    # Pass 2: fallback adaptive SOLO si p2 parece entero erróneo (p.ej. "2")
-    if best.ok and looks_like_wrong_integer_for_half(label, best.value, best.raw_text):
-        for method, bin_img in iter_variants_adaptive(crop):
+    # Pass 2: fallback adaptive si la heurística detecta entero erróneo para medio blind.
+    run_adaptive = best.ok and looks_like_wrong_integer_for_half(label, best.value, best.raw_text)
+    if bets_debug_enabled():
+        print(
+            f"DEBUG bets label={label} value={best.value} raw={best.raw_text!r} run_adaptive={run_adaptive}"
+        )
+    if run_adaptive:
+        for method, bin_img in iter_variants_adaptive(crop, label):
             txt = tesseract_ocr(bin_img, cfg)
             if txt is None:
                 continue
             cleaned = clean_numeric_text(txt).replace(",", ".")
             val = parse_float(cleaned)
+            if bets_debug_enabled() and val is not None:
+                print(f"DEBUG adaptive label={label} candidate_value={val} cleaned={cleaned!r}")
 
             sc = score_candidate(cleaned, val)
             if is_decimal_like(cleaned) and val is not None:

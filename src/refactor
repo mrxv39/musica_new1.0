@@ -1,0 +1,15 @@
+Mi ranking final de refactor real
+
+Si tuviera que elegir solo los más importantes:
+
+Refactor ya:
+
+modules/db/repo_workers_captures.py
+
+modules/preflop/workers_loop/worker_mesa.py
+
+src/pages/hands/useHandsPage.ts
+
+Probable refactor siguiente:
+4. src/pages/hands/useHandsPageActions.ts
+5. src/pages/hands/HandsTable.tsx o RealHandsTable.tsx si tienen mucha lógica interna

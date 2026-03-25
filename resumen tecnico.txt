@@ -1,0 +1,453 @@
+$root = "C:\Users\Usuario\Desktop\proyectos\poker_boss"
+Set-Location $root
+
+$note = ".\RESUMEN_CONTINUACION_20260310_worker_board_state_y_app.md"
+
+@'
+# Resumen de continuación — 2026-03-10
+
+## Contexto inmediato
+
+Estamos en la rama:
+
+- `feat/worker-real-mode`
+
+Estado que había justo antes del intento de commit:
+
+- modificados:
+  - `modules/preflop/preflop.py`
+  - `modules/preflop/workers_loop/worker_mesa.py`
+- nuevo archivo:
+  - `modules/preflop/board_state.py`
+
+Se intentó hacer commit, pero el pre-commit falló por un test backend roto.
+
+---
+
+## Qué se ha implementado seguro en esta sesión
+
+### 1) Nuevo módulo `board_state.py`
+Archivo nuevo:
+
+- `modules/preflop/board_state.py`
+
+Función observada de forma segura:
+
+- analiza una imagen de mesa
+- usa ROIs fijas para las 3 cartas del flop
+- clasifica el estado como:
+  - `postflop` si detecta 3 cartas válidas
+  - `preflop` si detecta 0 cartas válidas
+  - `unknown` en casos intermedios
+- devuelve JSON con:
+  - `street_state`
+  - `valid_count`
+  - `cards`
+  - `score_min`
+  - `fingerprint`
+  - `error` si aplica
+
+Hecho comprobado en pruebas manuales:
+- `flop.png` fue clasificada como `postflop` con 3 cartas válidas detectadas
+- varias screenshots preflop fueron clasificadas como `preflop` con `valid_count = 0`
+
+### 2) `preflop.py` ya no usa `noboard`
+Archivo modificado:
+
+- `modules/preflop/preflop.py`
+
+Cambio seguro:
+- antes existía integración con módulo `noboard`
+- ahora el pipeline devuelve `modules` con:
+  - `mano`
+  - `time`
+  - `board_state`
+
+Hecho observado:
+- el test backend que esperaba `noboard` ha fallado por eso mismo
+
+### 3) Optimización en `worker_mesa.py`: skip temprano por frame idéntico
+Archivo modificado:
+
+- `modules/preflop/workers_loop/worker_mesa.py`
+
+Cambio seguro:
+- se añadió caché en memoria por mesa:
+  - `_LAST_CAPTURE_FP_BY_MESA: Dict[int, Optional[str]] = {}`
+- en cada tick:
+  - se calcula `image_fp`
+  - si coincide con el último fingerprint de esa mesa:
+    - se elimina la imagen temporal
+    - se loguea `UNCHANGED_FRAME -> skip`
+    - se corta antes del pipeline pesado
+
+Hecho comprobado:
+- tras corregir el archivo, el log mostró:
+  - `[mesa X] UNCHANGED_FRAME -> skip | fp=...`
+- desde tick 2 hasta tick 10 los 4 workers hicieron skip por frame idéntico
+
+### 4) El worker estaba reprocesando demasiado y eso quedó corregido
+Antes del fix:
+- los workers seguían entrando repetidamente en `TIME+MANO CANDIDATE`
+- persistían `hands_obs`
+- y caían en `NO STRATEGY`
+- aunque las mesas no habían cambiado
+
+Después del fix:
+- tras el primer tick útil, los siguientes ticks hicieron `UNCHANGED_FRAME -> skip`
+- esto confirma que el corte temprano ya funciona
+
+---
+
+## Estado actual del commit
+
+Se lanzó:
+
+- `git commit -m "feat(worker): detect board state and skip preflop pipeline when flop is visible ..."`
+
+Resultado:
+
+- frontend fast: OK
+- frontend coverage: OK
+- backend pytest fast: FALLA
+
+### Error exacto del gate backend
+
+Falla:
+
+- `tests/test_preflop.py::TestPreflop::test_shape_and_flags`
+
+Motivo seguro:
+
+El test esperaba:
+
+- `data["modules"]["noboard"]`
+
+pero ahora el output real contiene:
+
+- `data["modules"]["board_state"]`
+
+Por tanto el fallo actual no parece ser de lógica runtime del worker, sino de **contrato de test backend desactualizado** frente al nuevo shape de `preflop.py`.
+
+---
+
+## Qué habría que hacer lo primero en el siguiente chat
+
+### Paso 1
+Arreglar el test backend roto:
+
+- `tests/test_preflop.py`
+
+Cambio esperado casi seguro:
+- adaptar las aserciones para que ya no esperen `noboard`
+- y pasen a esperar `board_state`
+
+Ejemplo conceptual de lo que debe reflejar el test:
+
+- existe `preflop_ok`
+- existe `fingerprint`
+- existe `modules`
+- existe `modules["mano"]`
+- existe `modules["time"]`
+- existe `modules["board_state"]`
+
+### Paso 2
+Volver a lanzar:
+
+- `python -m pytest -q`
+  o
+- el gate habitual:
+  - `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/gate-fast.ps1`
+
+### Paso 3
+Si todo pasa, hacer commit y push.
+
+---
+
+# Resumen técnico de funcionalidades de la app (solo lo que sabemos seguro)
+
+## 1) Captura / workers de mesas
+Existe un sistema de workers que procesa mesas por tick.
+
+Archivos y evidencias seguras:
+- `modules/preflop/run_workers_loop.py`
+- `modules/preflop/workers_loop/worker_mesa.py`
+
+Comportamiento observado:
+- hay ticks numerados (`TICK_START`, `TICK_END`)
+- procesa varias mesas (`mesa 1`, `mesa 2`, `mesa 3`, `mesa 4`)
+- guarda imágenes temporales y rutas de debug
+- puede capturar desde zonas reales de pantalla
+- también puede trabajar con input fijo (`fixed_input`) según el código
+
+## 2) Time gate
+Existe un filtro temporal previo a captura/procesado.
+
+Archivo seguro:
+- `modules/preflop/workers_loop/time_gate.py`
+- uso observado en `worker_mesa.py` vía:
+  - `run_time_gate_for_area(...)`
+
+Comportamiento seguro:
+- si `time_ok` es falso, esa mesa se salta
+- si `time_ok` es verdadero, sigue el pipeline
+
+## 3) OCR
+Existe módulo OCR.
+
+Archivo seguro:
+- `modules/ocr/ocr.py`
+
+Uso seguro:
+- `worker_mesa.py` llama a `run_ocr(img_path)`
+
+## 4) Pipeline preflop
+Existe un pipeline específico de preflop.
+
+Archivos seguros:
+- `modules/preflop/preflop.py`
+- `modules/preflop/mano.py`
+- `modules/preflop/time.py`
+- `modules/preflop/board_state.py`
+
+Salida segura actual de `preflop.py`:
+- `preflop_ok`
+- `fingerprint`
+- `modules`
+  - `mano`
+  - `time`
+  - `board_state`
+- `errors`
+
+## 5) Detección de mano
+Existe un módulo `mano.py`.
+
+Hechos seguros por outputs vistos:
+- devuelve datos como:
+  - `valid`
+  - `card1`
+  - `card2`
+  - `score1`
+  - `score2`
+  - `mano_raw`
+  - `hand_rank`
+  - `hand_class`
+  - `suited`
+
+## 6) Detección de estado de board
+Funcionalidad nueva introducida en esta sesión.
+
+Archivo:
+- `modules/preflop/board_state.py`
+
+Estado seguro:
+- ya funciona en pruebas manuales con imágenes guardadas
+- diferencia preflop vs postflop usando detección de cartas visibles del flop
+
+## 7) Persistencia de observaciones OCR / preflop
+Existe persistencia en base de datos para observaciones.
+
+Funciones seguras observadas:
+- `persist_preflop_obs(...)`
+- `update_obs_frame_ref(...)`
+
+Tabla segura observada:
+- `hands_obs`
+
+Hechos seguros:
+- los workers persistían registros con `obs_id`
+- se pudo consultar la tabla `hands_obs`
+- se vieron fingerprints persistidos
+- no había fingerprints duplicados en la comprobación manual hecha
+
+## 8) Persistencia de capturas de worker
+Existe persistencia de capturas del worker.
+
+Funciones seguras observadas en `worker_mesa.py`:
+- `find_recent_capture_by_fingerprint(...)`
+- `insert_worker_capture(...)`
+- `update_worker_capture_ocr(...)`
+- `update_worker_capture_route(...)`
+
+Implicación segura:
+- existe una tabla o repositorio de capturas de worker
+
+Nombre exacto de tabla:
+- aparece mencionado antes en conversaciones y utilidades como `worker_captures` / `workers_captures`
+- aquí NO lo doy como 100% confirmado porque en esta parte del chat no se abrió esquema SQL directo de esa tabla
+
+## 9) Sistema de carpetas debug/salida
+Seguro por logs:
+- `time_mano_candidates`
+- `errors`
+- `borrar`
+- `ok`
+- `tmp_dir`
+
+La app mueve imágenes entre carpetas según el resultado del pipeline.
+
+## 10) UI frontend
+Seguro por tests ejecutados:
+- hay una página `HandsPage`
+- hay modo REAL
+- existe tabla de manos reales
+- existe modal de mano real
+- existe modal de imagen de mano real
+- existe botón `Match Images`
+- existe importación XML
+- existe gestión de estrategias en frontend
+- existe guardado de estrategias
+- existe edición de OR ranges
+- existe botón para lanzar workers loop desde UI
+
+Esto es seguro porque los tests frontend que pasaron lo cubren.
+
+## 11) Importación XML
+Seguro por test frontend:
+- existe flujo de `Import XML`
+- llama a backend con:
+  - carpeta
+  - héroe
+  - dbPath
+
+## 12) Match Images
+Seguro por tests frontend:
+- existe acción `Match Images`
+- llama a backend `match_spots`
+- usa `dbPath`
+- si `dbPath` está vacío, cae a `poker_boss.db`
+
+## 13) Estrategias
+Seguro:
+- existe sistema de estrategias en frontend y backend
+- hay tests de edición y guardado
+- actualmente el worker está cayendo en:
+  - `OperationalError: no such table: strategies`
+
+También seguro:
+- para el siguiente chat **vamos a ignorar estrategias al principio**, porque el bloqueo actual del commit no viene de ahí sino del test backend de `preflop.py`
+
+---
+
+# Estructura de la app (solo lo seguro)
+
+## Backend Python
+Estructura segura parcial:
+
+- `modules/ocr/...`
+- `modules/preflop/...`
+- `modules/preflop/workers_loop/...`
+- `modules/workers/...`
+- `modules/db/...`
+
+Funciones/backend observados:
+- OCR
+- workers loop
+- preflop analysis
+- persistencia en SQLite
+- importación/procesado de spots y manos
+
+## Frontend
+Estructura segura parcial por tests y rutas vistas:
+
+- `src/pages/...`
+- `src/test/...`
+- componentes de tablas y modales
+- hooks para HandsPage
+- hooks para workers polling/status
+- páginas/editores de estrategia
+
+## Base de datos
+DB confirmada en uso en este tramo:
+- `C:\Users\Usuario\Desktop\proyectos\poker_boss\data\poker_boss.db`
+
+Tablas confirmadas por evidencia directa o errores:
+- `hands_obs`
+- `hands`
+- `hands_xml`
+- `players`
+- `hand_links`
+- `strategies` aparece en error runtime como faltante en esa DB
+
+### Importante sobre DB
+Seguro:
+- el worker actual está usando una DB donde **falta `strategies`**
+- esto produce `OperationalError: no such table: strategies`
+
+NO CONFIRMADO:
+- si toda la app debe apuntar siempre a `poker_boss.db`
+- o si parte histórica del proyecto aún mezcla una DB legacy en zonas antiguas/tests/scripts
+
+Hay evidencia en el repo de ambos nombres, pero no afirmo más sin revisar código fuente concreto de todas las entradas.
+
+---
+
+# Cosas que sabemos que NO están claras del todo
+
+## 1) Contrato final deseado de `preflop.py`
+Seguro:
+- ahora devuelve `board_state`
+- antes había tests esperando `noboard`
+
+NO CONFIRMADO:
+- si `board_state` sustituye definitivamente a `noboard`
+- o si se quiere mantener compatibilidad temporal devolviendo ambos campos
+
+## 2) Integración exacta de `board_state` dentro de todo el flujo preflop
+Seguro:
+- el archivo existe
+- se usa en `preflop.py`
+- el worker mejoró por el skip temprano de fingerprint
+
+NO CONFIRMADO:
+- si ya se está cortando explícitamente el pipeline preflop por `postflop` dentro de toda la cadena como diseño final deseado en todos los sitios
+- o si todavía falta rematar esa parte en algún helper o test adicional
+
+## 3) Tabla `strategies`
+Seguro:
+- en la DB usada por los workers faltaba esa tabla
+- esto genera `NO STRATEGY`
+
+NO CONFIRMADO:
+- si eso es esperado para este modo de prueba
+- o si la DB correcta para ese flujo debía tener migraciones aplicadas
+
+---
+
+# Conclusión operativa para el siguiente chat
+
+## Punto de reentrada recomendado
+
+Empezar por esto:
+
+1. revisar `tests/test_preflop.py`
+2. adaptar el test al nuevo contrato con `board_state`
+3. relanzar gate fast
+4. si pasa, hacer commit
+5. después, decidir si añadimos tests de protección para:
+   - `UNCHANGED_FRAME -> skip`
+   - `board_state` preflop/postflop
+
+## Estado de confianza
+
+### Alta confianza
+- `board_state.py` funciona en pruebas manuales hechas
+- `worker_mesa.py` ya hace `UNCHANGED_FRAME -> skip`
+- el commit está bloqueado por un test backend desactualizado
+- frontend fast/coverage están bien
+
+### Media confianza
+- `preflop.py` ya está alineado con `board_state` como nuevo shape
+- el siguiente fix correcto es adaptar tests, no revertir runtime
+
+### Baja / no confirmada
+- decisión final de compatibilidad `noboard` vs `board_state`
+- estrategia/DB definitiva a usar en todos los flujos
+
+---
+
+# Comandos útiles para retomar en el siguiente chat
+
+## Ver estado
+```powershell
+git status

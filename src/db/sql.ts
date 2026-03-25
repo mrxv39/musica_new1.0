@@ -10,12 +10,13 @@
  */
 
 import Database from "@tauri-apps/plugin-sql";
+import { getStrategyDbUrl } from "../config";
 
 let _db: Database | null = null;
 let _initPromise: Promise<void> | null = null;
 
-// ✅ DB única absoluta
-export const DB_URL = "sqlite:C:/Users/Usuario/Desktop/proyectos/poker_boss/data/musica_new.db";
+// ✅ DB única absoluta (ahora centralizada en src/config.ts)
+export const DB_URL = getStrategyDbUrl();
 
 export type SituationRow = {
   id: number;

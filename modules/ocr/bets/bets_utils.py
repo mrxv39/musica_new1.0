@@ -29,7 +29,11 @@ def safe_crop(img: np.ndarray, x: int, y: int, w: int, h: int) -> Optional[np.nd
     return img[y : y + h, x : x + w]
 
 
-def load_gray_image(image_path: str) -> Tuple[Optional[np.ndarray], Optional[str]]:
+def load_gray_image(
+    image_path: str, img_gray: Optional[np.ndarray] = None
+) -> Tuple[Optional[np.ndarray], Optional[str]]:
+    if img_gray is not None:
+        return img_gray, None
     if not image_path or not os.path.exists(image_path):
         return None, "image_not_found"
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)

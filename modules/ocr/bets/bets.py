@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Any
+from typing import Dict, Optional, Tuple, Any
 
 import numpy as np  # noqa: F401
 import cv2  # noqa: F401
@@ -27,6 +27,7 @@ def read_bets(
     roi_p1: Tuple[int, int, int, int] = ROI_P1BET_DEFAULT,
     roi_p2: Tuple[int, int, int, int] = ROI_P2BET_DEFAULT,
     roi_p3: Tuple[int, int, int, int] = ROI_P3BET_DEFAULT,
+    img_gray: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
     rois = build_rois(x1, y1, roi_p1, roi_p2, roi_p3)
 
@@ -46,7 +47,7 @@ def read_bets(
         "ts_ms": now_ms(),
     }
 
-    img, err = load_gray_image(image_path)
+    img, err = load_gray_image(image_path, img_gray=img_gray)
     if err is not None:
         out["errors"].append(err)
         return out

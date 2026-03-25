@@ -1,0 +1,17 @@
+listar registros 3 tablas
+
+python -c "
+import sqlite3
+db = r'data/poker_boss.db'
+con = sqlite3.connect(db)
+con.row_factory = sqlite3.Row
+cur = con.cursor()
+for title, sql in [('hands_obs', 'SELECT * FROM hands_obs'), ('hands_real', 'SELECT * FROM hands_real'), ('hand_links', 'SELECT * FROM hand_links')]:
+    print('\n=== ' + title + ' ===')
+    cur.execute(sql)
+    rows = cur.fetchall()
+    if not rows: print('(vacío)')
+    else:
+        for r in rows: print(dict(r))
+con.close()
+"

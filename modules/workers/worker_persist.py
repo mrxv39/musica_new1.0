@@ -41,8 +41,10 @@ def persist_obs(
     ts: float,
     mano_result: Any,
     preflop: Any,
+    strategy: Any,
     ocr_json: str,
     bets_result: Optional[Dict[str, Any]] = None,
+    gamecode_result: Optional[Dict[str, Any]] = None,
     frame_ref: str = "",
 ) -> None:
     # frame_ref:
@@ -64,6 +66,16 @@ def persist_obs(
         p2bet = _to_float(bets_result.get("p2", None))
         p3bet = _to_float(bets_result.get("p3", None))
 
+    p1_se_bb = None
+    if isinstance(strategy, dict):
+        p1_se_bb = _to_float(strategy.get("se_used", None))
+
+    captured_gamecode = None
+    if isinstance(gamecode_result, dict) and gamecode_result.get("ok") is True:
+        raw_gamecode = gamecode_result.get("value", None)
+        if raw_gamecode is not None and str(raw_gamecode).strip() != "":
+            captured_gamecode = str(raw_gamecode).strip()
+
     dbmod.insert_obs(
         fingerprint=sig,
         table_id="",
@@ -76,5 +88,7 @@ def persist_obs(
         ocr_json=ocr_json,
         p2bet=p2bet,
         p3bet=p3bet,
+        p1_se_bb=p1_se_bb,
+        captured_gamecode=captured_gamecode,
         frame_ref=frame_ref,
     )

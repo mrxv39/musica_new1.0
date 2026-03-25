@@ -63,7 +63,7 @@ function Require-Group([string]$label, [string[]]$candidates, [double]$minPct) {
 Write-Host ""
 Write-Host "=== Strategy coverage check ==="
 
-Require-Group "pages/strategy" @("pages/strategy", "src/pages/strategy") 63
+Require-Group "pages/strategy" @("pages/strategy", "src/pages/strategy") 65
 Require-Group "strategy"       @("strategy", "src/strategy")             55
 
 Write-Host "OK: Strategy coverage thresholds met."

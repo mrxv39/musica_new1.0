@@ -1,0 +1,400 @@
+/// C:\Users\Usuario\Desktop\proyectos\poker_boss\src\pages\hands\RealHandModal.tsx
+import React from "react";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import type { ActionRealRow, HandRealRow, HandRealSpotFrame } from "../../db";
+import { fetchActionsRealForHand } from "../../db";
+import { formatCardsString } from "./realHandsFormatters";
+
+function streetLabel(roundNo: number) {
+  if (roundNo === 1) return "PREFLOP";
+  if (roundNo === 2) return "FLOP";
+  if (roundNo === 3) return "TURN";
+  if (roundNo === 4) return "RIVER";
+  return "ROUND " + String(roundNo);
+}
+
+function formatBoardPretty(hand: HandRealRow) {
+  const flop = hand.flop ? formatCardsString(hand.flop) : "-";
+  const turn = hand.turn ? formatCardsString(hand.turn) : "-";
+  const river = hand.river ? formatCardsString(hand.river) : "-";
+  return { flop, turn, river };
+}
+
+function formatAmtBb(a: ActionRealRow) {
+  const v = Number(a.sum_bb ?? 0);
+  if (!Number.isFinite(v) || Math.abs(v) < 1e-9) return "";
+  const s = v.toFixed(2).replace(/\.00$/, "");
+  return ` ${s}bb`;
+}
+
+function flagLabel(ok: unknown, hasWarn: unknown) {
+  if (ok === true || ok === 1 || ok === "1") {
+    return hasWarn ? "WARN" : "OK";
+  }
+  return hasWarn ? "WARN" : "NO";
+}
+
+function boolWarn(v: unknown) {
+  return !!v;
+}
+
+function valueText(v: unknown, fallback = "-") {
+  if (v === null || v === undefined) return fallback;
+  const s = String(v).trim();
+  return s ? s : fallback;
+}
+
+function tournamentLabel(hand: HandRealRow) {
+  const name = String(hand.tournament_name || "").trim();
+  const code = String(hand.tournament_code || "").trim();
+  if (name && code) return `${name} (${code})`;
+  if (name) return name;
+  if (code) return code;
+  return "-";
+}
+
+function auditColors(status?: HandRealRow["ocr_audit_status"]) {
+  if (status === "ok") return { bg: "#eefaf0", border: "#cfe9d5", fg: "#1d6b35" };
+  if (status === "warn") return { bg: "#fff7e8", border: "#f0ddb3", fg: "#8a6116" };
+  if (status === "diff") return { bg: "#fdeeee", border: "#efcaca", fg: "#9b2c2c" };
+  return { bg: "#f4f4f4", border: "#dddddd", fg: "#666666" };
+}
+
+function buildSpotFrameTitle(frame: HandRealSpotFrame): string {
+  const parts = [
+    `spot ${frame.spot_index || frame.spot_id}`,
+    frame.street || "",
+    frame.match_method || "",
+    frame.match_score != null ? `score=${frame.match_score}` : "",
+    frame.hand_class || "",
+  ].filter(Boolean);
+  return parts.join(" | ");
+}
+
+export function RealHandModal({
+  open,
+  dbPath,
+  hand,
+  onClose,
+}: {
+  open: boolean;
+  dbPath: string;
+  hand: HandRealRow | null;
+  onClose: () => void;
+}) {
+  const [actions, setActions] = React.useState<ActionRealRow[]>([]);
+  const [status, setStatus] = React.useState<string>("idle");
+  const [obsImagePath, setObsImagePath] = React.useState<string | null>(null);
+  const [obsImageStatus, setObsImageStatus] = React.useState<string>("idle");
+
+  React.useEffect(() => {
+    let alive = true;
+    async function run() {
+      if (!open || !hand) return;
+      setStatus("loading...");
+      try {
+        const data = await fetchActionsRealForHand(dbPath, hand.id);
+        if (!alive) return;
+        setActions(data);
+        setStatus("ok (" + data.length + ")");
+      } catch (e: any) {
+        if (!alive) return;
+        setActions([]);
+        setStatus("ERROR: " + (e?.message || String(e)));
+      }
+    }
+    run();
+    return () => {
+      alive = false;
+    };
+  }, [open, hand, dbPath]);
+
+  React.useEffect(() => {
+    let alive = true;
+
+    async function run() {
+      if (!open || !hand) {
+        setObsImagePath(null);
+        setObsImageStatus("idle");
+        return;
+      }
+
+      if ((hand.spot_frames || []).length > 0) {
+        setObsImagePath(null);
+        setObsImageStatus("spot_links");
+        return;
+      }
+
+      setObsImageStatus("loading...");
+      try {
+        const path = await invoke<string | null>("get_hand_obs_image", {
+          dbPath,
+          gamecode: hand.gamecode,
+        });
+
+        if (!alive) return;
+
+        const cleaned = typeof path === "string" ? path.trim() : "";
+        if (cleaned) {
+          setObsImagePath(cleaned);
+          setObsImageStatus("ok");
+        } else {
+          setObsImagePath(null);
+          setObsImageStatus("not_found");
+        }
+      } catch (e: any) {
+        if (!alive) return;
+        setObsImagePath(null);
+        setObsImageStatus("ERROR: " + (e?.message || String(e)));
+      }
+    }
+
+    run();
+    return () => {
+      alive = false;
+    };
+  }, [open, hand, dbPath]);
+
+  if (!open || !hand) return null;
+
+  const byStreet = new Map<number, ActionRealRow[]>();
+  for (const a of actions) {
+    const k = Number(a.round_no ?? 0);
+    if (!byStreet.has(k)) byStreet.set(k, []);
+    byStreet.get(k)!.push(a);
+  }
+
+  const streets = [1, 2, 3, 4].filter((n) => (byStreet.get(n) || []).length > 0);
+  const board = formatBoardPretty(hand);
+  const obsImageUrl = obsImagePath ? convertFileSrc(obsImagePath) : null;
+  const spotFrames = (hand.spot_frames || []).filter((frame) => String(frame.image_path || "").trim());
+
+  const auditColorsNow = auditColors(hand.ocr_audit_status);
+  const cardsResult =
+    hand.ocr_cards_match === true ? "MATCH" :
+    hand.ocr_cards_match === false ? "DIFF" :
+    hand.linked_obs_id == null ? "NO OCR" : "?";
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.35)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 18,
+        zIndex: 9999,
+      }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        style={{
+          width: "min(980px, 96vw)",
+          maxHeight: "92vh",
+          overflow: "auto",
+          background: "#fff",
+          borderRadius: 12,
+          padding: 14,
+          boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>
+              Hand {hand.gamecode} <span style={{ fontWeight: 400, opacity: 0.7 }}>({hand.room} / {hand.hero})</span>
+            </div>
+            <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
+              {hand.startdate || ""} | SB {hand.sb} / BB {hand.bb}
+            </div>
+            <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
+              Tournament: {tournamentLabel(hand)}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}
+          >
+            Cerrar
+          </button>
+        </div>
+
+        <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div style={{ border: "1px solid #eee", borderRadius: 10, padding: 10 }}>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>Hero cards</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>
+              {formatCardsString(hand.hero_cards || "")}
+            </div>
+          </div>
+
+          <div style={{ border: "1px solid #eee", borderRadius: 10, padding: 10 }}>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>Board</div>
+            <div style={{ fontSize: 14, marginTop: 4 }}>
+              <div><b>Flop:</b> {board.flop}</div>
+              <div><b>Turn:</b> {board.turn}</div>
+              <div><b>River:</b> {board.river}</div>
+            </div>
+          </div>
+
+          <div style={{ gridColumn: "1 / -1", border: "1px solid #eee", borderRadius: 10, padding: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>OCR Audit</div>
+              <span
+                style={{
+                  display: "inline-block",
+                  padding: "3px 8px",
+                  borderRadius: 999,
+                  border: `1px solid ${auditColorsNow.border}`,
+                  background: auditColorsNow.bg,
+                  color: auditColorsNow.fg,
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {hand.ocr_audit_summary || "NO OCR"}
+              </span>
+            </div>
+
+            <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, fontSize: 13 }}>
+              <div><b>Cards XML:</b> {formatCardsString(hand.hero_cards || "")}</div>
+              <div><b>Cards OCR:</b> {valueText(hand.ocr_mano_raw)}</div>
+              <div><b>Cards result:</b> {cardsResult}</div>
+              <div><b>Linked obs_id:</b> {valueText(hand.linked_obs_id)}</div>
+              <div><b>Match method:</b> {valueText(hand.ocr_match_method)}</div>
+              <div><b>Match score:</b> {valueText(hand.ocr_match_score)}</div>
+              <div><b>Workers status:</b> {valueText(hand.wc_status)}</div>
+              <div><b>Workers reason:</b> {valueText(hand.wc_reason)}</div>
+              <div><b>Stacks:</b> {flagLabel(hand.stacks_ok, boolWarn(hand.ocr_warn_stacks))}</div>
+              <div><b>Bets:</b> {flagLabel(hand.bets_ok, boolWarn(hand.ocr_warn_bets))}</div>
+              <div><b>Pos:</b> {flagLabel(hand.posiciones_ok, boolWarn(hand.ocr_warn_pos))}</div>
+              <div><b>Dealer:</b> {flagLabel(hand.dealer_ok, boolWarn(hand.ocr_warn_dealer))}</div>
+              <div><b>Table:</b> {flagLabel(hand.table_state_ok, boolWarn(hand.ocr_warn_table))}</div>
+              <div><b>Frame ref:</b> {valueText(hand.ocr_frame_ref)}</div>
+            </div>
+          </div>
+
+          <div style={{ gridColumn: "1 / -1", border: "1px solid #eee", borderRadius: 10, padding: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>OCR capture relacionada</div>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>
+                match image: {obsImageStatus}
+              </div>
+            </div>
+
+            {spotFrames.length > 0 ? (
+              <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
+                {spotFrames.map((frame) => (
+                  <div
+                    key={`${frame.spot_id}-${frame.obs_id}`}
+                    style={{ border: "1px solid #eee", borderRadius: 8, padding: 8, background: "#fafafa" }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+                      Spot {frame.spot_index || frame.spot_id}
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>
+                      {buildSpotFrameTitle(frame)}
+                    </div>
+                    <img
+                      src={convertFileSrc(frame.image_path)}
+                      alt={`Spot ${frame.spot_index || frame.spot_id} ${hand.gamecode}`}
+                      title={buildSpotFrameTitle(frame)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        maxHeight: 260,
+                        objectFit: "contain",
+                        borderRadius: 8,
+                        border: "1px solid #eee",
+                        background: "#fff",
+                      }}
+                    />
+                    <div style={{ marginTop: 6, fontSize: 11, opacity: 0.65, wordBreak: "break-all" }}>
+                      {frame.image_path}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : obsImageUrl ? (
+              <div style={{ marginTop: 8 }}>
+                <img
+                  src={obsImageUrl}
+                  alt={`OCR capture ${hand.gamecode}`}
+                  style={{
+                    display: "block",
+                    maxWidth: "100%",
+                    maxHeight: 420,
+                    borderRadius: 8,
+                    border: "1px solid #eee",
+                    background: "#fafafa",
+                  }}
+                />
+                <div style={{ marginTop: 6, fontSize: 11, opacity: 0.65, wordBreak: "break-all" }}>
+                  {obsImagePath}
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: 8, fontSize: 13, opacity: 0.75 }}>
+                No hay imagen OCR enlazada para esta mano.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 14, fontSize: 13, opacity: 0.8 }}>
+          Actions: {status}
+        </div>
+
+        <div style={{ marginTop: 10, display: "grid", gap: 12 }}>
+          {streets.length === 0 ? (
+            <div style={{ padding: 10, border: "1px solid #eee", borderRadius: 10, opacity: 0.8 }}>
+              No hay acciones en actions_real para esta mano.
+            </div>
+          ) : (
+            streets.map((roundNo) => (
+              <div key={roundNo} style={{ border: "1px solid #eee", borderRadius: 10, padding: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>{streetLabel(roundNo)}</div>
+                <div style={{ display: "grid", gap: 6 }}>
+                  {(byStreet.get(roundNo) || []).map((a) => (
+                    <div
+                      key={a.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        fontSize: 13,
+                        padding: "6px 8px",
+                        borderRadius: 8,
+                        background: "#fafafa",
+                        border: "1px solid #f1f1f1",
+                      }}
+                    >
+                      <div style={{ whiteSpace: "nowrap" }}>
+                        <b>{a.player}</b> {a.type_name}
+                        <span style={{ opacity: 0.8 }}>{formatAmtBb(a)}</span>
+                      </div>
+                      <div style={{ opacity: 0.6, whiteSpace: "nowrap" }}>
+                        #{a.round_no}.{a.action_no}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <details style={{ marginTop: 12 }}>
+          <summary style={{ cursor: "pointer", fontSize: 12, opacity: 0.8 }}>Ver players_json</summary>
+          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, marginTop: 8 }}>
+{hand.players_json || ""}
+          </pre>
+        </details>
+      </div>
+    </div>
+  );
+}
+
+export default RealHandModal;

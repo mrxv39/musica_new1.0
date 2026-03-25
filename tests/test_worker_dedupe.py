@@ -18,7 +18,14 @@ class TestWorkerDedupeAndPersist(unittest.TestCase):
         self.tmpdb = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
         self.tmpdb.close()
         self.db_path = self.tmpdb.name
-        os.environ["MUSICA_DB_PATH"] = self.db_path
+        os.environ["POKER_BOSS_DB_PATH"] = self.db_path
+        try:
+            if getattr(dbmod, "_DB_CONN", None) is not None:
+                dbmod._DB_CONN.close()
+        except Exception:
+            pass
+        dbmod._DB_CONN = None
+        dbmod._DB_PATH_ACTIVE = None
         dbmod.init_db()
 
         # Create a temp file to use as --image (must exist)
@@ -29,6 +36,13 @@ class TestWorkerDedupeAndPersist(unittest.TestCase):
 
     def tearDown(self):
         try:
+            if getattr(dbmod, "_DB_CONN", None) is not None:
+                dbmod._DB_CONN.close()
+        except Exception:
+            pass
+        dbmod._DB_CONN = None
+        dbmod._DB_PATH_ACTIVE = None
+        try:
             os.unlink(self.image_path)
         except Exception:
             pass
@@ -37,7 +51,7 @@ class TestWorkerDedupeAndPersist(unittest.TestCase):
         except Exception:
             pass
         try:
-            del os.environ["MUSICA_DB_PATH"]
+            del os.environ["POKER_BOSS_DB_PATH"]
         except KeyError:
             pass
 
@@ -45,7 +59,7 @@ class TestWorkerDedupeAndPersist(unittest.TestCase):
         conn = dbmod.get_conn()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT COUNT(*) FROM hands_obs")
+            cur.execute("SELECT COUNT(*) FROM spots")
             return int(cur.fetchone()[0])
         finally:
             conn.close()

@@ -98,6 +98,43 @@ export function makeHandsColumns(
 ): ColumnDef[] {
   const base: ColumnDef[] = [
     {
+      id: "copy",
+      label: "copy",
+      render: (r) => {
+        const handleCopy = (e: React.MouseEvent) => {
+          e.stopPropagation();
+          try {
+            const text = JSON.stringify(r, null, 2);
+            navigator.clipboard.writeText(text);
+          } catch {}
+        };
+        return (
+          <span
+            onClick={handleCopy}
+            title="Copiar registro completo"
+            style={{ cursor: "pointer", fontSize: 13 }}
+          >
+            📋
+          </span>
+        );
+      },
+    },
+    {
+      id: "review",
+      label: "review",
+      render: (r) => {
+        const s = (r as any).review_status;
+        if (s === "ok") return <span style={{ color: "#155724", fontWeight: 700 }}>OK</span>;
+        if (s === "error") return <span style={{ color: "#721c24", fontWeight: 700 }}>ERR</span>;
+        return <span style={{ color: "#999" }}>--</span>;
+      },
+    },
+    {
+      id: "gamecode",
+      label: "game code",
+      render: (r) => (r as any).captured_gamecode ?? "",
+    },
+    {
       id: "time",
       label: "time",
       sortableKey: "detected_at_ms",
@@ -111,10 +148,10 @@ export function makeHandsColumns(
     },
     {
       id: "stackef",
-      label: "stackef",
+      label: "SE derivado",
       sortableKey: "stackefectivo",
       render: (r) => {
-        const v = extractStackEfectivo((r as any).ocr_json);
+        const v = (r as any).p1_se_bb ?? extractStackEfectivo((r as any).ocr_json);
         const p = extractLocalImagePath(r);
         const canOpen = Boolean(p);
         return (

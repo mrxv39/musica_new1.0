@@ -44,10 +44,10 @@ def table_worker(table_id):
         if preflop_valid and time_ok and noboard_ok:
             fingerprint = mano.get('fingerprint', f'fp_{table_id}')
             # OCR modules
-            stackefectivo = run_script('modules/ocr/stackefectivo.py', image)
             names = run_script('modules/ocr/names.py', image)
             stacks = run_script('modules/ocr/stacks.py', image)
             bets = run_script('modules/ocr/bets.py', image)
+            stackefectivo = {}
             hand_data = {
                 'table_id': table_id,
                 'fingerprint': fingerprint,

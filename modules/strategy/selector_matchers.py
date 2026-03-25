@@ -7,6 +7,17 @@ from .selector_models import MatchInput, SubStrategySpec
 from .selector_utils import norm_lower, norm_upper
 
 
+def _norm_tipo(v: str) -> str:
+    """
+    Pool default:
+    - Si el rival es desconocido (OCR/DB no lo clasifica), tratamos como 'fish'.
+    """
+    t = norm_lower(v)
+    if t in ("", "unknown", "unk", "?"):
+        return "fish"
+    return t
+
+
 def match_categorical(inp: MatchInput, spec: SubStrategySpec) -> Optional[str]:
     """
     Returns mismatch reason for categorical fields, or None if OK.
@@ -21,9 +32,9 @@ def match_categorical(inp: MatchInput, spec: SubStrategySpec) -> Optional[str]:
     if spec.p3_pos != norm_upper(inp.p3_pos):
         return "p3_pos"
 
-    if spec.p2_tipo != norm_lower(inp.p2_tipo):
+    if spec.p2_tipo != _norm_tipo(inp.p2_tipo):
         return "p2_tipo"
-    if spec.p3_tipo != norm_lower(inp.p3_tipo):
+    if spec.p3_tipo != _norm_tipo(inp.p3_tipo):
         return "p3_tipo"
 
     return None

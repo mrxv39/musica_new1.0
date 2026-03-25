@@ -78,9 +78,12 @@ class TestComputeStrategy(unittest.TestCase):
         result = compute_strategy(**_make_full_inputs(ocr_stacks={"ok": False}))
         self.assertFalse(result["ok"])
 
-    def test_returns_not_ok_when_stackefectivo_not_ok(self):
+    def test_returns_ok_ignores_stackefectivo_result(self):
+        """SE is now derived from stacks, not from external stackefectivo module."""
         result = compute_strategy(**_make_full_inputs(stackefectivo_result={"ok": False}))
-        self.assertFalse(result["ok"])
+        # Should still return ok=True because SE is computed from ocr_stacks, not stackefectivo_result
+        self.assertTrue(result["ok"])
+        self.assertEqual(result.get("se_method"), "derived")
 
     def test_returns_not_ok_when_select_move_none(self):
         result = compute_strategy(**_make_full_inputs(select_move=None))

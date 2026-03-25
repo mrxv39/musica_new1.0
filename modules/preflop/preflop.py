@@ -1,21 +1,19 @@
-# C:\Users\Usuario\Desktop\proyectos\musica_new\modules\preflop\preflop.py
+# C:\Users\Usuario\Desktop\proyectos\poker_boss\modules\preflop\preflop.py
 import sys
 import os
 import json
 import time as t
 import hashlib
 import concurrent.futures
-import subprocess
 
-MANO_PATH = os.path.join(os.path.dirname(__file__), "mano.py")
-TIME_PATH = os.path.join(os.path.dirname(__file__), "time.py")
-NOBOARD_PATH = os.path.join(os.path.dirname(__file__), "noboard.py")
+# Ensure project root is on sys.path for both import and subprocess modes
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
-MODULES = {
-    "mano": (MANO_PATH, "mano_ok"),
-    "time": (TIME_PATH, "time_ok"),
-    "noboard": (NOBOARD_PATH, "noboard_ok"),
-}
+from modules.preflop.mano import run_mano, load_templates, load_suit_templates
+from modules.preflop.time import run_time
+from modules.preflop.board_state import run_board_state
 
 
 def _sha1(s: str) -> str:
@@ -27,111 +25,107 @@ def _fingerprint(image_path: str) -> str:
     return _sha1(abs_image_path + "|preflop|" + str(int(t.time()) // 2))
 
 
-def run_module(name: str, path: str, image_path: str):
-    try:
-        proc = subprocess.run(
-            ["python", path, "--image", image_path],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if proc.returncode != 0 or not (proc.stdout or "").strip():
-            return (
-                {"error": "nonzero exit or no output", MODULES[name][1]: False},
-                f"{name}: nonzero exit or no output",
-            )
-
-        try:
-            data = json.loads(proc.stdout)
-            if not isinstance(data, dict):
-                return (
-                    {"error": "invalid json (not an object)", MODULES[name][1]: False},
-                    f"{name}: invalid json (not an object)",
-                )
-            return data, None
-        except Exception:
-            return ({"error": "invalid json", MODULES[name][1]: False}, f"{name}: invalid json")
-
-    except subprocess.TimeoutExpired:
-        return ({"error": "timeout", MODULES[name][1]: False}, f"{name}: timeout")
-    except Exception as e:
-        return ({"error": str(e), MODULES[name][1]: False}, f"{name}: {str(e)}")
-
-
 def extract_ok_flag(name: str, data: dict) -> bool:
-    if name == "mano":
-        if isinstance(data, dict):
-            hand_class = data.get("hand_class", "")
-            mano_raw = data.get("mano_raw", "")
-            return bool(hand_class and mano_raw)
+    if not isinstance(data, dict):
         return False
 
-    key = MODULES[name][1]
-    return bool(isinstance(data, dict) and data.get(key, False))
+    if name == "mano":
+        hand_class = data.get("hand_class", "")
+        mano_raw = data.get("mano_raw", "")
+        return bool(hand_class and mano_raw)
+
+    if name == "time":
+        return bool(data.get("time_ok", False))
+
+    if name == "board_state":
+        return str(data.get("street_state", "")).strip().lower() == "preflop"
+
+    return False
 
 
-def main():
+def run_preflop(image_path: str, rank_templates=None, suit_templates=None) -> dict:
+    """Run the full preflop pipeline via direct function calls (no subprocess)."""
     try:
-        if "--image" not in sys.argv:
-            raise Exception("Missing --image argument")
-
-        image_path = sys.argv[sys.argv.index("--image") + 1]
-
-        # ✅ FIX: si la imagen no existe, error global (y errors no vacío)
-        if not os.path.exists(image_path):
+        abs_image_path = os.path.abspath(image_path)
+        if not os.path.exists(abs_image_path):
             raise Exception("Image not found")
 
-        fp = _fingerprint(image_path)
+        fp = _fingerprint(abs_image_path)
+
+        # Preload templates once (shared across mano + board_state)
+        if rank_templates is None:
+            rank_templates = load_templates()
+        if suit_templates is None:
+            suit_templates = load_suit_templates()
 
         results = {}
         errors = []
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futs = {name: executor.submit(run_module, name, path, image_path) for name, (path, _) in MODULES.items()}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            fut_mano = executor.submit(run_mano, abs_image_path, rank_templates, suit_templates)
+            fut_time = executor.submit(run_time, abs_image_path)
+            fut_board = executor.submit(run_board_state, abs_image_path, rank_templates)
 
-            # ✅ FIX: iteración correcta
-            for name, future in futs.items():
-                data, err = future.result()
-                results[name] = data
-                if err:
-                    errors.append(err)
+            for name, fut in [("mano", fut_mano), ("time", fut_time), ("board_state", fut_board)]:
+                try:
+                    data = fut.result(timeout=10)
+                    results[name] = data
+                    if data.get("error"):
+                        errors.append(f"{name}: {data['error']}")
+                except Exception as e:
+                    results[name] = {"error": f"{type(e).__name__}: {e}"}
+                    errors.append(f"{name}: {type(e).__name__}: {e}")
 
         mano_ok = extract_ok_flag("mano", results.get("mano", {}))
         time_ok = extract_ok_flag("time", results.get("time", {}))
-        noboard_ok = extract_ok_flag("noboard", results.get("noboard", {}))
+        board_preflop_ok = extract_ok_flag("board_state", results.get("board_state", {}))
 
-        preflop_ok = bool(mano_ok and time_ok and noboard_ok)
+        preflop_ok = bool(mano_ok and time_ok and board_preflop_ok)
 
-        out = {
+        return {
             "preflop_ok": preflop_ok,
             "fingerprint": fp,
             "modules": results,
             "errors": errors,
         }
-        print(json.dumps(out))
-        return
 
     except Exception as e:
-        try:
-            image_path = sys.argv[sys.argv.index("--image") + 1] if "--image" in sys.argv else ""
-        except Exception:
-            image_path = ""
-
         fp = _fingerprint(image_path)
         msg = str(e)
-
-        out = {
+        return {
             "preflop_ok": False,
             "fingerprint": fp,
             "modules": {
                 "mano": {"error": msg, "mano_ok": False},
                 "time": {"error": msg, "time_ok": False},
-                "noboard": {"error": msg, "noboard_ok": False},
+                "board_state": {"error": msg, "street_state": "unknown", "valid_count": 0},
             },
             "errors": [msg],
         }
+
+
+def main():
+    """CLI entry point — still works as subprocess for backward compat."""
+    try:
+        if "--image" not in sys.argv:
+            raise Exception("Missing --image argument")
+        image_path = sys.argv[sys.argv.index("--image") + 1]
+        out = run_preflop(image_path)
         print(json.dumps(out))
-        return
+    except Exception as e:
+        image_path = ""
+        try:
+            image_path = sys.argv[sys.argv.index("--image") + 1]
+        except Exception:
+            pass
+        fp = _fingerprint(image_path)
+        out = {
+            "preflop_ok": False,
+            "fingerprint": fp,
+            "modules": {},
+            "errors": [str(e)],
+        }
+        print(json.dumps(out))
 
 
 if __name__ == "__main__":
