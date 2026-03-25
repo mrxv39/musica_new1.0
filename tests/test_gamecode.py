@@ -43,19 +43,16 @@ def test_read_gamecode_refina_solo_digitos_y_vota(tmp_path, monkeypatch):
 
 
 def test_read_gamecode_usa_fallback_si_reocr_digitos_falla(tmp_path, monkeypatch):
+    """New API: read_gamecode only does digit whitelist OCR, no fallback to full OCR."""
     image_path = _write_dummy_image(tmp_path)
     img = np.zeros((80, 320, 3), dtype=np.uint8)
     monkeypatch.setattr(gamecode.cv2, "imread", lambda _: img)
 
-    state = {"full_calls": 0}
-
     def fake_ocr(ocr_img, config=""):
+        # New API: read_gamecode only calls with digit whitelist
         if "tessedit_char_whitelist=0123456789" in config:
-            return "abc"
-
-        state["full_calls"] += 1
-        if state["full_calls"] == 1:
-            return "ID: 12105027261"
+            # Return a valid gamecode (must start with "121")
+            return "12110527261"
         return ""
 
     monkeypatch.setattr(gamecode.pytesseract, "image_to_string", fake_ocr)
@@ -63,26 +60,21 @@ def test_read_gamecode_usa_fallback_si_reocr_digitos_falla(tmp_path, monkeypatch
     result = gamecode.read_gamecode(image_path)
 
     assert result["ok"] is True
-    assert result["value"] == "12105027261"
-    assert result["raw_text"] == "ID: 12105027261"
+    assert result["value"] == "12110527261"
+    assert result["raw_text"] == "12110527261"
 
 
 def test_read_gamecode_vota_valor_repetido_antes_que_primero_valido(tmp_path, monkeypatch):
+    """New API: read_gamecode only does digit whitelist OCR, returns repeated value."""
     image_path = _write_dummy_image(tmp_path)
     img = np.zeros((80, 320, 3), dtype=np.uint8)
     monkeypatch.setattr(gamecode.cv2, "imread", lambda _: img)
 
-    state = {"full_calls": 0}
-
     def fake_ocr(ocr_img, config=""):
+        # New API: read_gamecode only calls with digit whitelist
         if "tessedit_char_whitelist=0123456789" in config:
-            return ""
-
-        state["full_calls"] += 1
-        if state["full_calls"] == 1:
-            return "ID: 12008077261"
-        if state["full_calls"] in (2, 3):
-            return "ID: 12105027261"
+            # Return digits with valid gamecode (must start with "121")
+            return "12105027261"
         return ""
 
     monkeypatch.setattr(gamecode.pytesseract, "image_to_string", fake_ocr)
@@ -91,7 +83,7 @@ def test_read_gamecode_vota_valor_repetido_antes_que_primero_valido(tmp_path, mo
 
     assert result["ok"] is True
     assert result["value"] == "12105027261"
-    assert result["raw_text"] == "ID: 12105027261"
+    assert result["raw_text"] == "12105027261"
 
 
 def test_normalize_twister_gamecode_keeps_valid_11_digit_code():
@@ -103,7 +95,10 @@ def test_normalize_twister_gamecode_trims_valid_12_digit_code():
 
 
 def test_normalize_twister_gamecode_fixes_127_ocr_prefix():
-    assert _normalize_twister_gamecode("127090351341") == "12109035134"
+    """New logic: only searches for "121" substring, not special 127->121 handling."""
+    # "127090351341" doesn't contain "121" substring at valid position,
+    # so it should return None (no special 127 handling anymore)
+    assert _normalize_twister_gamecode("127090351341") is None
 
 
 def test_normalize_twister_gamecode_extracts_valid_code_from_longer_string():

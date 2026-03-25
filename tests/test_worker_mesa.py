@@ -61,6 +61,7 @@ def test_run_worker_mesa_once_skip_si_time_gate_false(monkeypatch, tmp_path):
     monkeypatch.setattr(wmod, "capture_to_tmp", _capture)
     dbmod = SimpleNamespace(
         find_recent_capture_by_fingerprint=lambda **k: None,
+        get_obs_by_fingerprint=lambda *a, **k: None,
         insert_worker_capture=lambda **k: called.__setitem__("insert", called["insert"] + 1),
     )
 
@@ -101,6 +102,7 @@ def test_run_worker_mesa_once_skip_duplicado_por_fingerprint(monkeypatch, tmp_pa
 
     dbmod = SimpleNamespace(
         find_recent_capture_by_fingerprint=lambda **k: {"capture_id": 99, "status": "ok"},
+        get_obs_by_fingerprint=lambda *a, **k: None,
         insert_worker_capture=lambda **k: db_calls.__setitem__("insert", db_calls["insert"] + 1),
     )
 
@@ -160,6 +162,7 @@ def test_run_worker_mesa_once_guarda_capture_y_ocr(monkeypatch, tmp_path):
         insert_worker_capture=insert_worker_capture,
         update_worker_capture_ocr=update_worker_capture_ocr,
         update_worker_capture_route=update_worker_capture_route,
+        get_obs_by_fingerprint=lambda *a, **k: None,
     )
 
     wmod.run_worker_mesa_once(
@@ -215,6 +218,7 @@ def test_run_worker_mesa_once_preflop_fail_mueve_a_borrar_y_actualiza_db(monkeyp
 
     dbmod = SimpleNamespace(
         find_recent_capture_by_fingerprint=lambda **k: None,
+        get_obs_by_fingerprint=lambda *a, **k: None,
         insert_worker_capture=lambda **k: 777,
         update_worker_capture_ocr=lambda **k: True,
         update_worker_capture_route=lambda **k: seen.__setitem__("route", kwargs_copy(k)) or True,
@@ -266,6 +270,7 @@ def test_run_worker_mesa_once_strategy_ok_mueve_a_ok(monkeypatch, tmp_path):
     seen = {"route": None}
     dbmod = SimpleNamespace(
         find_recent_capture_by_fingerprint=lambda **k: None,
+        get_obs_by_fingerprint=lambda *a, **k: None,
         insert_worker_capture=lambda **k: 500,
         update_worker_capture_ocr=lambda **k: True,
         update_worker_capture_route=lambda **k: seen.__setitem__("route", kwargs_copy(k)) or True,
@@ -317,6 +322,7 @@ def test_run_worker_mesa_once_no_strategy_mueve_a_errors(monkeypatch, tmp_path):
     seen = {"route": None}
     dbmod = SimpleNamespace(
         find_recent_capture_by_fingerprint=lambda **k: None,
+        get_obs_by_fingerprint=lambda *a, **k: None,
         insert_worker_capture=lambda **k: 600,
         update_worker_capture_ocr=lambda **k: True,
         update_worker_capture_route=lambda **k: seen.__setitem__("route", kwargs_copy(k)) or True,
@@ -364,6 +370,7 @@ def test_run_worker_mesa_once_si_falla_capture_ocr_loguea_y_sale(monkeypatch, tm
     seen_ocr = {}
     dbmod = SimpleNamespace(
         find_recent_capture_by_fingerprint=lambda **k: None,
+        get_obs_by_fingerprint=lambda *a, **k: None,
         insert_worker_capture=lambda **k: 900,
         update_worker_capture_ocr=lambda **k: seen_ocr.update(k) or True,
         update_worker_capture_route=lambda **k: True,
@@ -421,6 +428,7 @@ def test_run_worker_mesa_once_profiles_and_inserts_worker_profile(monkeypatch, t
 
     dbmod = SimpleNamespace(
         find_recent_capture_by_fingerprint=lambda **k: None,
+        get_obs_by_fingerprint=lambda *a, **k: None,
         insert_worker_capture=lambda **k: 42,
         update_worker_capture_ocr=lambda **k: True,
         update_worker_capture_route=lambda **k: True,

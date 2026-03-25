@@ -49,7 +49,8 @@ def test_compute_strategy_returns_decision_with_normalized_villains():
     assert out["bets_p1_used"] == 0.0
     assert out["bets_fix_reason"] == "btn_unacted_p1_bet_looks_like_pot"
     assert out["se_method"] == "derived"
-    assert out["se_used"] == 6.0
+    # SE derived from total stacks (behind + committed): min(15.0+3.0, max(20.0+0.5, 18.0+1.0)) = min(18.0, 20.5) = 18.0
+    assert out["se_used"] == 18.0
     assert captured["p2_tipo"] == "FISH"
     assert captured["p3_tipo"] == "REG"
 

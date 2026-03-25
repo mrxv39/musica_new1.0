@@ -142,16 +142,15 @@ def test_run_ocr_incluye_gamecode(monkeypatch):
     monkeypatch.setattr(
         ocrmod.gamecode,
         "read_gamecode",
-        lambda *a, **k: {"ok": True, "value": "12104995598", "raw_text": "ID: 12104995598", "roi": (10, 20, 220, 32), "error": ""},
+        lambda *a, **k: {"ok": True, "value": "12104995598", "raw_text": "12104995598", "roi": (10, 20, 220, 32), "error": ""},
     )
 
     out = ocrmod.run_ocr("fake.bmp")
 
-    # Mientras el OCR de gamecode está desactivado, run_ocr debe seguir
-    # incluyendo la clave "gamecode" pero marcada como skipped.
+    # Gamecode is included in output when available
     assert "gamecode" in out
-    assert out["gamecode"]["ok"] is False
-    assert out["gamecode"].get("skipped") == "gamecode_disabled"
+    assert out["gamecode"]["ok"] is True
+    assert out["gamecode"]["value"] == "12104995598"
 
 
 def test_run_ocr_agrega_gamecode_error_singular(monkeypatch):
@@ -170,9 +169,7 @@ def test_run_ocr_agrega_gamecode_error_singular(monkeypatch):
 
     out = ocrmod.run_ocr("fake.bmp")
 
-    # Con gamecode desactivado, errores internos de read_gamecode no deben
-    # propagarse a out["errors"]; mantenemos la clave pero marcada como skipped.
+    # Gamecode errors are propagated to out["errors"] with "gamecode:" prefix
     assert "gamecode" in out
     assert out["gamecode"]["ok"] is False
-    assert out["gamecode"].get("skipped") == "gamecode_disabled"
-    assert all("gamecode:gamecode_not_found" not in err for err in out["errors"])
+    assert "gamecode:gamecode_not_found" in out["errors"]

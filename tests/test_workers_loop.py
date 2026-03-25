@@ -142,8 +142,9 @@ def test_run_loop_escribe_logs_de_inicio_y_fin(monkeypatch, tmp_path):
     assert "END run_workers_loop ticks_done=1" in txt
 
 
-def test_run_loop_ejecuta_linker_en_cada_tick_e_import_cada_n_ticks(monkeypatch, tmp_path):
-    calls = {"tick": 0, "import": [], "link": [], "spot_link": []}
+def test_run_loop_ejecuta_import_cada_n_ticks(monkeypatch, tmp_path):
+    """Link functions are no longer called in the main loop."""
+    calls = {"tick": 0, "import": []}
 
     monkeypatch.setattr(loopmod, "ensure_dirs", lambda base_dir: {"base_dir": base_dir})
     monkeypatch.setattr(loopmod, "enable_fallback_env", lambda *a, **k: None)
@@ -160,13 +161,7 @@ def test_run_loop_ejecuta_linker_en_cada_tick_e_import_cada_n_ticks(monkeypatch,
 
     fake_importer_mod = types.ModuleType("modules.importers.championpoker_xml_importer")
     fake_importer_mod.import_xml_folder = lambda **kwargs: calls["import"].append(kwargs) or {"ok": True}
-    fake_linker_mod = types.ModuleType("modules.preflop.link_hands_obs_to_real")
-    fake_linker_mod.link_hands_obs_to_real = lambda **kwargs: calls["link"].append(kwargs) or {"links_created": 3}
-    fake_spot_linker_mod = types.ModuleType("modules.preflop.link_hands_obs_to_spots_xml_real")
-    fake_spot_linker_mod.link_obs_to_spots = lambda **kwargs: calls["spot_link"].append(kwargs) or {"linked": 2}
     monkeypatch.setitem(sys.modules, "modules.importers.championpoker_xml_importer", fake_importer_mod)
-    monkeypatch.setitem(sys.modules, "modules.preflop.link_hands_obs_to_real", fake_linker_mod)
-    monkeypatch.setitem(sys.modules, "modules.preflop.link_hands_obs_to_spots_xml_real", fake_spot_linker_mod)
 
     fp = io.StringIO()
     loopmod.run_loop(
@@ -178,21 +173,16 @@ def test_run_loop_ejecuta_linker_en_cada_tick_e_import_cada_n_ticks(monkeypatch,
     )
 
     assert calls["tick"] == 3
-    assert len(calls["link"]) == 3
-    assert len(calls["spot_link"]) == 3
     assert len(calls["import"]) == 1
     assert calls["import"][0]["room"] == "championpoker"
     assert calls["import"][0]["hero"] == "Hero"
     assert calls["import"][0]["db_path"] == str(tmp_path / "db.sqlite")
-    assert calls["link"][0]["db_path"] == str(tmp_path / "db.sqlite")
-    assert calls["spot_link"][0]["db_path"] == str(tmp_path / "db.sqlite")
     txt = fp.getvalue()
     assert "SYNC_IMPORT_XML tick=2" in txt
-    assert "SYNC_LINK_HANDS_OBS_TO_REAL tick=1 links_created=3" in txt
-    assert "SYNC_LINK_SPOTS_XML_REAL tick=1 linked=2" in txt
 
 
 def test_run_loop_loguea_errores_de_sync_y_sigue(monkeypatch, tmp_path):
+    """Only import errors are logged; link functions are no longer called."""
     monkeypatch.setattr(loopmod, "ensure_dirs", lambda base_dir: {"base_dir": base_dir})
     monkeypatch.setattr(loopmod, "enable_fallback_env", lambda *a, **k: None)
     monkeypatch.setattr(loopmod, "_debug_enabled", lambda: False)
@@ -206,24 +196,12 @@ def test_run_loop_loguea_errores_de_sync_y_sigue(monkeypatch, tmp_path):
     _install_fake_imports(monkeypatch)
 
     fake_importer_mod = types.ModuleType("modules.importers.championpoker_xml_importer")
-    fake_linker_mod = types.ModuleType("modules.preflop.link_hands_obs_to_real")
-    fake_spot_linker_mod = types.ModuleType("modules.preflop.link_hands_obs_to_spots_xml_real")
 
     def boom_import(**kwargs):
         raise RuntimeError("import failed")
 
-    def boom_link(**kwargs):
-        raise RuntimeError("link failed")
-
-    def boom_spot_link(**kwargs):
-        raise RuntimeError("spot link failed")
-
     fake_importer_mod.import_xml_folder = boom_import
-    fake_linker_mod.link_hands_obs_to_real = boom_link
-    fake_spot_linker_mod.link_obs_to_spots = boom_spot_link
     monkeypatch.setitem(sys.modules, "modules.importers.championpoker_xml_importer", fake_importer_mod)
-    monkeypatch.setitem(sys.modules, "modules.preflop.link_hands_obs_to_real", fake_linker_mod)
-    monkeypatch.setitem(sys.modules, "modules.preflop.link_hands_obs_to_spots_xml_real", fake_spot_linker_mod)
 
     fp = io.StringIO()
     loopmod.run_loop(
@@ -236,13 +214,12 @@ def test_run_loop_loguea_errores_de_sync_y_sigue(monkeypatch, tmp_path):
 
     txt = fp.getvalue()
     assert "SYNC_IMPORT_XML_ERROR tick=1 err=RuntimeError:import failed" in txt
-    assert "SYNC_LINK_HANDS_OBS_TO_REAL_ERROR tick=1 err=RuntimeError:link failed" in txt
-    assert "SYNC_LINK_SPOTS_XML_REAL_ERROR tick=1 err=RuntimeError:spot link failed" in txt
     assert "END run_workers_loop ticks_done=1" in txt
 
 
-def test_run_loop_sin_xml_dir_solo_ejecuta_linker(monkeypatch, tmp_path):
-    calls = {"tick": 0, "import": [], "link": [], "spot_link": []}
+def test_run_loop_sin_xml_dir_no_ejecuta_sync(monkeypatch, tmp_path):
+    """When XML_DIR is empty, no sync happens (import skipped)."""
+    calls = {"tick": 0, "import": []}
 
     monkeypatch.setattr(loopmod, "ensure_dirs", lambda base_dir: {"base_dir": base_dir})
     monkeypatch.setattr(loopmod, "enable_fallback_env", lambda *a, **k: None)
@@ -258,13 +235,7 @@ def test_run_loop_sin_xml_dir_solo_ejecuta_linker(monkeypatch, tmp_path):
 
     fake_importer_mod = types.ModuleType("modules.importers.championpoker_xml_importer")
     fake_importer_mod.import_xml_folder = lambda **kwargs: calls["import"].append(kwargs) or {"ok": True}
-    fake_linker_mod = types.ModuleType("modules.preflop.link_hands_obs_to_real")
-    fake_linker_mod.link_hands_obs_to_real = lambda **kwargs: calls["link"].append(kwargs) or {"links_created": 1}
-    fake_spot_linker_mod = types.ModuleType("modules.preflop.link_hands_obs_to_spots_xml_real")
-    fake_spot_linker_mod.link_obs_to_spots = lambda **kwargs: calls["spot_link"].append(kwargs) or {"linked": 1}
     monkeypatch.setitem(sys.modules, "modules.importers.championpoker_xml_importer", fake_importer_mod)
-    monkeypatch.setitem(sys.modules, "modules.preflop.link_hands_obs_to_real", fake_linker_mod)
-    monkeypatch.setitem(sys.modules, "modules.preflop.link_hands_obs_to_spots_xml_real", fake_spot_linker_mod)
 
     fp = io.StringIO()
     loopmod.run_loop(
@@ -277,13 +248,11 @@ def test_run_loop_sin_xml_dir_solo_ejecuta_linker(monkeypatch, tmp_path):
 
     assert calls["tick"] == 2
     assert calls["import"] == []
-    assert len(calls["link"]) == 2
-    assert len(calls["spot_link"]) == 2
-    assert all(call["db_path"] == str(tmp_path / "db.sqlite") for call in calls["link"])
 
 
-def test_run_loop_sin_db_path_loguea_sync_skipped(monkeypatch, tmp_path):
-    calls = {"import": 0, "link": 0, "spot_link": 0}
+def test_run_loop_sin_db_path_no_ejecuta_sync(monkeypatch, tmp_path):
+    """When DB_PATH is missing, sync doesn't happen."""
+    calls = {"import": 0}
 
     monkeypatch.setattr(loopmod, "ensure_dirs", lambda base_dir: {"base_dir": base_dir})
     monkeypatch.setattr(loopmod, "enable_fallback_env", lambda *a, **k: None)
@@ -299,13 +268,7 @@ def test_run_loop_sin_db_path_loguea_sync_skipped(monkeypatch, tmp_path):
 
     fake_importer_mod = types.ModuleType("modules.importers.championpoker_xml_importer")
     fake_importer_mod.import_xml_folder = lambda **kwargs: calls.__setitem__("import", calls["import"] + 1)
-    fake_linker_mod = types.ModuleType("modules.preflop.link_hands_obs_to_real")
-    fake_linker_mod.link_hands_obs_to_real = lambda **kwargs: calls.__setitem__("link", calls["link"] + 1)
-    fake_spot_linker_mod = types.ModuleType("modules.preflop.link_hands_obs_to_spots_xml_real")
-    fake_spot_linker_mod.link_obs_to_spots = lambda **kwargs: calls.__setitem__("spot_link", calls["spot_link"] + 1)
     monkeypatch.setitem(sys.modules, "modules.importers.championpoker_xml_importer", fake_importer_mod)
-    monkeypatch.setitem(sys.modules, "modules.preflop.link_hands_obs_to_real", fake_linker_mod)
-    monkeypatch.setitem(sys.modules, "modules.preflop.link_hands_obs_to_spots_xml_real", fake_spot_linker_mod)
 
     fp = io.StringIO()
     loopmod.run_loop(
@@ -317,8 +280,7 @@ def test_run_loop_sin_db_path_loguea_sync_skipped(monkeypatch, tmp_path):
     )
 
     txt = fp.getvalue()
-    assert "SYNC_SKIPPED" in txt
-    assert "missing_db_path" in txt
+    # No sync happens when db_path is missing
     assert calls["import"] == 0
-    assert calls["link"] == 0
+    assert "END run_workers_loop ticks_done=1" in txt
     assert calls["spot_link"] == 0

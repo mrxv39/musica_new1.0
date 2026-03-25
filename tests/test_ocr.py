@@ -28,8 +28,8 @@ class TestOCROrchestrator(unittest.TestCase):
         self.assertIn('villano', out)
         # Error aggregation
         self.assertIn('bets:fail_bets', out['errors'])
-        # Villano called with precomputed names
-        mock_villano.assert_called_with(image_path='img.png', x1=0, y1=0, p2_name='A', p3_name='')
+        # Villano called with precomputed names and gamecode
+        mock_villano.assert_called_with(image_path='img.png', x1=0, y1=0, p2_name='A', p3_name='', gamecode='')
 
     @patch('modules.ocr.bets.read_bets', side_effect=Exception('fail_bets'))
     @patch('modules.ocr.stacks.read_stacks', side_effect=Exception('fail_stacks'))

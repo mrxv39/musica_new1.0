@@ -26,8 +26,8 @@ def conn():
           spot_key TEXT NOT NULL,
           hand_range_name TEXT NOT NULL,
           move TEXT NOT NULL,
-          bet_min TEXT,
-          bet_max TEXT,
+          p1bet_min TEXT,
+          p1bet_max TEXT,
           hand_range TEXT,
           stack_effective_min REAL NOT NULL,
           stack_effective_max REAL NOT NULL,
@@ -67,7 +67,7 @@ def test_decide_spot_strategy_hoja1_or_range_fold_default(conn):
     )
     conn.execute(
         """
-        INSERT INTO spots_strategies(spot_key,hand_range_name,move,bet_min,bet_max,hand_range,stack_effective_min,stack_effective_max,p2_tipo,p3_tipo)
+        INSERT INTO spots_strategies(spot_key,hand_range_name,move,p1bet_min,p1bet_max,hand_range,stack_effective_min,stack_effective_max,p2_tipo,p3_tipo)
         VALUES ('BTN','OR TO CALL ANY','OR','2','75','AA-99',6,75,'fish','fish')
         """
     )
@@ -101,13 +101,13 @@ def test_decide_spot_strategy_hoja1_picks_row_matching_hand(conn):
     )
     conn.execute(
         """
-        INSERT INTO spots_strategies(spot_key,hand_range_name,move,bet_min,bet_max,hand_range,stack_effective_min,stack_effective_max,p2_tipo,p3_tipo)
+        INSERT INTO spots_strategies(spot_key,hand_range_name,move,p1bet_min,p1bet_max,hand_range,stack_effective_min,stack_effective_max,p2_tipo,p3_tipo)
         VALUES ('BTN','OR','OR','2','75','AA-99',6,75,'fish','fish')
         """
     )
     conn.execute(
         """
-        INSERT INTO spots_strategies(spot_key,hand_range_name,move,bet_min,bet_max,hand_range,stack_effective_min,stack_effective_max,p2_tipo,p3_tipo)
+        INSERT INTO spots_strategies(spot_key,hand_range_name,move,p1bet_min,p1bet_max,hand_range,stack_effective_min,stack_effective_max,p2_tipo,p3_tipo)
         VALUES ('BTN','PUSH','PUSH','2','75','AKs',6,75,'fish','fish')
         """
     )
@@ -138,7 +138,7 @@ def test_decide_spot_strategy_hoja1_or_range_hit(conn):
     )
     conn.execute(
         """
-        INSERT INTO spots_strategies(spot_key,hand_range_name,move,bet_min,bet_max,hand_range,stack_effective_min,stack_effective_max,p2_tipo,p3_tipo)
+        INSERT INTO spots_strategies(spot_key,hand_range_name,move,p1bet_min,p1bet_max,hand_range,stack_effective_min,stack_effective_max,p2_tipo,p3_tipo)
         VALUES ('BTN','OR TO CALL ANY','OR','2','75','AKs,AA',6,75,'fish','fish')
         """
     )
